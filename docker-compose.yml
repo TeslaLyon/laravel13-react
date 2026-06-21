@@ -1,0 +1,72 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DB_CONNECTION=pgsql
+      - DB_HOST=pgsql
+      - REDIS_HOST=valkey
+      - MEILISEARCH_HOST=http://meilisearch:7700
+      - BROADCAST_CONNECTION=pusher
+      - PUSHER_HOST=soketi
+    networks:
+      - gateway_net # 连接外部 Caddy 总网关
+      - backend_net # 连接内部微服务数据库
+
+  pgsql:
+    # 放弃 alpine，使用基于 Debian Bookworm 的原生镜像，在 ARM64 下 C 库兼容性最完美
+    image: postgres:18.4-bookworm
+    container_name: laravel_pgsql
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-laravel}
+      POSTGRES_USER: ${DB_USERNAME:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      # ⚠️ 核心修复：强制声明 PGDATA，覆盖 PG18 默认的动态版本号目录规则！
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      # 配合上面的 PGDATA 声明，这样你的数据就能安全持久化了
+      - pgsql_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+
+  valkey:
+    # Valkey 的最新稳定大版本
+    image: valkey/valkey:9.1.0-alpine
+    container_name: laravel_valkey
+    restart: always
+    volumes:
+      - valkey_data:/data
+    networks:
+      - backend_net
+
+  meilisearch:
+    # 极速开源搜索引擎的最新稳定版
+    image: getmeili/meilisearch:v1.47.0
+    container_name: laravel_meilisearch
+    restart: always
+    environment:
+      - MEILI_MASTER_KEY=${MEILISEARCH_KEY:-your_production_master_key}
+      - MEILI_ENV=production
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - backend_net
+
+# ==========================================
+# 网络与数据卷声明
+# ==========================================
+networks:
+  gateway_net:
+    external: true
+  backend_net:
+    driver: bridge
+
+volumes:
+  pgsql_data:
+  valkey_data:
+  meilisearch_data:
