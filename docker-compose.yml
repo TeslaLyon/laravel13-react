@@ -14,6 +14,13 @@ services:
       - MEILISEARCH_HOST=http://meilisearch:7700
       - BROADCAST_CONNECTION=pusher
       - PUSHER_HOST=soketi
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    volumes:
+      # 🚀 终极杀招：直接把你服务器上的真实 .env 文件，物理映射到容器内部的 /app/.env！
+      # 这样 Laravel 的底层代码就能 100% 精准读取到 smzdk 和你的强密码！
+      - ./.env:/app/.env
     networks:
       - gateway_net # 连接外部 Caddy 总网关
       - backend_net # 连接内部微服务数据库
