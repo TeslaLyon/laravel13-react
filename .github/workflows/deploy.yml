@@ -43,7 +43,7 @@ jobs:
           # 强制编译为 ARM64 架构，完美契合你的服务器！
           platforms: linux/arm64
           # 将这里的标签替换为你的实际仓库路径 (必须全部小写)
-          tags: ghcr.io/${{ github.repository_owner }}/laravel13-react:latest
+          tags: ghcr.io/teslalyon/laravel13-react:latest
 
   # ==========================================
   # 任务 2: 登录你的服务器，只负责拉取镜像和重启
