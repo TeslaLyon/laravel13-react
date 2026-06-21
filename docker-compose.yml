@@ -1,8 +1,9 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: ghcr.io/teslalyon/laravel13-react:latest
     container_name: laravel_app
     restart: always
     environment:

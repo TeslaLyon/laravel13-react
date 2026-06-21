@@ -1,49 +1,91 @@
-name: 🚀 生产环境自动化部署
+name: 🚀 生产环境自动化部署 (远程构建版)
 
-# 触发条件：当代码推送到 main 分支时执行
 on:
   push:
     branches:
       - main
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+# 赋予 GitHub Actions 推送镜像到 GitHub 容器注册表的权限
+permissions:
+  contents: read
+  packages: write
 
+jobs:
+  # ==========================================
+  # 任务 1: 在 GitHub 服务器上构建 Docker 镜像并推送
+  # ==========================================
+  build-and-push:
+    runs-on: ubuntu-latest
     steps:
-      - name: 登录服务器并部署更新
-        # 使用 appleboy 的开源 SSH 插件
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 登录到 GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 开启 QEMU 模拟器，支持跨架构编译
+      - name: 设置 QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: 构建并推送到 GHCR (指定 ARM64 架构)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          # 强制编译为 ARM64 架构，完美契合你的服务器！
+          platforms: linux/arm64
+          # 将这里的标签替换为你的实际仓库路径 (必须全部小写)
+          tags: ghcr.io/${{ github.repository_owner }}/laravel13-react:latest
+
+  # ==========================================
+  # 任务 2: 登录你的服务器，只负责拉取镜像和重启
+  # ==========================================
+  deploy:
+    # 必须等任务 1 (构建) 成功后，才执行任务 2 (部署)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: 登录服务器并更新
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
-          # 登录后要在服务器上执行的命令
           script: |
-            set -e # 加上这一行！只要有命令失败，立刻终止并报错
-
-            echo "🚀 开始部署项目..."
-
-            # 进入项目目录 (如果在服务器端不存在则报错)
+            set -e
+            echo "🚀 开始更新服务器..."
             cd ${{ secrets.PROJECT_PATH }} || exit
 
-            # 放弃服务器上任何可能的本地修改，拉取最新代码
+            # 拉取最新代码
             git fetch --all
             git reset --hard origin/main
             git pull origin main
 
-            # 重建并重启 Docker 容器 (后台运行，不中断现有服务的情况下的滚动更新)
-            echo "📦 正在构建并启动 Docker 容器..."
-            docker compose -f docker-compose.yml up -d --build
+            # 强制拉取刚刚 GitHub 打包好的最新镜像
+            echo "📥 正在拉取最新的 ARM64 镜像..."
+            docker compose pull app
 
-            # 优化 Laravel 缓存 (利用 Octane 的常驻特性，建议清理一下)
-            echo "🧹 正在优化 Laravel 配置..."
+            # 启动/重启容器 (速度极快，不消耗服务器 CPU)
+            echo "📦 正在平滑重启服务..."
+            docker compose up -d
+
+            # 优化配置与重启 Octane 进程
+            echo "🧹 优化 Laravel 配置..."
             docker exec laravel_app php artisan optimize:clear
             docker exec laravel_app php artisan optimize
-
-            # 重启 Octane 进程让新代码生效
             echo "🔄 重启 Octane 服务..."
             docker exec laravel_app php artisan octane:reload
 
-            echo "✅ 部署完成！"
+            # 清理废弃镜像
+            docker image prune -f
+
+            echo "✅ 极致丝滑的部署完成！"
