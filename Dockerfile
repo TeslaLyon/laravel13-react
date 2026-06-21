@@ -1,11 +1,10 @@
 # ==========================================
-# 阶段 1: 统一构建阶段 (基于 Debian 的 FrankenPHP)
+# 阶段 1: 统一构建阶段 (在 GitHub 原生高速 x86 环境下秒速编译)
 # ==========================================
-# 去掉 -alpine，默认即为基于 Debian Bookworm 的原生镜像
-FROM dunglas/frankenphp:php8.4 AS builder
+# 🚀 核心优化：加上 --platform=$BUILDPLATFORM，直接借用 GitHub 最强算力！
+FROM --platform=$BUILDPLATFORM dunglas/frankenphp:php8.4 AS builder
 
-# 安装系统级依赖以及现代版 Node.js (22.x LTS)
-# 这一步使用 NodeSource 官方源，确保你的 Vite 插件完美运行
+# 安装系统级依赖以及现代版 Node.js
 RUN apt-get update && apt-get install -y curl git unzip \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs
@@ -16,23 +15,24 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY . .
 
-# 安装后端依赖
+# 极速安装后端依赖
 RUN composer install --no-dev --optimize-autoloader
 
-# 安装前端依赖并打包
+# 极速安装前端依赖并打包
 RUN npm ci
 RUN npm run build
 
 
 # ==========================================
-# 阶段 2: 生产运行环境 (纯净 Debian 版)
+# 阶段 2: 生产运行环境 (ARM64 组装阶段)
 # ==========================================
+# 这个阶段会自动继承 GitHub Action 传递过来的 linux/arm64 架构
 FROM dunglas/frankenphp:php8.4 AS runner
 
 ENV APP_ENV=production
 ENV APP_DEBUG=false
 
-# Debian 镜像同样内置了 install-php-extensions，极其方便
+# 安装所需的 PHP 扩展
 RUN install-php-extensions \
     pdo_pgsql \
     pgsql \
@@ -46,11 +46,11 @@ WORKDIR /app
 # 从 builder 阶段复制已经编译好的完整项目
 COPY --from=builder /app /app
 
-# 确保 Laravel 目录权限正确 (Debian 中 www-data 是内置的标准 Web 用户)
+# 确保 Laravel 目录权限正确
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 
 # 暴露端口
 EXPOSE 8000
 
-# 启动常驻内存的 Octane 进程
+# 启动命令：自动清理重建缓存并启动 Octane
 CMD ["sh", "-c", "php artisan optimize:clear && php artisan optimize && php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000"]
