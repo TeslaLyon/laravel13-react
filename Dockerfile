@@ -2,7 +2,7 @@
 # 阶段 1: 统一构建阶段 (PHP + Node.js 混合环境)
 # ==========================================
 # 我们直接使用带有 PHP 的镜像作为构建基础
-FROM dunglas/frankenphp:php8.3-alpine AS builder
+FROM dunglas/frankenphp:php8.5-alpine AS builder
 
 # 关键修复：在 PHP 环境中安装 Node.js 和 npm
 RUN apk add --no-cache nodejs npm
@@ -27,7 +27,7 @@ RUN npm run build
 # ==========================================
 # 阶段 2: 生产运行环境 (纯净的 FrankenPHP + Octane)
 # ==========================================
-FROM dunglas/frankenphp:php8.3-alpine AS runner
+FROM dunglas/frankenphp:php8.5-alpine AS runner
 
 ENV APP_ENV=production
 ENV APP_DEBUG=false
