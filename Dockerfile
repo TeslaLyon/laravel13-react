@@ -1,38 +1,38 @@
 # ==========================================
-# 阶段 1: 统一构建阶段 (PHP + Node.js 混合环境)
+# 阶段 1: 统一构建阶段 (基于 Debian 的 FrankenPHP)
 # ==========================================
-# 我们直接使用带有 PHP 的镜像作为构建基础
-FROM dunglas/frankenphp:php8.5-alpine AS builder
+# 去掉 -alpine，默认即为基于 Debian Bookworm 的原生镜像
+FROM dunglas/frankenphp:php8.4 AS builder
 
-# 关键修复：在 PHP 环境中安装 Node.js 和 npm
-RUN apk add --no-cache nodejs npm
+# 安装系统级依赖以及现代版 Node.js (22.x LTS)
+# 这一步使用 NodeSource 官方源，确保你的 Vite 插件完美运行
+RUN apt-get update && apt-get install -y curl git unzip \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
-# 引入 Composer 工具
+# 引入 Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
-# 复制所有代码到容器
 COPY . .
 
-# 步骤 A：先安装 PHP 核心依赖
-# 这一步会生成 vendor 目录，保证后续的 php artisan 命令可以正常运行
+# 安装后端依赖
 RUN composer install --no-dev --optimize-autoloader
 
-# 步骤 B：安装前端依赖并执行打包
-# 现在环境中既有 node/npm，又有完整的 PHP 和 vendor，Vite 插件可以完美运行了！
+# 安装前端依赖并打包
 RUN npm ci
 RUN npm run build
 
 
 # ==========================================
-# 阶段 2: 生产运行环境 (纯净的 FrankenPHP + Octane)
+# 阶段 2: 生产运行环境 (纯净 Debian 版)
 # ==========================================
-FROM dunglas/frankenphp:php8.5-alpine AS runner
+FROM dunglas/frankenphp:php8.4 AS runner
 
 ENV APP_ENV=production
 ENV APP_DEBUG=false
 
-# 安装所需的 PHP 扩展
+# Debian 镜像同样内置了 install-php-extensions，极其方便
 RUN install-php-extensions \
     pdo_pgsql \
     pgsql \
@@ -43,15 +43,14 @@ RUN install-php-extensions \
 
 WORKDIR /app
 
-# 从 builder 阶段把【已经编译好】的完整项目复制过来
-# 里面已经包含了 vendor 目录和 public/build 前端静态文件
+# 从 builder 阶段复制已经编译好的完整项目
 COPY --from=builder /app /app
 
-# 确保 Laravel 目录权限正确
+# 确保 Laravel 目录权限正确 (Debian 中 www-data 是内置的标准 Web 用户)
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 
-# 暴露 8000 端口
+# 暴露端口
 EXPOSE 8000
 
-# 启动命令
+# 启动常驻内存的 Octane 进程
 CMD ["php", "artisan", "octane:start", "--server=frankenphp", "--host=0.0.0.0", "--port=8000"]

@@ -76,7 +76,11 @@ jobs:
 
             # 启动/重启容器 (速度极快，不消耗服务器 CPU)
             echo "📦 正在平滑重启服务..."
-            docker compose up -d
+            docker compose up -d --no-deps app
+
+            # ✅ 新增这一行：等待 5 秒钟，让 FrankenPHP 和 Laravel 完全启动
+            echo "⏳ 等待应用启动..."
+            sleep 5
 
             # 优化配置与重启 Octane 进程
             echo "🧹 优化 Laravel 配置..."
