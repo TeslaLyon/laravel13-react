@@ -53,4 +53,4 @@ RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 EXPOSE 8000
 
 # 启动常驻内存的 Octane 进程
-CMD ["php", "artisan", "octane:start", "--server=frankenphp", "--host=0.0.0.0", "--port=8000"]
+CMD ["sh", "-c", "php artisan optimize:clear && php artisan optimize && php artisan octane:start --server=frankenphp --host=0.0.0.0 --port=8000"]
