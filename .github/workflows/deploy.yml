@@ -58,28 +58,32 @@ jobs:
     steps:
       - name: 登录服务器并更新
         uses: appleboy/ssh-action@v1.2.5
+        # 👇 核心秘籍 1：将 GitHub 提供的临时 Token 存入环境变量
+        env:
+          TEMP_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
+          # 👇 核心秘籍 2：允许 SSH 脚本读取这个临时变量
+          envs: TEMP_GH_TOKEN
           script: |
             set -e
-            echo "🚀 开始更新服务器..."
             cd ${{ secrets.PROJECT_PATH }} || exit
 
-            git fetch --all
-            git reset --hard origin/main
-            git pull origin main
+            # 👇 核心秘籍 3：使用临时 Token 自动登录 Docker！
+            echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
+            echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
 
             echo "📥 正在拉取最新的 ARM64 镜像..."
             docker compose -f docker-compose.yml pull app
 
-            # 启动容器 (容器会自动执行配置优化，不需要我们操心了)
             echo "📦 正在精准重启应用容器..."
-            docker compose up -d --no-deps app
+            docker compose -f docker-compose.yml up -d --no-deps app
 
-            # 清理废弃镜像
+            # 👇 核心秘籍 4：过河拆桥，拉完镜像立刻退出登录，保证服务器绝对安全！
+            docker logout ghcr.io
             docker image prune -f
 
-            echo "✅ 极致丝滑的部署完成！"
+            echo "✅ 极致安全的自动化部署完成！"
