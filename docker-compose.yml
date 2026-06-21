@@ -9,7 +9,7 @@ services:
     environment:
       - APP_ENV=production
       - DB_CONNECTION=pgsql
-      - DB_HOST=pgsql
+      - DB_HOST=laravel_pgsql
       - REDIS_HOST=valkey
       - MEILISEARCH_HOST=http://meilisearch:7700
       - BROADCAST_CONNECTION=pusher
