@@ -30,6 +30,5 @@ yarn-error.log
 
 **/caddy
 frankenphp
-frankenphp-worker.php
 
 compose.yaml
