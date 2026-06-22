@@ -70,9 +70,10 @@ jobs:
               set -e
               cd ${{ secrets.PROJECT_PATH }} || exit
 
-              # 💡 优化点 1：必须执行 git pull！确保服务器上的 docker-compose.yml 永远与仓库同步
-              echo "🔄 正在同步最新的服务器配置文件..."
-              git pull
+              # 💡 核心修复：不再用温和的 git pull，改用强力的丢弃本地修改并强制对齐仓库
+              echo "🔄 正在强制同步最新的服务器配置文件..."
+              git fetch --all
+              git reset --hard origin/main
 
               echo "📝 正在全量注入生产环境变量..."
               echo "$PROD_ENV_CONTENT" > .env
