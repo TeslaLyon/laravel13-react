@@ -29,9 +29,6 @@ RUN npm run build
 # 这个阶段会自动继承 GitHub Action 传递过来的 linux/arm64 架构
 FROM dunglas/frankenphp:php8.4 AS runner
 
-ENV APP_ENV=production
-ENV APP_DEBUG=false
-
 # 安装所需的 PHP 扩展
 RUN install-php-extensions \
     pdo_pgsql \
