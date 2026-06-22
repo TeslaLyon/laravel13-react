@@ -88,6 +88,10 @@ jobs:
               echo "📦 正在无损更新应用容器..."
               docker compose -f docker-compose.yml up -d --no-deps app
 
+              # 🔥 核心新增：等容器拉起后，立刻让其在内部执行数据库迁移
+              echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
+              docker compose -f docker-compose.yml exec -T app php artisan migrate --force
+
               docker logout ghcr.io
               docker image prune -f
 
