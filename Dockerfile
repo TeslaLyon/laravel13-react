@@ -60,6 +60,11 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # 暴露 HTTP 标准端口
 EXPOSE 8000
 
+# 💡 核心修复：显式重写健康检查，让 Docker 去戳 8000 端口的 /up 路由
+# interval: 检查间隔, timeout: 超时, start-period: 启动缓冲时间（给 Laravel 留足生成缓存的时间）, retries: 失败重试次数
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/up || exit 1
+
 # 声明运行时入口
 ENTRYPOINT ["docker-entrypoint.sh"]
 
