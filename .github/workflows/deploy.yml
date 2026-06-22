@@ -52,43 +52,43 @@ jobs:
   # 任务 2: 登录你的服务器，只负责拉取镜像和重启
   # ==========================================
   deploy:
-    # 必须等任务 1 (构建) 成功后，才执行任务 2 (部署)
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: 登录服务器并更新
-        uses: appleboy/ssh-action@v1.2.5
-        # 👇 核心秘籍 1：将 GitHub 提供的临时 Token 存入环境变量
-        env:
-          TEMP_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PROD_ENV_CONTENT: ${{ secrets.PROD_ENV_FILE }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          # 👇 核心秘籍 2：允许 SSH 脚本读取这个临时变量
-          envs: TEMP_GH_TOKEN,PROD_ENV_CONTENT
-          script: |
-            set -e
-            cd ${{ secrets.PROJECT_PATH }} || exit
+      needs: build-and-push
+      runs-on: ubuntu-latest
+      steps:
+        - name: 登录服务器并更新
+          uses: appleboy/ssh-action@v1.2.5
+          env:
+            TEMP_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            PROD_ENV_CONTENT: ${{ secrets.PROD_ENV_FILE }}
+          with:
+            host: ${{ secrets.SERVER_HOST }}
+            username: ${{ secrets.SERVER_USERNAME }}
+            key: ${{ secrets.SERVER_SSH_KEY }}
+            port: ${{ secrets.SERVER_PORT }}
+            envs: TEMP_GH_TOKEN,PROD_ENV_CONTENT
+            script: |
+              set -e
+              cd ${{ secrets.PROJECT_PATH }} || exit
 
-            # 🚀 终极极简魔法：直接将多行变量无损输出为物理 .env 文件
-            echo "📝 正在全量注入生产环境变量..."
-            echo "$PROD_ENV_CONTENT" > .env
+              # 💡 优化点 1：必须执行 git pull！确保服务器上的 docker-compose.yml 永远与仓库同步
+              echo "🔄 正在同步最新的服务器配置文件..."
+              git pull
 
-            # 👇 核心秘籍 3：使用临时 Token 自动登录 Docker！
-            echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
-            echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
+              echo "📝 正在全量注入生产环境变量..."
+              echo "$PROD_ENV_CONTENT" > .env
 
-            echo "📥 正在拉取最新的 ARM64 镜像..."
-            docker compose -f docker-compose.yml pull app
+              echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
+              echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
 
-            echo "📦 正在精准重启应用容器..."
-            docker compose -f docker-compose.yml up -d --no-deps app
+              echo "📥 正在拉取最新的 ARM64 镜像..."
+              docker compose -f docker-compose.yml pull app
 
-            # 👇 核心秘籍 4：过河拆桥，拉完镜像立刻退出登录，保证服务器绝对安全！
-            docker logout ghcr.io
-            docker image prune -f
+              # 💡 优化点 2：加上 --force-recreate 核心参数！
+              # 强行粉碎旧容器，逼迫 Docker 彻底读取全新的健康检查配置（不管是写在 Dockerfile 还是 Compose 里的）
+              echo "📦 正在强力重建并启动应用容器..."
+              docker compose -f docker-compose.yml up -d --force-recreate --no-deps app
 
-            echo "✅ 极致安全的自动化部署完成！"
+              docker logout ghcr.io
+              docker image prune -f
+
+              echo "✅ 极致安全的自动化部署完成！"
