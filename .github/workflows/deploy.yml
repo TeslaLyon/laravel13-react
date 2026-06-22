@@ -84,10 +84,9 @@ jobs:
               echo "📥 正在拉取最新的 ARM64 镜像..."
               docker compose -f docker-compose.yml pull app
 
-              # 💡 优化点 2：加上 --force-recreate 核心参数！
-              # 强行粉碎旧容器，逼迫 Docker 彻底读取全新的健康检查配置（不管是写在 Dockerfile 还是 Compose 里的）
-              echo "📦 正在强力重建并启动应用容器..."
-              docker compose -f docker-compose.yml up -d --force-recreate --no-deps app
+              # 💡 完美形态：去掉 --force-recreate，交给 Docker Compose 自动判断增量更新
+              echo "📦 正在无损更新应用容器..."
+              docker compose -f docker-compose.yml up -d --no-deps app
 
               docker logout ghcr.io
               docker image prune -f
