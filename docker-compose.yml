@@ -39,6 +39,12 @@ services:
     volumes:
       # 配合上面的 PGDATA 声明，这样你的数据就能安全持久化了
       - pgsql_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - backend_net
 
