@@ -61,16 +61,21 @@ jobs:
         # 👇 核心秘籍 1：将 GitHub 提供的临时 Token 存入环境变量
         env:
           TEMP_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROD_ENV_CONTENT: ${{ secrets.PROD_ENV_FILE }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           # 👇 核心秘籍 2：允许 SSH 脚本读取这个临时变量
-          envs: TEMP_GH_TOKEN
+          envs: TEMP_GH_TOKEN,PROD_ENV_CONTENT
           script: |
             set -e
             cd ${{ secrets.PROJECT_PATH }} || exit
+
+            # 🚀 终极极简魔法：直接将多行变量无损输出为物理 .env 文件
+            echo "📝 正在全量注入生产环境变量..."
+            echo "$PROD_ENV_CONTENT" > .env
 
             # 👇 核心秘籍 3：使用临时 Token 自动登录 Docker！
             echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
