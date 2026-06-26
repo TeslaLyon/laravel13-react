@@ -21,7 +21,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock package.json package-lock.json ./
 
 # 极速安装后端与前端依赖
-RUN composer install --no-dev --optimize-autoloader --no-scripts --prefer-dist \
+RUN composer install --no-dev --optimize-autoloader --no-scripts --prefer-dist --ignore-platform-reqs \
     && npm ci
 
 # 复制项目全量源码
@@ -55,8 +55,13 @@ RUN install-php-extensions \
     pgsql \
     redis \
     pcntl \
+    bcmath \
     opcache \
-    zip
+    zip \
+    gd \
+    exif \
+    intl \
+    igbinary
 
 # 复制自定义的生产环境 PHP 优化配置
 COPY deployment/php/production.ini $PHP_INI_DIR/conf.d/99-laravel-production.ini
