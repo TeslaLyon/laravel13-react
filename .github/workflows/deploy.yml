@@ -124,7 +124,7 @@ jobs:
               docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate
 
               echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
-              docker compose -f compose.prod.yaml exec -T app php artisan migrate:refresh --force
+              docker compose -f compose.prod.yaml exec -T app php artisan migrate --force
 
               docker logout ghcr.io
               docker image prune -f
