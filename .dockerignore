@@ -9,5 +9,5 @@ bootstrap/cache/*.php
 .env
 .env.*
 !.env.example
-docker-compose.yml
+compose.prod.yml
 Dockerfile

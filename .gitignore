@@ -27,8 +27,12 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+./docker
 
 **/caddy
 frankenphp
 
 compose.yaml
+
+frankenphp-worker.php
+

@@ -67,10 +67,38 @@ jobs:
             port: ${{ secrets.SERVER_PORT }}
             envs: TEMP_GH_TOKEN,PROD_ENV_CONTENT
             script: |
+              # set -e
+              # cd ${{ secrets.PROJECT_PATH }} || exit
+
+              # # 💡 核心修复：不再用温和的 git pull，改用强力的丢弃本地修改并强制对齐仓库
+              # echo "🔄 正在强制同步最新的服务器配置文件..."
+              # git fetch --all
+              # git reset --hard origin/main
+
+              # echo "📝 正在全量注入生产环境变量..."
+              # echo "$PROD_ENV_CONTENT" > .env
+
+              # echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
+              # echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
+
+              # echo "📥 正在拉取最新的 ARM64 镜像..."
+              # docker compose -f compose.prod.yaml pull app
+
+              # # 💡 完美形态：去掉 --force-recreate，交给 Docker Compose 自动判断增量更新
+              # echo "📦 正在无损更新应用容器..."
+              # docker compose -f compose.prod.yaml up -d --no-deps app
+
+              # # 🔥 核心新增：等容器拉起后，立刻让其在内部执行数据库迁移
+              # echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
+              # docker compose -f compose.prod.yaml exec -T app php artisan migrate --force
+
+              # docker logout ghcr.io
+              # docker image prune -f
+
+              # echo "✅ 极致安全的自动化部署完成！"
               set -e
               cd ${{ secrets.PROJECT_PATH }} || exit
 
-              # 💡 核心修复：不再用温和的 git pull，改用强力的丢弃本地修改并强制对齐仓库
               echo "🔄 正在强制同步最新的服务器配置文件..."
               git fetch --all
               git reset --hard origin/main
@@ -81,16 +109,22 @@ jobs:
               echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
               echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
 
+              # 💡 核心修改 1：同时拉取 app 和 horizon 两个服务
               echo "📥 正在拉取最新的 ARM64 镜像..."
-              docker compose -f docker-compose.yml pull app
+              docker compose -f compose.prod.yaml pull app horizon
 
-              # 💡 完美形态：去掉 --force-recreate，交给 Docker Compose 自动判断增量更新
-              echo "📦 正在无损更新应用容器..."
-              docker compose -f docker-compose.yml up -d --no-deps app
+              # 💡 核心修改 2：同时更新并启动这两个服务
+              echo "📦 正在无损更新应用容器与队列容器..."
+              docker compose -f compose.prod.yaml up -d --no-deps app horizon
 
-              # 🔥 核心新增：等容器拉起后，立刻让其在内部执行数据库迁移
+              # 🔥 核心新增 3：通知旧的 Horizon 进程平滑退出
+              # 这会触发我们刚才在 compose 文件里设置的 `stop_grace_period: 60s`
+              # 它会把手头的邮件安稳发完再关闭，随后 Docker 会立刻用新代码将其拉起！
+              echo "🔄 正在平滑重启 Horizon 队列服务..."
+              docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate
+
               echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
-              docker compose -f docker-compose.yml exec -T app php artisan migrate --force
+              docker compose -f compose.prod.yaml exec -T app php artisan migrate --force
 
               docker logout ghcr.io
               docker image prune -f

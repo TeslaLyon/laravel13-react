@@ -48,15 +48,13 @@ export default function ManageTwoFactor(props: Props) {
         <div className="space-y-6">
             <Heading
                 variant="small"
-                title="Two-factor authentication"
-                description="Manage your two-factor authentication settings"
+                title="两步验证"
+                description="管理两步验证设置"
             />
             {twoFactorEnabled ? (
                 <div className="flex flex-col items-start justify-start space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        You will be prompted for a secure, random pin during
-                        login, which you can retrieve from the TOTP-supported
-                        application on your phone.
+                        登录时会提示输入安全随机PIN码，该码可在TOTP应用中获取。
                     </p>
 
                     <div className="relative inline">
@@ -67,7 +65,7 @@ export default function ManageTwoFactor(props: Props) {
                                     type="submit"
                                     disabled={processing}
                                 >
-                                    Disable 2FA
+                                    关闭两步验证
                                 </Button>
                             )}
                         </Form>
@@ -82,10 +80,7 @@ export default function ManageTwoFactor(props: Props) {
             ) : (
                 <div className="flex flex-col items-start justify-start space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        When you enable two-factor authentication, you will be
-                        prompted for a secure pin during login. This pin can be
-                        retrieved from a TOTP-supported application on your
-                        phone.
+                        启用两步验证后，登录时会提示输入安全PIN码。该PIN码可通过手机上的TOTP应用获取。
                     </p>
 
                     <div>
@@ -101,7 +96,7 @@ export default function ManageTwoFactor(props: Props) {
                             >
                                 {({ processing }) => (
                                     <Button type="submit" disabled={processing}>
-                                        Enable 2FA
+                                        启用两步验证
                                     </Button>
                                 )}
                             </Form>

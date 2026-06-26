@@ -1,0 +1,148 @@
+# ==========================================
+# 终极生产环境配置 (Production-Ready Ultimate)
+# ==========================================
+# 全局扩展字段：统一定义日志轮转规则，避免硬盘被打满
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"   # 每个日志文件最大 20MB
+    max-file: "3"     # 最多保留 3 个滚动文件
+
+services:
+  app:
+    image: ghcr.io/teslalyon/laravel13-react:latest
+    container_name: laravel_app
+    restart: always
+    logging: *default-logging # 引入全局日志限制
+    # 💡 优化：FrankenPHP 处理停止信号非常快，给它留出优雅处理现有请求的时间
+    stop_grace_period: 20s
+    environment:
+      - APP_ENV=production
+      - DB_CONNECTION=pgsql
+      - DB_HOST=laravel_pgsql
+      - REDIS_HOST=laravel_valkey
+      - MEILISEARCH_HOST=http://meilisearch:7700
+      - BROADCAST_CONNECTION=pusher
+      - PUSHER_HOST=soketi
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    volumes:
+      - ./.env:/app/.env
+    networks:
+      - gateway_net
+      - backend_net
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+
+  horizon:
+    image: ghcr.io/teslalyon/laravel13-react:latest
+    container_name: laravel_horizon
+    restart: always
+    logging: *default-logging
+    # 💡 终极护盾：如果 Horizon 发邮件发了一半被 docker stop，给它 60 秒时间把手头的事情做完再关机，绝不丢任务！
+    stop_grace_period: 60s
+    environment:
+      - APP_ENV=production
+      - DB_CONNECTION=pgsql
+      - DB_HOST=laravel_pgsql
+      - REDIS_HOST=laravel_valkey
+      - MEILISEARCH_HOST=http://meilisearch:7700
+      - BROADCAST_CONNECTION=pusher
+      - PUSHER_HOST=soketi
+      - CACHE_STORE=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    volumes:
+      - ./.env:/app/.env
+    command: ["php", "artisan", "horizon"]
+    networks:
+      - backend_net
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+    # 🚨 终极护盾：防假死检测！让容器每分钟执行一次 status 检查。如果 Horizon 卡死，Docker 会自动将其击毙并重启！
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # 资源护盾：绝不允许队列跑满 4 核，最多只给 1.5 核，保证前台 Web 永远不卡
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3072M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+  pgsql:
+    image: postgres:18.4-bookworm
+    container_name: laravel_pgsql
+    restart: always
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-laravel}
+      POSTGRES_USER: ${DB_USERNAME:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-root} -d ${DB_DATABASE:-laravel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - backend_net
+
+  valkey:
+    image: valkey/valkey:9.1.0-alpine
+    container_name: laravel_valkey
+    restart: always
+    logging: *default-logging
+    volumes:
+      - valkey_data:/data
+    networks:
+      - backend_net
+    # 🛡️ 资源护盾：防止缓存穿透或队列积压导致内存溢出
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.47.0
+    container_name: laravel_meilisearch
+    restart: always
+    logging: *default-logging
+    environment:
+      - MEILI_MASTER_KEY=${MEILISEARCH_KEY:-your_production_master_key}
+      - MEILI_ENV=production
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          memory: 6144M
+
+networks:
+  gateway_net:
+    external: true
+  backend_net:
+    driver: bridge
+
+volumes:
+  pgsql_data:
+  valkey_data:
+  meilisearch_data:

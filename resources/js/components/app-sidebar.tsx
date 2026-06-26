@@ -1,10 +1,9 @@
-import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import { BookOpen, FolderGit2, LayoutGrid, Video, House, Users, Images, Clapperboard, HelpCircle, Search } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { TeamSwitcher } from '@/components/team-switcher';
 import {
     Sidebar,
     SidebarContent,
@@ -14,51 +13,61 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { home, videos } from '@/routes';
 import type { NavItem } from '@/types';
 
+const mainNavItems: NavItem[] = [
+    {
+        title: '首页',
+        href: home(),
+        icon: House,
+    },
+    {
+        title: '视频',
+        href: videos(),
+        icon: Video,
+    },
+    {
+        title: '演员',
+        href: home(),
+        icon: Users,
+    },
+    {
+        title: '图片',
+        href: home(),
+        icon: Images,
+    },
+    {
+        title: '片商',
+        href: home(),
+        icon: Clapperboard,
+    },
+];
+
+const footerNavItems: NavItem[] = [
+    {
+        title: '帮助中心',
+        href: home(),
+        icon: HelpCircle,
+    },
+    {
+        title: '搜索',
+        href: 'https://laravel.com/docs/starter-kits#react',
+        icon: Search,
+    },
+];
+
 export function AppSidebar() {
-    const page = usePage();
-    const dashboardUrl = page.props.currentTeam
-        ? dashboard(page.props.currentTeam.slug)
-        : '/';
-
-    const mainNavItems: NavItem[] = [
-        {
-            title: 'Dashboard',
-            href: dashboardUrl,
-            icon: LayoutGrid,
-        },
-    ];
-
-    const footerNavItems: NavItem[] = [
-        {
-            title: 'Repository',
-            href: 'https://github.com/laravel/react-starter-kit',
-            icon: FolderGit2,
-        },
-        {
-            title: 'Documentation',
-            href: 'https://laravel.com/docs/starter-kits#react',
-            icon: BookOpen,
-        },
-    ];
-
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboardUrl} prefetch>
+                            <Link href={home()} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <TeamSwitcher />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>

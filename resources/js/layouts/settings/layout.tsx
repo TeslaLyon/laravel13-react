@@ -8,27 +8,21 @@ import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import { index as teams } from '@/routes/teams';
 import type { NavItem } from '@/types';
 
 const sidebarNavItems: NavItem[] = [
     {
-        title: 'Profile',
+        title: '个人资料',
         href: edit(),
         icon: null,
     },
     {
-        title: 'Security',
+        title: '账户安全',
         href: editSecurity(),
         icon: null,
     },
     {
-        title: 'Teams',
-        href: teams(),
-        icon: null,
-    },
-    {
-        title: 'Appearance',
+        title: '外观',
         href: editAppearance(),
         icon: null,
     },
@@ -40,8 +34,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     return (
         <div className="px-4 py-6">
             <Heading
-                title="Settings"
-                description="Manage your profile and account settings"
+                title="设置"
+                description="管理您的个人资料和帐户设置"
             />
 
             <div className="flex flex-col lg:flex-row lg:space-x-12">
@@ -53,7 +47,6 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                         {sidebarNavItems.map((item, index) => (
                             <Button
                                 key={`${toUrl(item.href)}-${index}`}
-                                size="sm"
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
