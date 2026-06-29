@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid, Video, House, Users, Images, Clapperboard, HelpCircle, Search } from 'lucide-react';
+import { BookOpen, FolderGit2, LayoutGrid, Video, House, Users, Images, Clapperboard, HelpCircle, Search, FileText } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -13,7 +13,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { home, videos } from '@/routes';
+import { home } from '@/routes';
+import { index as videosIndex } from '@/routes/videos';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -24,7 +25,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: '视频',
-        href: videos(),
+        href: videosIndex(),
         icon: Video,
     },
     {
@@ -42,6 +43,11 @@ const mainNavItems: NavItem[] = [
         href: home(),
         icon: Clapperboard,
     },
+    {
+        title: '文章',
+        href: home(),
+        icon: FileText,
+    },
 ];
 
 const footerNavItems: NavItem[] = [
@@ -52,7 +58,7 @@ const footerNavItems: NavItem[] = [
     },
     {
         title: '搜索',
-        href: 'https://laravel.com/docs/starter-kits#react',
+        href: home(),
         icon: Search,
     },
 ];

@@ -9,6 +9,7 @@ import {
 import { toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
+import { useCurrentUrl } from '@/hooks/use-current-url';
 
 export function NavFooter({
     items,
@@ -17,6 +18,8 @@ export function NavFooter({
 }: ComponentPropsWithoutRef<typeof SidebarGroup> & {
     items: NavItem[];
 }) {
+    const { isCurrentUrl } = useCurrentUrl();
+
     return (
         <SidebarGroup
             {...props}
@@ -29,9 +32,11 @@ export function NavFooter({
                             <SidebarMenuButton
                                 asChild
                                 className="text-neutral-600 hover:text-neutral-800 dark:text-neutral-300 dark:hover:text-neutral-100"
+                                isActive={isCurrentUrl(item.href)}
+                                tooltip={{ children: item.title }}
                             >
                                 <Link href={item.href} prefetch>
-                                {/* <a
+                                    {/* <a
                                     href={toUrl(item.href)}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -40,7 +45,7 @@ export function NavFooter({
                                         <item.icon className="h-5 w-5" />
                                     )}
                                     <span>{item.title}</span>
-                                {/* </a> */}
+                                    {/* </a> */}
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>

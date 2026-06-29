@@ -1,103 +1,89 @@
-import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Play } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { fetchVideos } from '@/api/api'; // 引入上面定义的模拟接口
+import { VideoSkeleton } from "@/components/video/VideoSkeleton";
+import { Video } from "@/types/video";
+import { VideoCard } from "@/components/video/Card";
+import { VideoPagination } from '@/components/VideoPagination';
+import { Button } from "@/components/ui/button";
+import { SlidersHorizontal } from "lucide-react";
 
-// 1. 定义模拟的视频数据
-const MOCK_VIDEOS = [
-  {
-    id: "1",
-    title: "2026年 React 进阶开发指南",
-    thumbnail: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&q=80",
-    duration: "12:34",
-    views: "1.2万",
-    postedAt: "2小时前",
-    author: {
-      name: "前端大师兄",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-    },
-  },
-  {
-    id: "2",
-    title: "掌握 shadcn/ui 的核心架构设计",
-    thumbnail: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80",
-    duration: "45:10",
-    views: "8500",
-    postedAt: "昨天",
-    author: {
-      name: "UI实验室",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
-    },
-  },
-  {
-    id: "3",
-    title: "从零开始的 Laravel 13 完整教程",
-    thumbnail: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80",
-    duration: "1:20:05",
-    views: "3.4万",
-    postedAt: "3天前",
-    author: {
-      name: "全栈开发者",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jack",
-    },
-  }
-];
+const CATEGORIES = ["全部", "前端开发", "开源项目", "科技数码", "生活Vlog", "影视飓风", "大耳朵TV"];
 
-export default function VideoList() {
-  return (
-    // 2. 响应式网格容器
-    <div className="p-6">
-      <h2 className="mb-6 text-2xl font-bold tracking-tight">最新推荐</h2>
+export default function YoutubeVideoGrid() {
+    const [videos, setVideos] = useState<Video[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(true); // boolean 通常会自动推断，加上也可以
+    const [activeCategory, setActiveCategory] = useState("全部");
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {MOCK_VIDEOS.map((video) => (
-          // 3. 视频卡片主体
-          <Card key={video.id} className="overflow-hidden transition-all hover:shadow-lg border-none bg-transparent shadow-none group cursor-pointer">
+    useEffect(() => {
+        // 定义获取数据的异步函数
+        const loadVideos = async () => {
+            setIsLoading(true);
+            try {
+                const data = await fetchVideos(); // 真实项目中这里换成 fetch('/api/videos') 或 axios
+                setVideos(data);
+            } catch (error) {
+                console.error("Failed to fetch videos:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-            {/* 封面图区域 */}
-            <div className="relative aspect-video w-full overflow-hidden rounded-xl">
-              <img
-                src={video.thumbnail}
-                alt={video.title}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              {/* 悬浮播放图标 */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
-                <div className="rounded-full bg-white/30 p-3 backdrop-blur-sm">
-                  <Play className="h-6 w-6 text-white fill-white" />
+        loadVideos();
+    }, []); // 空依赖数组表示组件挂载时执行一次
+
+    return (
+        <div className="w-full p-4 md:p-8 bg-background min-h-screen">
+
+            {/* 🎯 1. 页面头部区域：标题 + 筛选操作 */}
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-primary">推荐视频</h1>
+                    <p className="text-sm text-muted-foreground mt-1">根据你的喜好实时更新</p>
                 </div>
-              </div>
-              {/* 时长角标 */}
-              <Badge variant="secondary" className="absolute bottom-2 right-2 bg-black/80 text-white hover:bg-black/80">
-                {video.duration}
-              </Badge>
+
+                {/* 一个精致的侧边筛选按钮（备用，提升专业感） */}
+                <Button variant="outline" size="sm" className="gap-2 rounded-xl hidden sm:flex">
+                    <SlidersHorizontal className="w-4 h-4" />
+                    高级筛选
+                </Button>
             </div>
 
-            {/* 信息区域 */}
-            <CardContent className="p-0 pt-4 flex gap-3">
-              <Avatar className="h-9 w-9 mt-1">
-                <AvatarImage src={video.author.avatar} alt={video.author.name} />
-                <AvatarFallback>{video.author.name.substring(0, 2)}</AvatarFallback>
-              </Avatar>
+            {/* 🎯 2. 胶囊标签滚动区（完美复刻 YouTube 顶盘） */}
+            {/* no-scrollbar 确保横向滚动时隐藏丑陋的滚动条 */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none snap-x">
+                {CATEGORIES.map((category) => (
+                    <button
+                        key={category}
+                        onClick={() => setActiveCategory(category)}
+                        className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-all shrink-0 snap-center
+              ${activeCategory === category
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'bg-muted hover:bg-muted/80 text-muted-foreground hover:text-primary'
+                            }`}
+                    >
+                        {category}
+                    </button>
+                ))}
+            </div>
 
-              <div className="flex flex-col">
-                <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-foreground group-hover:text-primary transition-colors">
-                  {video.title}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {video.author.name}
-                </p>
-                <div className="flex items-center text-xs text-muted-foreground">
-                  <span>{video.views} 次观看</span>
-                  <span className="mx-1.5 inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
-                  <span>{video.postedAt}</span>
+            {/* 🎯 3. 核心网格区：gap-x-6 (左右呼吸) gap-y-12 (上下断句) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
+                {isLoading
+                    ? Array.from({ length: 10 }).map((_, index) => (
+                        <VideoSkeleton key={index} />
+                    ))
+                    : videos.map((video) => (
+                        <VideoCard key={video.id} video={video} />
+                    ))}
+            </div>
+
+            {/* 🎯 4. 底部加载区域：使用带有呼吸感的大留白和幽灵按钮 */}
+            {!isLoading && (
+                <div className="flex flex-col items-center justify-center mt-16 mb-12 gap-2">
+                    <VideoPagination />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+            )}
+
+        </div>
+    );
 }

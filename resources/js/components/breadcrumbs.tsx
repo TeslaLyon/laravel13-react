@@ -15,6 +15,7 @@ export function Breadcrumbs({
 }: {
     breadcrumbs: BreadcrumbItemType[];
 }) {
+    console.log("breadcrumbs: ", breadcrumbs);
     return (
         <>
             {breadcrumbs.length > 0 && (
