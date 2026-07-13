@@ -36,16 +36,10 @@ export function NavFooter({
                                 tooltip={{ children: item.title }}
                             >
                                 <Link href={item.href} prefetch>
-                                    {/* <a
-                                    href={toUrl(item.href)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                > */}
                                     {item.icon && (
                                         <item.icon className="h-5 w-5" />
                                     )}
                                     <span>{item.title}</span>
-                                    {/* </a> */}
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>

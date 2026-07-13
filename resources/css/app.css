@@ -303,3 +303,43 @@ button:not([disabled]),
 [role="button"]:not([disabled]) {
     cursor: pointer;
 }
+
+/* 定义从左到右的位移动画 */
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* 基础扫光类 */
+.animate-shimmer {
+    position: relative;
+    overflow: hidden;
+}
+
+/* 扫光的光泽层 (利用伪元素实现) */
+.animate-shimmer::after {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    /* 这里的白色透明度渐变就是那道"光" */
+    background-image: linear-gradient(90deg,
+            rgba(255, 255, 255, 0) 0,
+            rgba(255, 255, 255, 0.2) 20%,
+            rgba(255, 255, 255, 0.5) 60%,
+            rgba(255, 255, 255, 0));
+    animation: shimmer 2s infinite;
+    content: '';
+}
+
+/* (可选) 暗黑模式下的扫光适配：如果你使用了暗黑模式，这会让扫光变成深色 */
+.dark .animate-shimmer::after {
+    background-image: linear-gradient(90deg,
+            rgba(0, 0, 0, 0) 0,
+            rgba(0, 0, 0, 0.1) 20%,
+            rgba(0, 0, 0, 0.2) 60%,
+            rgba(0, 0, 0, 0));
+}

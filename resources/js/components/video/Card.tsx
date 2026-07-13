@@ -16,8 +16,6 @@ const hoverColorPool = [
     "bg-orange-500/10 dark:bg-orange-500/20",
 ];
 
-
-
 export function VideoCard({ video }: { video: Video }) {
     // 🎯 2. 根据视频 ID 确定性地“随机”选择一个颜色
     // 如果你的 id 是数字字符串（如 "1", "2"），直接取余数即可
@@ -40,13 +38,14 @@ export function VideoCard({ video }: { video: Video }) {
             {/* 视频封面区域 */}
             <div className="relative w-full aspect-video">
                 <img
-                    src={video.thumbnail}
-                    alt={video.title}
+                    // src={video.list_img}
+                    src="https://media-public-ht.project1content.com/m=eaFaWHbWx/1bd/c20/e85/07c/486/5a5/67b/b43/a5f/47f/26/poster/poster_01.jpg"
+                    alt={video.name}
                     className="w-full h-full object-cover rounded-xl transition-all duration-200"
                 />
-                <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
+                {/* <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
                     {video.duration}
-                </span>
+                </span> */}
 
                 {/* 🎯 细节复刻：底部模拟进度条（仅悬停时显示） */}
                 {/* <div className="absolute bottom-0 left-0 h-[2px] bg-red-500 w-1/3 opacity-0 group-hover:opacity-100 transition-opacity"></div> */}
@@ -57,9 +56,13 @@ export function VideoCard({ video }: { video: Video }) {
 
                 {/* 头像 */}
                 <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                    <AvatarImage src={video.channel.avatar} alt={video.channel.name} />
+                    <AvatarFallback>{video.channel.name.substring(0, 2)}</AvatarFallback>
+                </Avatar>
+                {/* <Avatar className="h-9 w-9 shrink-0 mt-0.5">
                     <AvatarImage src={video.channelAvatar} alt={video.channelName} />
                     <AvatarFallback>{video.channelName.substring(0, 2)}</AvatarFallback>
-                </Avatar>
+                </Avatar> */}
 
                 {/* 🎯 右侧内容区：加上 flex-1 占满空间，加上 min-w-0 防止多行截断失效 */}
                 <div className="flex flex-col flex-1 min-w-0">
@@ -68,7 +71,7 @@ export function VideoCard({ video }: { video: Video }) {
                     <div className="flex items-start justify-between gap-2">
 
                         <h3 className="text-[15px] font-semibold leading-tight line-clamp-2 text-primary group-hover:text-blue-500 transition-colors pt-1.5">
-                            {video.title}
+                            {video.name}
                         </h3>
 
                         {/* 🎯 菜单按钮容器 */}
@@ -76,17 +79,23 @@ export function VideoCard({ video }: { video: Video }) {
                         {/* -mt-1 -mr-2: 向上向右微调一点负边距，让图标的中心与第一行文字的中心完美对齐 */}
                         {/* 响应式逻辑：默认(移动端) opacity-100 永远可见；md(PC端) 恢复为悬停可见 */}
                         <div className="shrink-0 -mt-1 -mr-2 transition-opacity p-1 hover:bg-muted-foreground/20 rounded-full">
-                            <VideoMenu />
+                            <VideoMenu videoId={video.id} slug={video.slug} />
                         </div>
                     </div>
 
                     {/* 频道与播放数据 */}
                     {/* 加入 truncate 让频道名过长时单行省略，保持布局整洁 */}
-                    <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
+                    {/* <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
                         {video.channelName}
                     </p>
                     <p className="text-sm text-muted-foreground truncate">
                         {video.views} • {video.uploadedAt}
+                    </p> */}
+                    <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
+                        {video.channel.name}
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate">
+                        1.2万次观看 • 2小时前
                     </p>
 
                 </div>

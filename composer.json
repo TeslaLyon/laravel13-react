@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "cybercog/laravel-love": "^10.2",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel-lang/common": "^6.8",
         "laravel/chisel": "^0.1.0",
@@ -18,9 +19,12 @@
         "laravel/horizon": "^5.47",
         "laravel/octane": "^2.17",
         "laravel/tinker": "^3.0",
-        "laravel/wayfinder": "^0.1.14"
+        "laravel/wayfinder": "^0.1.14",
+        "overtrue/laravel-query-logger": "^5.1",
+        "resend/resend-php": "^1.5"
     },
     "require-dev": {
+        "barryvdh/laravel-ide-helper": "^3.7",
         "fakerphp/faker": "^1.24",
         "larastan/larastan": "^3.9",
         "laravel/pail": "^1.2.5",

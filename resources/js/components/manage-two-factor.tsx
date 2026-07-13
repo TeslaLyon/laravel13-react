@@ -80,7 +80,7 @@ export default function ManageTwoFactor(props: Props) {
             ) : (
                 <div className="flex flex-col items-start justify-start space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        启用两步验证后，登录时会提示输入安全PIN码。该PIN码可通过手机上的TOTP应用获取。
+                        启用两步验证后，登录时会提示输入安全PIN码。该PIN码可通过手机上的TOTP应用获取，比如 Google Authenticator 、Microsoft Authenticator、Authy、1Password、LastPass Authenticator等。
                     </p>
 
                     <div>
