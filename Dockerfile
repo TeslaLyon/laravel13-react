@@ -18,11 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # 🚀 极致缓存优化：先单独复制依赖定义文件，让 GitHub 能够秒级缓存 node_modules 和 vendor
-COPY composer.json composer.lock package.json package-lock.json ./
+# COPY composer.json composer.lock package.json package-lock.json ./
 
-# 极速安装后端与前端依赖
-RUN composer install --no-dev --optimize-autoloader --no-scripts --prefer-dist --ignore-platform-reqs \
-    && npm ci
+# # 极速安装后端与前端依赖
+# RUN composer install --no-dev --optimize-autoloader --no-scripts --prefer-dist --ignore-platform-reqs \
+#     && npm ci
+
+# 🚀 极致缓存优化：拆分后端与前端，最大限度利用 Docker 缓存
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader --no-scripts --prefer-dist --ignore-platform-reqs
+
+COPY package.json package-lock.json ./
+# 将严格的 ci 换成 install，增加容错率，并忽略严格的 peer 依赖冲突
+RUN npm install --legacy-peer-deps
 
 # 复制项目全量源码
 COPY . .
