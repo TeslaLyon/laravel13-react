@@ -21,6 +21,10 @@ export default function ForgotPassword({ status }: { status?: string }) {
                 </div>
             )}
 
+            <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                <strong>温馨提示：</strong> 邮件发送后，请先到<strong>垃圾邮件</strong>中查看是否收到来自“什么值得看”的邮件。如果被误判为垃圾邮件，请在邮件详情页中点击<strong>“这不是垃圾邮件”</strong>按钮，以确保后续能正常接收通知。
+            </div>
+
             <div className="space-y-6">
                 <Form {...email.form()}>
                     {({ processing, errors }) => (

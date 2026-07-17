@@ -4,24 +4,11 @@ import { StoreMenu } from '@/components/store/Menu';
 import { Product } from '@/types/store';
 import { cn } from "@/lib/utils";
 import { Link } from "@inertiajs/react";
+import { getCardHoverColor } from "@/lib/utils";
 
 export function ProductCard({ product }: { product: Product }) {
-    // 动态悬浮背景色池 (保留你精妙的设计)
-    const hoverColorPool = [
-        "bg-red-500/10 dark:bg-red-500/20",
-        "bg-blue-500/10 dark:bg-blue-500/20",
-        "bg-green-500/10 dark:bg-green-500/20",
-        "bg-yellow-500/10 dark:bg-yellow-500/20",
-        "bg-purple-500/10 dark:bg-purple-500/20",
-        "bg-pink-500/10 dark:bg-pink-500/20",
-        "bg-indigo-500/10 dark:bg-indigo-500/20",
-        "bg-orange-500/10 dark:bg-orange-500/20",
-    ];
-    // 为了防止 product.id 为数字或字符串时报错，这里加个容错处理
-    const colorIndex = Number(product.id) % hoverColorPool.length;
-    console.log("colorIndex: ", colorIndex);
-    console.log("productId: ", product.id);
-    const hoverBgStyle = hoverColorPool[colorIndex];
+
+    const hoverBgStyle = getCardHoverColor(product.id);
 
     // 判断是否为特价商品（有原价且原价大于现价）
     const isSale = product.originalPrice && product.originalPrice > product.price;

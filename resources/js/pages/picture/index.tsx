@@ -6,7 +6,7 @@ import { VideoPagination } from '@/components/VideoPagination';
 // 模拟数据：标签颜色全面适配 Dark Mode
 const mockItems: ShowcaseItem[] = [
     {
-        id: "1",
+        id: 1,
         title: "在东京街头寻找最佳的赛博朋克摄影机位，夜景实拍解析",
         imageUrl: "https://images.pexels.com/photos/2506923/pexels-photo-2506923.jpeg?auto=compress&cs=tinysrgb&w=800",
         views: "12.5万",
@@ -16,7 +16,7 @@ const mockItems: ShowcaseItem[] = [
         ]
     },
     {
-        id: "2",
+        id: 2,
         title: "只需要 5 分钟的居家燃脂 HIIT，不需要任何器械！",
         imageUrl: "https://images.pexels.com/photos/4498542/pexels-photo-4498542.jpeg?auto=compress&cs=tinysrgb&w=800",
         views: "230万",
@@ -26,7 +26,7 @@ const mockItems: ShowcaseItem[] = [
         ]
     },
     {
-        id: "3",
+        id: 3,
         title: "如何用一台旧手机打造智能家居控制中心？超简单教程",
         imageUrl: "https://images.pexels.com/photos/4144222/pexels-photo-4144222.jpeg?auto=compress&cs=tinysrgb&w=800",
         views: "8.9万",
@@ -35,7 +35,7 @@ const mockItems: ShowcaseItem[] = [
         ]
     },
     {
-        id: "4",
+        id: 4,
         title: "探店隐藏在深巷里的百年拉面馆，醇厚猪骨汤底的秘密",
         imageUrl: "https://images.pexels.com/photos/3338681/pexels-photo-3338681.jpeg?auto=compress&cs=tinysrgb&w=800",
         views: "45万",

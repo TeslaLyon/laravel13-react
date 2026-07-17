@@ -6,6 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Product } from '@/types/store';
 
+// TODO: 需要有地方介绍视频|图片的尺寸大小
+// TODO:规划抖音快手主播每天都会有视频产生，如何售卖？捆绑？
+
 // 扩展一下详情页专用的模拟数据
 const PRODUCT_DETAIL = {
     id: '101',

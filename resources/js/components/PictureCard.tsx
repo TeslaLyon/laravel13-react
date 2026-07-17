@@ -1,6 +1,7 @@
 import React from "react";
 import { MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getCardHoverColor } from "@/lib/utils";
 
 export interface Tag {
     id: string;
@@ -9,28 +10,15 @@ export interface Tag {
 }
 
 export interface ShowcaseItem {
-    id: string;
+    id: number;
     title: string;
     imageUrl: string;
     views: string;
     tags: Tag[];
 }
 
-// 颜色池复用
-const hoverColorPool = [
-    "bg-red-500/10 dark:bg-red-500/20",
-    "bg-blue-500/10 dark:bg-blue-500/20",
-    "bg-green-500/10 dark:bg-green-500/20",
-    "bg-yellow-500/10 dark:bg-yellow-500/20",
-    "bg-purple-500/10 dark:bg-purple-500/20",
-    "bg-pink-500/10 dark:bg-pink-500/20",
-    "bg-indigo-500/10 dark:bg-indigo-500/20",
-    "bg-orange-500/10 dark:bg-orange-500/20",
-];
-
 export default function ShowcaseCard({ item }: { item: ShowcaseItem }) {
-    const colorIndex = String(item.id).charCodeAt(0) % hoverColorPool.length;
-    const hoverBgStyle = hoverColorPool[colorIndex];
+    const hoverBgStyle = getCardHoverColor(item.id);
 
     return (
         // 采用你参考文件的外层逻辑结构

@@ -7,42 +7,42 @@ import { Compass } from "lucide-react";
 const fetchCategories = async (): Promise<CategoryItem[]> => {
     return new Promise((resolve) => setTimeout(() => resolve([
         {
-            id: "c1",
+            id: 1,
             name: "前端开发",
             description: "探索最新的 React、Vue 及前沿 Web 技术。",
             coverImage: "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&cs=tinysrgb&w=800",
             itemCount: "128"
         },
         {
-            id: "c2",
+            id: 2,
             name: "科技数码",
             description: "最新的电子产品评测与极客桌面搭建指北。",
             coverImage: "https://images.pexels.com/photos/1779487/pexels-photo-1779487.jpeg?auto=compress&cs=tinysrgb&w=800",
             itemCount: "342"
         },
         {
-            id: "c3",
+            id: 3,
             name: "生活 Vlog",
             description: "记录真实的生活碎片，感受世界的美好温度。",
             coverImage: "https://images.pexels.com/photos/347139/pexels-photo-347139.jpeg?auto=compress&cs=tinysrgb&w=800",
             itemCount: "85"
         },
         {
-            id: "c4",
+            id: 4,
             name: "影视制作",
             description: "灯光、摄影、剪辑，全方位的影视幕后解析。",
             coverImage: "https://images.pexels.com/photos/2510428/pexels-photo-2510428.jpeg?auto=compress&cs=tinysrgb&w=800",
             itemCount: "64"
         },
         {
-            id: "c5",
+            id: 5,
             name: "独立游戏",
             description: "发现小众佳作，支持独立游戏开发者的梦想。",
             coverImage: "https://images.pexels.com/photos/3165335/pexels-photo-3165335.jpeg?auto=compress&cs=tinysrgb&w=800",
             itemCount: "210"
         },
         {
-            id: "c6",
+            id: 6,
             name: "开源项目",
             description: "汇集优秀的开源工具，共建更好的开发者生态。",
             coverImage: "https://images.pexels.com/photos/546819/pexels-photo-546819.jpeg?auto=compress&cs=tinysrgb&w=800",

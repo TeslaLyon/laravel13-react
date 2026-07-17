@@ -1,31 +1,20 @@
-// 文件位置: src/components/CategoryCard.tsx
 import React from "react";
 import { ChevronRight } from "lucide-react";
+import { getCardHoverColor } from "@/lib/utils";
 
 // 1. 定义分类数据类型
 export interface CategoryItem {
-    id: string;
+    id: number;
     name: string;
     description: string;
     coverImage: string;
     itemCount: string;
 }
 
-// 2. 引入彩色光晕池
-const hoverColorPool = [
-    "bg-red-500/10 dark:bg-red-500/20",
-    "bg-blue-500/10 dark:bg-blue-500/20",
-    "bg-green-500/10 dark:bg-green-500/20",
-    "bg-yellow-500/10 dark:bg-yellow-500/20",
-    "bg-purple-500/10 dark:bg-purple-500/20",
-    "bg-pink-500/10 dark:bg-pink-500/20",
-    "bg-indigo-500/10 dark:bg-indigo-500/20",
-    "bg-orange-500/10 dark:bg-orange-500/20",
-];
+
 
 export default function CategoryCard({ category }: { category: CategoryItem }) {
-    const colorIndex = String(category.id).charCodeAt(0) % hoverColorPool.length;
-    const hoverBgStyle = hoverColorPool[colorIndex];
+    const hoverBgStyle = getCardHoverColor(category.id);
 
     return (
         // 🎯 外层容器

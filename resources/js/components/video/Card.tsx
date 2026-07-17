@@ -1,27 +1,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Video } from "@/types/video";
 import { VideoMenu } from "@/components/video/Menu";
+import { getCardHoverColor } from "@/lib/utils";
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
 
-// 🎯 1. 定义一个颜色池
-// 使用 10% 的透明度 (比如 /10)，这样颜色会很柔和，不会刺眼。
-// 同时适配了暗黑模式 (dark:xxx/20)
-const hoverColorPool = [
-    "bg-red-500/10 dark:bg-red-500/20",
-    "bg-blue-500/10 dark:bg-blue-500/20",
-    "bg-green-500/10 dark:bg-green-500/20",
-    "bg-yellow-500/10 dark:bg-yellow-500/20",
-    "bg-purple-500/10 dark:bg-purple-500/20",
-    "bg-pink-500/10 dark:bg-pink-500/20",
-    "bg-indigo-500/10 dark:bg-indigo-500/20",
-    "bg-orange-500/10 dark:bg-orange-500/20",
-];
+dayjs.extend(relativeTime)
+
+dayjs.locale('zh-cn')
 
 export function VideoCard({ video }: { video: Video }) {
-    // 🎯 2. 根据视频 ID 确定性地“随机”选择一个颜色
-    // 如果你的 id 是数字字符串（如 "1", "2"），直接取余数即可
-    // 如果 id 是 UUID，可以使用 video.id.charCodeAt(0) 获取第一个字符的 ASCII 码来计算
-    const colorIndex = String(video.id).charCodeAt(0) % hoverColorPool.length;
-    const hoverBgStyle = hoverColorPool[colorIndex];
+    const hoverBgStyle = getCardHoverColor(video.id);
     return (
         // 🎯 核心悬停特效区：
         // p-2 -m-2: 让容器向外扩张一点但用负边距抵消，防止挤压旁边的卡片
@@ -39,7 +29,7 @@ export function VideoCard({ video }: { video: Video }) {
             <div className="relative w-full aspect-video">
                 <img
                     // src={video.list_img}
-                    src="https://media-public-ht.project1content.com/m=eaFaWHbWx/1bd/c20/e85/07c/486/5a5/67b/b43/a5f/47f/26/poster/poster_01.jpg"
+                    src="https://static0.srcdn.com/wordpress/wp-content/uploads/2024/12/gta-6-keyart-logo.jpg?w=1600&h=900&fit=crop"
                     alt={video.name}
                     className="w-full h-full object-cover rounded-xl transition-all duration-200"
                 />
@@ -95,7 +85,7 @@ export function VideoCard({ video }: { video: Video }) {
                         {video.channel.name}
                     </p>
                     <p className="text-sm text-muted-foreground truncate">
-                        1.2万次观看 • 2小时前
+                        1.2万次观看 • {dayjs(video.created_at).fromNow()}
                     </p>
 
                 </div>

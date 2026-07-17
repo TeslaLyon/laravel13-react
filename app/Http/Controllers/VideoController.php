@@ -12,12 +12,15 @@ class VideoController extends Controller
 
     public function index(): \Inertia\Response
     {
-        $videos = Video::with('channel:id,name,slug,avatar')->orderByDesc('created_at')->paginate(9);
+        $videos = Video::with('channel:id,name,slug,avatar')
+            ->orderByDesc('created_at')
+            ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'likes_count', 'favorites_count', 'created_at')
+            ->paginate(9);
         // dd($videos->toArray());
         return Inertia::render('video/index', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
-                ['title' => '推荐视频', 'href' => null], // 当前页没有 URL
+                ['title' => '推荐视频1111', 'href' => null], // 当前页没有 URL
             ],
             'videos' => Inertia::defer(function () use ($videos) {
                 // Sleep::for(1000)->milliseconds();
@@ -43,6 +46,11 @@ class VideoController extends Controller
             $isDisLike = $video->viaLoveReactant()->isReactedBy($user, 'Dislike');
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");
         }
+        $recommendVideos = Video::with('channel:id,name,slug,avatar')
+            ->orderByDesc('created_at')
+            ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'likes_count', 'favorites_count', 'created_at')
+            ->take(10)
+            ->get();
         return Inertia::render('video/show', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
@@ -52,6 +60,9 @@ class VideoController extends Controller
             'video' => Inertia::defer(function () use ($video) {
                 Sleep::for(1000)->milliseconds();
                 return $video;
+            }),
+            'recommendVideos' => Inertia::defer(function () use ($recommendVideos) {
+                return $recommendVideos;
             }),
             'isSubscribed' => $isSubscribed,
             'liked' => $isLike,
@@ -183,7 +194,7 @@ class VideoController extends Controller
             $isSaveToWatchLater = $video->viaLoveReactant()->isReactedBy($user, 'SaveToWatchLater');
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");
         }
-        Sleep::for(2000)->milliseconds();
+        // Sleep::for(2000)->milliseconds();
         return response()->json([
             'isCollect' => $isCollect,
             'isSaveToWatchLater' => $isSaveToWatchLater,

@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useHttp, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { show } from '@/actions/App/Http/Controllers/ChannelController';
+import { getCardHoverColor } from "@/lib/utils";
 
 export interface StudioItem {
     id: string;
@@ -29,17 +30,6 @@ export interface StudioItem {
     imageCount: string | number;
     linkCount: string | number;
 }
-
-const hoverColorPool = [
-    "bg-red-500/10 dark:bg-red-500/20",
-    "bg-blue-500/10 dark:bg-blue-500/20",
-    "bg-green-500/10 dark:bg-green-500/20",
-    "bg-yellow-500/10 dark:bg-yellow-500/20",
-    "bg-purple-500/10 dark:bg-purple-500/20",
-    "bg-pink-500/10 dark:bg-pink-500/20",
-    "bg-indigo-500/10 dark:bg-indigo-500/20",
-    "bg-orange-500/10 dark:bg-orange-500/20",
-];
 
 interface SubscribeResponse {
     is_subscribed: boolean;
@@ -53,8 +43,7 @@ const actorTags = [
 ];
 
 export default function StudioCard({ studio }: { studio: Channel & any }) {
-    const colorIndex = String(studio.id).charCodeAt(0) % hoverColorPool.length;
-    const hoverBgStyle = hoverColorPool[colorIndex];
+    const hoverBgStyle = getCardHoverColor(studio.id);
     const [isOpen, setIsOpen] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
     const { get, processing: isGetting } = useHttp()
