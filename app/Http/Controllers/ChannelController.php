@@ -9,59 +9,107 @@ use Illuminate\Support\Sleep;
 
 class ChannelController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $channels = Channel::orderByDesc('created_at')->paginate(1);
-        // dd($channels->toArray());
+        $category = $request->input('category', '全部片商');
 
         return Inertia::render('channel/index', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
-                ['title' => '片商', 'href' => null], // 当前页没有 URL
+                ['title' => '片商', 'href' => null],
             ],
-            'channels' => Inertia::defer(function () use ($channels) {
-                // Sleep::for(2000)->milliseconds();
-                return $channels;
+            // 将当前选中的分类传回前端
+            'currentCategory' => $category,
+            // 🌟 使用 Inertia::defer 延迟加载数据库分页查询
+            'channels' => Inertia::defer(function () use ($request, $category) {
+                $query = Channel::query()->orderByDesc('created_at');
+
+                // 当分类不是“全部片商”时，增加条件筛选
+                if ($category && $category !== '全部片商') {
+                    $query->where('category', $category);
+                }
+
+                // 每页 12 条数据，withQueryString() 确保翻页时保留 category 参数
+                return $query->paginate(1)->withQueryString();
             })
         ]);
     }
 
-    public function show(Channel $channel)
+    public function show(Request $request, Channel $channel, string $slug, string $tab = 'home')
     {
+        abort_if($channel->slug !== $slug, 404);
+
+        $user = $request->user();
+        $initisFollowed = false;
+        if ($user) {
+            $initisFollowed = $channel->viaLoveReactant()->isReactedBy($user, 'FollowChannel');
+        }
+
+        // ==========================================
+        // 4. 数据结构拍平处理，适配前端 BaseDetailShow 组件
+        // ==========================================
+        $channelData = $channel->toArray();
+        if ($channel->detail) {
+            $channelData['basic_info'] = $channel->detail->basic_info ?? [];
+            $channelData['physical_info'] = $channel->detail->physical_info ?? [];
+            $channelData['socials'] = $channel->detail->socials ?? [];
+            unset($channelData['detail']);
+        } else {
+            $channelData['basic_info'] = [];
+            $channelData['physical_info'] = [];
+            $channelData['socials'] = [];
+        }
+
+        // ==========================================
+        // 5. 渲染前端 Inertia 组件并使用 defer 延迟加载大体积数据
+        // ==========================================
         return Inertia::render('channel/show', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
                 ['title' => '片商', 'href' => route('channels.index')],
-                ['title' => $channel->name, 'href' => null], // 当前页没有 URL
+                ['title' => $channel->name, 'href' => null],
             ],
-            'channel' => [
-                'id' => 1,
-                'name' => '星空视觉工作室 (Starry Studio)',
-                'avatar_url' => 'https://api.dicebear.com/9.x/bottts/svg?seed=Starry&backgroundColor=b6e3f4',
-                'banner_url' => 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop',
-                'followers_count' => '125万',
-                'handle' => '@StarryStudio',
-                'description' => '致力于创作最高质量的视觉作品和短片。'
-            ],
-            'videos' => [
-                [
-                    'id' => 101,
-                    'title' => '【4K画质】探索未知宇宙的奥秘...',
-                    'thumbnail_url' => 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800&auto=format&fit=crop&q=60',
-                    'views' => '23.5万',
-                    'published_at' => '2天前'
-                ],
-                // ... 其他视频
-            ]
-            // 'video' => Inertia::defer(function () use ($video) {
-            //     Sleep::for(1000)->milliseconds();
-            //     return $video;
-            // }),
-            // 'isSubscribed' => $isSubscribed,
-            // 'liked' => $isLike,
-            // 'disLiked' => $isDisLike,
-            // 'likeCount' => 975,
-            // 'initialIsCollect' => $isCollect,
+            'channel' => $channelData,
+            'initisFollowed' => $initisFollowed,
+            'currentTab' => $tab,
+
+            // 🌟 首页 Tab：最新视频（延迟加载，并关联预加载演员数据）
+            'latestVideos' => Inertia::defer(function () use ($channel) {
+                $videos = $channel->videos()->latest()->take(3)->get();
+
+                // 在内存中将现有 $channel 挂载到每个 video 上
+                $videos->each(fn($video) => $video->setRelation('channel', $channel));
+
+                return $videos;
+            }),
+
+            // 🌟 首页 Tab：最新图片（延迟加载）
+            // 'latestPhotos' => Inertia::defer(
+            //     fn() => $channel->images()
+            //         ->latest()
+            //         ->take(5)
+            //         ->get()
+            // ),
+            'latestPhotos' => [],
+
+            // 🌟 视频 Tab：分页视频列表（延迟加载）
+            'paginatedVideos' => Inertia::defer(function () use ($channel) {
+                $paginator = $channel->videos()->latest()->paginate(12)->withQueryString();
+
+                // 对分页数据集的当前页集合在内存中绑定 $channel
+                $paginator->getCollection()->each(fn($video) => $video->setRelation('channel', $channel));
+
+                return $paginator;
+            }),
+
+            // 🌟 图片 Tab：分页图片列表（延迟加载）
+            // 'paginatedPhotos' => Inertia::defer(
+            //     fn() => $channel->images()
+            //         ->latest()
+            //         ->paginate(15)
+            //         ->withQueryString()
+            // ),
+            'paginatedPhotos' => [],
         ]);
     }
 

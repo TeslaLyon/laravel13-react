@@ -18,6 +18,10 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
+    // 1. 新增：获取 URL 中的 redirect 参数
+    const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const redirectUrl = searchParams?.get('redirect') || '';
+
     return (
         <>
             <Head title="登录" />
@@ -31,6 +35,11 @@ export default function Login({ status, canResetPassword }: Props) {
             >
                 {({ processing, errors }) => (
                     <>
+                        {/* 2. 新增：如果存在 redirect 参数，追加隐藏输入框传入后端 */}
+                        {redirectUrl && (
+                            <input type="hidden" name="redirect" value={redirectUrl} />
+                        )}
+
                         <div className="grid gap-6">
                             <div className="grid gap-2">
                                 <Label htmlFor="email">电子邮箱地址</Label>

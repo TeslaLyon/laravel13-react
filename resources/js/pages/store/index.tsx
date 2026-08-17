@@ -145,7 +145,7 @@ export default function StoreFront() {
                 </div>
 
                 {/* 响应式网格布局 (YouTube 风格：自适应列数) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-6">
                     {MOCK_PRODUCTS.map((product) => (
                         <ProductCard key={product.id} product={product} />
                     ))}

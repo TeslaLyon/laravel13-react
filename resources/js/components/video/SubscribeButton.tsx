@@ -11,6 +11,8 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useRequireAuth } from '@/components/require-auth-provider';
+import ChannelController from "@/actions/App/Http/Controllers/ChannelController";
 
 interface SubscribeResponse {
     is_subscribed: boolean;
@@ -30,17 +32,22 @@ export function SubscribeButton({ subscribed, channelId, setSubscribed, channelS
 
     const { post, processing } = useHttp()
 
+    const { requireAuth } = useRequireAuth();
+
+    // 2. 使用 requireAuth 包裹订阅处理函数
     const handleSubscribeToggle = () => {
-        if (processing) return;
-        post(`/channels/${channelId}/${channelSlug}/subscribe`, {
-            onSuccess: (response: unknown) => {
-                const subscribeResponse = response as SubscribeResponse;
-                toast.success(subscribeResponse.message);
-                setSubscribed(subscribeResponse.is_subscribed);
-            },
-            onError: () => {
-                toast.error('刷新页面后重试');
-            }
+        requireAuth(() => {
+            if (processing) return;
+            post(ChannelController.toggleSubscribe.url({ channel: channelId, slug: channelSlug }), {
+                onSuccess: (response: unknown) => {
+                    const subscribeResponse = response as SubscribeResponse;
+                    toast.success(subscribeResponse.message);
+                    setSubscribed(subscribeResponse.is_subscribed);
+                },
+                onError: () => {
+                    toast.error('刷新页面后重试');
+                }
+            });
         });
     };
     return (

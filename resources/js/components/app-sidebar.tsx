@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Store, LayoutGrid, Video, House, Users, Images, Clapperboard, HelpCircle, Search, FileText, Crown } from 'lucide-react';
+import { Store, LayoutGrid, Video, House, Users, Images, Clapperboard, HelpCircle, Search, FileText, Crown, MessagesSquare } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -22,6 +22,7 @@ import { index as categoryIndex } from '@/routes/categories';
 import { index as articlesIndex } from '@/routes/articles';
 import { index as storeIndex } from '@/routes/store';
 import { index as vipIndex } from '@/routes/vip';
+import { index as ForumIndex } from '@/routes/forum';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -64,6 +65,11 @@ const mainNavItems: NavItem[] = [
         title: '商城',
         href: storeIndex(),
         icon: Store,
+    },
+    {
+        title: '论坛',
+        href: ForumIndex(),
+        icon: MessagesSquare,
     },
     {
         title: 'VIP',

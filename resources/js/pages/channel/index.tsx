@@ -5,6 +5,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { Deferred, Link } from "@inertiajs/react";
 import { Channel, PaginatedResponse } from "@/types/channel";
 import { show } from '@/actions/App/Http/Controllers/ChannelController';
+import { VideoPagination } from '@/components/VideoPagination';
 
 // 顶部分类胶囊标签
 const CATEGORIES = ["全部片商", "北美区", "欧洲区", "亚洲区", "独立制作", "VR专区"];
@@ -61,14 +62,9 @@ export default function StudioListPage({ channels }: { channels: PaginatedRespon
                 </Deferred>
             </div>
 
-            {/* 4. 底部加载区域 */}
-            {/* {!isLoading && (
-                <div className="flex flex-col items-center justify-center mt-16 mb-12 gap-2">
-                    <Button variant="ghost" className="text-muted-foreground hover:bg-muted rounded-full px-8">
-                        加载更多
-                    </Button>
-                </div>
-            )} */}
+            <div className="flex flex-col items-center justify-center mt-10 mb-12 gap-2">
+                <VideoPagination links={channels?.links} />
+            </div>
         </div>
     );
 }

@@ -9,7 +9,6 @@
  * file that was distributed with this source code.
  */
 
-declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;

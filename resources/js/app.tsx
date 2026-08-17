@@ -27,10 +27,10 @@ createInertiaApp({
     withApp(app) {
         return (
             // <AuthPromptProvider>
-                <TooltipProvider delayDuration={0}>
-                    {app}
-                    <Toaster />
-                </TooltipProvider>
+            <TooltipProvider delayDuration={0}>
+                {app}
+                <Toaster />
+            </TooltipProvider>
             // </AuthPromptProvider>
         );
     },

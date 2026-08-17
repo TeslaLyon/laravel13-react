@@ -6,17 +6,18 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-    Clock,
-    Bookmark,
     EllipsisVertical,
     Loader2,
     AlarmClockPlus,
-    AlarmClockMinus
-
+    AlarmClockMinus,
+    Bookmark
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useHttp, usePage, router } from '@inertiajs/react';
+import { useHttp, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
+
+// 1. 引入全局登录拦截 Hook
+import { useRequireAuth } from '@/components/require-auth-provider';
 
 interface VideoStatusResponse {
     isSaveToWatchLater: boolean;
@@ -43,6 +44,10 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
 
     const { get, post } = useHttp();
 
+    // 2. 获取全局登录拦截方法
+    const { requireAuth } = useRequireAuth();
+
+    // 当菜单展开且用户已登录时，获取初始的稍后观看/收藏状态
     useEffect(() => {
         if (isOpen && user) {
             setIsGetting(true);
@@ -62,61 +67,57 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
         }
     }, [isOpen, videoId, slug, user]);
 
-    const checkLoginOrPrompt = () => {
-        if (!user) {
-            toast('需要登录', {
-                description: '请先登录后再进行此操作',
-                action: {
-                    label: '去登录',
-                    onClick: () => router.visit('/login'),
-                },
-                duration: 15000,
-            });
-            setIsOpen(false);
-            return false;
-        }
-        return true;
-    };
-
+    // 3. 重构：切换稍后观看状态
     const handleToggleWatchLater = () => {
-        if (!checkLoginOrPrompt()) return;
-        if (isWatchLaterProcessing) return;
+        // 先关闭下拉菜单，保证 UI 简洁
+        setIsOpen(false);
 
-        setIsWatchLaterProcessing(true);
+        // 使用 requireAuth 统一拦截
+        requireAuth(() => {
+            if (isWatchLaterProcessing) return;
 
-        post(`/videos/${videoId}/${slug}/watch-later`, {
-            onSuccess: (response: unknown) => {
-                const res = response as ActionResponse;
-                toast.success(res.message);
-                setIsWatchLater(res.status);
-            },
-            onError: () => {
-                toast.error('操作失败，请重试');
-            },
-            onFinish: () => {
-                setIsWatchLaterProcessing(false);
-            }
+            setIsWatchLaterProcessing(true);
+
+            post(`/videos/${videoId}/${slug}/watch-later`, {
+                onSuccess: (response: unknown) => {
+                    const res = response as ActionResponse;
+                    toast.success(res.message);
+                    setIsWatchLater(res.status);
+                },
+                onError: () => {
+                    toast.error('操作失败，请重试');
+                },
+                onFinish: () => {
+                    setIsWatchLaterProcessing(false);
+                }
+            });
         });
     };
 
+    // 4. 重构：切换收藏状态
     const handleToggleFavorite = () => {
-        if (!checkLoginOrPrompt()) return;
-        if (isFavoriteProcessing) return;
+        // 先关闭下拉菜单
+        setIsOpen(false);
 
-        setIsFavoriteProcessing(true);
+        // 使用 requireAuth 统一拦截
+        requireAuth(() => {
+            if (isFavoriteProcessing) return;
 
-        post(`/videos/${videoId}/${slug}/collect`, {
-            onSuccess: (response: unknown) => {
-                const res = response as ActionResponse;
-                toast.success(res.message);
-                setIsFavorited(res.status);
-            },
-            onError: () => {
-                toast.error('操作失败，请重试');
-            },
-            onFinish: () => {
-                setIsFavoriteProcessing(false);
-            }
+            setIsFavoriteProcessing(true);
+
+            post(`/videos/${videoId}/${slug}/collect`, {
+                onSuccess: (response: unknown) => {
+                    const res = response as ActionResponse;
+                    toast.success(res.message);
+                    setIsFavorited(res.status);
+                },
+                onError: () => {
+                    toast.error('操作失败，请重试');
+                },
+                onFinish: () => {
+                    setIsFavoriteProcessing(false);
+                }
+            });
         });
     };
 
@@ -169,7 +170,6 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
                             {isFavoriteProcessing ? (
                                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                             ) : (
-                                /* 🎯 修改点：通过判断 isFavorited 动态设置 fill 属性 */
                                 <Bookmark
                                     className="w-5 h-5"
                                     fill={isFavorited ? "currentColor" : "none"}

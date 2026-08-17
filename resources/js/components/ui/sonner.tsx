@@ -12,6 +12,7 @@ function Toaster({ ...props }: ToasterProps) {
             theme={appearance}
             className="toaster group"
             position="bottom-right"
+            richColors // 【关键新增】：开启这个属性，success 就会自动变绿，error 变红
             style={
                 {
                     '--normal-bg': 'var(--popover)',

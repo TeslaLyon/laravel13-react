@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProfileController extends Controller
 {
@@ -41,6 +43,43 @@ class ProfileController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 
         return to_route('profile.edit');
+    }
+
+    public function editAvatar(Request $request): Response
+    {
+        return Inertia::render('settings/avatar');
+    }
+
+    /**
+     * 🎯 保存裁剪后的新头像
+     */
+    public function updateAvatar(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
+        ]);
+
+        $user = $request->user();
+
+        // 自动清理旧头像文件
+        if ($user->avatar && Str::startsWith($user->avatar, '/storage/')) {
+            $oldPath = Str::replaceFirst('/storage/', '', $user->avatar);
+            if (Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+        }
+
+        // 保存新文件
+        $path = $request->file('avatar')->store('avatars', 'public');
+
+        // 更新数据库
+        $user->update([
+            'avatar' => Storage::url($path),
+        ]);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Avatar updated successfully.')]);
+
+        return to_route('profile.avatar.edit');
     }
 
     /**

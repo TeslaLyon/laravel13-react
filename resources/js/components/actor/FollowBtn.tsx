@@ -22,6 +22,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useHttp } from '@inertiajs/react';
 import { toast } from 'sonner';
 
+// 🌟 1. 引入鉴权拦截 Hook
+import { useRequireAuth } from '@/components/require-auth-provider';
+
+// 🌟 2. 导出支持的模块类型
+export type ModuleType = 'actor' | 'channel' | 'category' | 'tag';
+
 // 星星粒子组件
 const Sparkles = () => {
     const particles = [
@@ -53,17 +59,44 @@ const Sparkles = () => {
 
 const Spinner = () => <Loader2 className="w-4 h-4 animate-spin" />;
 
-interface FollowBtnProps {
-    actorId: number;
-    slug: string;
-    initisFollowed: boolean;
+// 🌟 3. 扩充 Props 类型定义，支持可选参数与多模块类型
+export interface FollowBtnProps {
+    moduleType?: ModuleType;            // 模块类型，默认为 'actor'
+    id?: number | string;               // 实体 ID
+    actorId?: number | string;          // 兼容旧属性名 actorId
+    slug?: string;                      // 允许 string 或 undefined
+    initisFollowed?: boolean;           // 初始关注状态
 }
 
 interface CollectResponse {
     message: string;
 }
 
-export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
+/**
+ * 辅助函数：根据模块类型返回 API 路径前缀
+ */
+function getModulePrefix(moduleType: ModuleType): string {
+    switch (moduleType) {
+        case 'category':
+            return 'categories'; // 自动转换为复数 categories
+        case 'actor':
+            return 'actors';
+        case 'channel':
+            return 'channels';
+        case 'tag':
+            return 'tags';
+        default:
+            return `${moduleType}s`;
+    }
+}
+
+export function FollowBtn({
+    moduleType = 'actor',
+    id,
+    actorId,
+    slug = '',
+    initisFollowed = false
+}: FollowBtnProps) {
     const [isSubscribed, setIsSubscribed] = useState(initisFollowed);
     const { post, processing } = useHttp();
     const [isAnimating, setIsAnimating] = useState(false);
@@ -71,6 +104,12 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [alertOpen, setAlertOpen] = useState(false);
     const [notifyLevel, setNotifyLevel] = useState<'all' | 'personalized' | 'none'>('personalized');
+
+    // 🌟 4. 初始化鉴权拦截器
+    const { requireAuth } = useRequireAuth();
+
+    // 优先取 id，没有则取兼容属性 actorId
+    const targetId = id ?? actorId;
 
     // 【核心控制】：只有在播放关注动画，或者已关注状态下，才启用布局和颜色过渡
     const enableAnim = isAnimating || isSubscribed;
@@ -86,25 +125,32 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
         }
     }, [isAnimating]);
 
-    // 网络请求处理逻辑
+    // 🌟 5. 网络请求处理逻辑（使用 requireAuth 拦截）
     const handleToggle = () => {
-        if (processing || isAnimating) return;
+        if (processing || isAnimating || !targetId) return;
 
-        post(`/actors/${actorId}/${slug}/follow`, {
-            onSuccess: (response: unknown) => {
-                const typedResponse = response as CollectResponse;
-                toast.success(typedResponse.message);
+        // 引入权限验证包围网络请求
+        requireAuth(() => {
+            const prefix = getModulePrefix(moduleType);
+            const slugSegment = slug ? `${slug}/` : '';
+            const followUrl = `/${prefix}/${targetId}/${slugSegment}follow`;
 
-                if (isSubscribed) {
-                    setIsSubscribed(false);
-                    setNotifyLevel('personalized');
-                } else {
-                    setIsAnimating(true);
+            post(followUrl, {
+                onSuccess: (response: unknown) => {
+                    const typedResponse = response as CollectResponse;
+                    toast.success(typedResponse.message || '操作成功');
+
+                    if (isSubscribed) {
+                        setIsSubscribed(false);
+                        setNotifyLevel('personalized');
+                    } else {
+                        setIsAnimating(true);
+                    }
+                },
+                onError: () => {
+                    toast.error('操作失败，请刷新页面后重试');
                 }
-            },
-            onError: () => {
-                toast.error('操作失败，请刷新页面后重试');
-            }
+            });
         });
     };
 
@@ -127,7 +173,7 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
     };
 
     return (
-        <div className="relative inline-block w-full sm:w-auto mt-3">
+        <div className="relative inline-block w-full sm:w-auto">
             <DropdownMenu
                 open={dropdownOpen}
                 onOpenChange={(open) => {
@@ -148,14 +194,12 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
                                             }
                                         }}
                                         disabled={processing}
-
                                         className={`w-full sm:w-auto rounded-full px-5 text-sm font-semibold ${enableAnim ? "transition-colors duration-300" : ""
                                             } ${getDynamicStyles()}`}
                                     >
                                         <motion.div layout={enableAnim} className="flex items-center justify-center gap-2 overflow-hidden">
                                             {processing && <Spinner />}
 
-                                            {/* 【优化】：完全移除了 AnimatePresence 和 exit，退订时图标瞬间消失 */}
                                             {((isAnimating || isSubscribed) && !processing) && (
                                                 <motion.div
                                                     layout={enableAnim}
@@ -171,7 +215,6 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
                                                 {label}
                                             </motion.span>
 
-                                            {/* 【优化】：完全移除了 AnimatePresence 和 exit，退订时箭头瞬间消失 */}
                                             {((isAnimating || isSubscribed) && !processing) && (
                                                 <motion.div
                                                     layout={enableAnim}
@@ -193,7 +236,7 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
                     </Tooltip>
                 </TooltipProvider>
 
-                {/* 下拉菜单内容区保持不变 */}
+                {/* 下拉菜单内容区 */}
                 <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
                     <DropdownMenuItem onClick={() => setNotifyLevel('all')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
                         <div className="flex items-center gap-3">
@@ -233,6 +276,7 @@ export function FollowBtn({ actorId, slug, initisFollowed }: FollowBtnProps) {
                 </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* 退订二次确认模态框 */}
             <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

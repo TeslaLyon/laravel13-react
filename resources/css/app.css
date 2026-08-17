@@ -343,3 +343,26 @@ button:not([disabled]),
             rgba(0, 0, 0, 0.2) 60%,
             rgba(0, 0, 0, 0));
 }
+
+@layer base {
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        /* 开启苹果级抗锯齿渲染 */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+@layer utilities {
+    .grid-autofill-360 {
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    }
+    /* 隐形滚动条全局工具类 */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

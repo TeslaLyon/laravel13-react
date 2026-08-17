@@ -56,12 +56,25 @@ use Cog\Laravel\Love\Reacterable\Models\Traits\Reacterable;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|User whereUpdatedAt($value)
  * @mixin \Eloquent
  */
-#[Fillable(['name', 'nickname', 'email', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser, MustVerifyEmail, ReacterableInterface
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable, Reacterable;
+
+    protected $fillable = [
+        'name',
+        'nickname',
+        'email',
+        'password',
+        'avatar',
+    ];
+
+    protected $hidden = [
+        'password',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'remember_token'
+    ];
 
     /**
      * Get the attributes that should be cast.

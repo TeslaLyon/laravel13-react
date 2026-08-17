@@ -24,7 +24,7 @@ export const VideoPreviews = ({ images }: VideoPreviewsProps) => {
     };
 
     return (
-        <div className="mt-8">
+        <div className="mt-4">
             <h3 className="text-base font-semibold text-foreground mb-4 px-1">视频预览</h3>
 
             {/* 1. 缩略图网格布局 */}

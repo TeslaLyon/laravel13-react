@@ -8,12 +8,18 @@ import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
+import { edit as editAvatar } from '@/routes/profile/avatar';
 import type { NavItem } from '@/types';
 
 const sidebarNavItems: NavItem[] = [
     {
         title: '个人资料',
         href: edit(),
+        icon: null,
+    },
+    {
+        title: '修改头像',
+        href: editAvatar(),
         icon: null,
     },
     {

@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
 use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -59,14 +62,67 @@ use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
 class Video extends Model implements ReactableInterface
 {
     use Reactable;
+
+    protected function casts(): array
+    {
+        return [
+            'list_img' => 'array',
+        ];
+    }
+
     public function channel(): BelongsTo
     {
         // 默认情况下，Laravel 会自动寻找 channel_id 作为外键
         return $this->belongsTo(Channel::class);
     }
 
+    public function actors(): BelongsToMany
+    {
+        return $this->belongsToMany(Actor::class, 'actor_video');
+    }
+
+    public function videoDetail(): HasOne
+    {
+        return $this->hasOne(VideoDetail::class);
+    }
+
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class);
+    }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class);
+    }
+
     public function bookmarks()
     {
         return $this->morphMany(Bookmark::class, 'bookmarkable');
+    }
+
+    public function feedback()
+    {
+        return $this->morphMany(Feedback::class, 'feedbackable');
+    }
+
+    /**
+     * 获取该视频下的所有字幕记录（一对多）。
+     * 包含 pending, approved, rejected 的所有状态。
+     */
+    public function subtitles(): HasMany
+    {
+        return $this->hasMany(VideoSubtitle::class);
+    }
+
+    /**
+     * 获取该视频已审核通过的唯一/优先字幕（一对一）。
+     * 结合我们之前设计的 status 字段进行过滤。
+     */
+    public function approvedSubtitles(): HasMany
+    {
+        return $this->hasMany(VideoSubtitle::class)
+            ->where('status', 'approved')
+            ->with('user:id,name,nickname');
     }
 }

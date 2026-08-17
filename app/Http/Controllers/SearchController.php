@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Http\JsonResponse;
+use App\Models\Actor;
+use App\Models\Category;
+use App\Models\Tag;
+use Illuminate\Support\Sleep;
 
 class SearchController extends Controller
 {
@@ -44,5 +49,83 @@ class SearchController extends Controller
             'query' => $query,
             'groupedResults' => $results,
         ]);
+    }
+
+    public function actors(Request $request): JsonResponse
+    {
+        $keyword = trim($request->query('q', ''));
+
+        if (empty($keyword)) {
+            return response()->json([]);
+        }
+
+        $actors = Actor::query()
+            ->where('name', 'ILIKE', "{$keyword}%")
+            // 如果你的别名存放在 aliases 字段 (JSON 或字符串)，也可以加入搜索
+            // ->orWhere('aliases', 'like', "%{$keyword}%")
+            ->select(['id', 'name', 'avatar'])
+            ->limit(10)
+            ->get();
+        // ->map(function ($actor) {
+        //     // 格式化为前端 EntitySuggestInput 所需的 SuggestOption 结构
+        //     return [
+        //         'id'       => $actor->id,
+        //         'name'     => $actor->name,
+        //         'avatar'   => $actor->avatar ?? '/images/default-avatar.png',
+        //         // 'subtitle' => is_array($actor->aliases)
+        //         //                 ? implode(', ', $actor->aliases)
+        //         //                 : $actor->aliases,
+        //     ];
+        // });
+        Sleep::for(1000)->milliseconds();
+        return response()->json($actors);
+    }
+
+    /**
+     * 2. 搜索分类
+     */
+    public function categories(Request $request): JsonResponse
+    {
+        $keyword = trim($request->query('q', ''));
+
+        if (empty($keyword)) {
+            return response()->json([]);
+        }
+
+        $categories = Category::query()
+            ->where('name', 'ILIKE', "{$keyword}%")
+            ->select(['id', 'name', 'name_zh'])
+            ->limit(10)
+            ->get();
+        // ->map(fn ($category) => [
+        //     'id'   => $category->id,
+        //     'name' => $category->name,
+        // ]);
+        Sleep::for(1000)->milliseconds();
+        return response()->json($categories);
+    }
+
+    /**
+     * 3. 搜索标签
+     */
+    public function tags(Request $request): JsonResponse
+    {
+        $keyword = trim($request->query('q', ''));
+
+        if (empty($keyword)) {
+            return response()->json([]);
+        }
+
+        $tags = Tag::query()
+            ->where('name', 'ILIKE', "{$keyword}%")
+            ->select(['id', 'name'])
+            ->limit(10)
+            ->get();
+        // ->map(fn ($tag) => [
+        //     'id'   => $tag->id,
+        //     'name' => $tag->name,
+        // ]);
+        Sleep::for(1000)->milliseconds();
+        return response()->json($tags);
     }
 }

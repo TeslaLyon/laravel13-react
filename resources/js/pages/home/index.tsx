@@ -8,6 +8,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlayCircle, Crown, ShoppingBag, Clapperboard, Star, Bell } from 'lucide-react';
 
+// TODO:新增 猜你喜欢 模块，到时候看看根据什么推荐
+
 // --- 新的实用工具：生成高质量的随机真实图片 ---
 // 使用 seed 参数确保每次刷新页面时，同一张图保持不变
 const getImageUrl = (width: number, height: number, seed: string) => {

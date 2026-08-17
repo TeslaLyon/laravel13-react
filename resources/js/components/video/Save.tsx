@@ -9,6 +9,8 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useRequireAuth } from '@/components/require-auth-provider';
+import VideoController from "@/actions/App/Http/Controllers/VideoController";
 
 interface CollectResponse {
     message: string;
@@ -17,17 +19,20 @@ interface CollectResponse {
 export function Save({ videoId, slug, initialIsCollect }: { videoId: number, slug: string, initialIsCollect: boolean }) {
     const { post, processing } = useHttp()
     const [isCollect, setIsCollect] = useState(initialIsCollect);
+    const { requireAuth } = useRequireAuth();
     const handleCollectToggle = () => {
-        if (processing) return;
-        post(`/videos/${videoId}/${slug}/collect`, {
-            onSuccess: (response: unknown) => {
-                const typedResponse = response as CollectResponse;
-                toast.success(typedResponse.message);
-                setIsCollect(!isCollect);
-            },
-            onError: () => {
-                toast.error('刷新页面后重试');
-            }
+        requireAuth(() => {
+            if (processing) return;
+            post(VideoController.collect.url({ video: videoId, slug: slug }), {
+                onSuccess: (response: unknown) => {
+                    const typedResponse = response as CollectResponse;
+                    toast.success(typedResponse.message);
+                    setIsCollect(!isCollect);
+                },
+                onError: () => {
+                    toast.error('刷新页面后重试');
+                }
+            });
         });
     };
 

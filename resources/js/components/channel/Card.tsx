@@ -6,7 +6,7 @@ import {
     Link2,
     UserPlus,
     UserMinus,
-    Loader2 // 1. 引入 Loader2 图标用于加载状态
+    Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,9 @@ import { useHttp, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { show } from '@/actions/App/Http/Controllers/ChannelController';
 import { getCardHoverColor } from "@/lib/utils";
+
+// 🌟 1. 引入权限拦截 Hook
+import { useRequireAuth } from '@/components/require-auth-provider';
 
 export interface StudioItem {
     id: string;
@@ -46,10 +49,24 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
     const hoverBgStyle = getCardHoverColor(studio.id);
     const [isOpen, setIsOpen] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
-    const { get, processing: isGetting } = useHttp()
-    const { post, processing: isPosting } = useHttp()
+    const { get, processing: isGetting } = useHttp();
+    const { post, processing: isPosting } = useHttp();
 
-    // 监听菜单打开状态，请求后端接口
+    // 🌟 2. 初始化权限拦截器
+    const { requireAuth } = useRequireAuth();
+
+    // 🌟 3. 接管下拉菜单打开状态，加入 requireAuth 拦截
+    const handleOpenChange = (open: boolean) => {
+        if (open) {
+            requireAuth(() => {
+                setIsOpen(true);
+            });
+        } else {
+            setIsOpen(false);
+        }
+    };
+
+    // 监听菜单打开状态，请求后端接口获取关注状态
     useEffect(() => {
         if (isOpen) {
             const fetchFollowStatus = async () => {
@@ -61,8 +78,6 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
                     },
                     onError: () => {
                         toast.error('刷新页面后重试');
-                    },
-                    onFinish: () => {
                     }
                 });
             };
@@ -71,20 +86,21 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
         }
     }, [isOpen, studio.id]);
 
-    // 处理点击关注/取消关注事件
+    // 🌟 4. 处理点击关注/取消关注事件（加入 requireAuth 拦截）
     const handleToggleFollow = async () => {
         if (isPosting) return;
-        post(`/channels/${studio.id}/${studio.slug}/subscribe`, {
-            onSuccess: (response: unknown) => {
-                const subscribeResponse = response as SubscribeResponse;
-                toast.success(subscribeResponse.message);
-                setIsFollowing(subscribeResponse.is_subscribed);
-            },
-            onError: () => {
-                toast.error('刷新页面后重试');
-            },
-            onFinish: () => {
-            }
+
+        requireAuth(() => {
+            post(`/channels/${studio.id}/${studio.slug}/subscribe`, {
+                onSuccess: (response: unknown) => {
+                    const subscribeResponse = response as SubscribeResponse;
+                    toast.success(subscribeResponse.message);
+                    setIsFollowing(subscribeResponse.is_subscribed);
+                },
+                onError: () => {
+                    toast.error('刷新页面后重试');
+                }
+            });
         });
     };
 
@@ -104,16 +120,14 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
 
             {/* 底部信息区域 */}
             <div className="flex flex-col px-1 mt-2 gap-2.5">
-
                 {/* 标题与菜单组合行 */}
                 <div className="flex items-center justify-between gap-2 w-full min-h-[36px]">
-                    {/* 片商名称 */}
                     <h3 className="text-[16px] font-semibold leading-tight line-clamp-1 text-foreground group-hover:text-primary transition-colors flex-1 min-w-0">
                         {studio.name}
                     </h3>
 
-                    {/* 下拉菜单 */}
-                    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+                    {/* 🌟 5. 下拉菜单 open / onOpenChange 绑定 */}
+                    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -125,7 +139,6 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
                             </Button>
                         </DropdownMenuTrigger>
 
-                        {/* YouTube 风格的下拉菜单内容 */}
                         <DropdownMenuContent
                             align="end"
                             className="w-64 rounded-xl shadow-lg p-2"
@@ -138,13 +151,11 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
                             ) : (
                                 <DropdownMenuItem
                                     className="gap-3 py-2.5 cursor-pointer rounded-lg text-foreground hover:bg-muted"
-                                    // 2. 将 onClick 更改为 onSelect，并使用 e.preventDefault() 阻止菜单关闭
                                     onSelect={(e) => {
                                         e.preventDefault();
                                         handleToggleFollow();
                                     }}
                                 >
-                                    {/* 3. 使用 isPosting 判断是否处于请求中，渲染对应的图标 */}
                                     {isPosting ? (
                                         <>
                                             <Loader2 className="w-[18px] h-[18px] animate-spin text-muted-foreground" />
@@ -178,7 +189,7 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
                     ))}
                 </div>
 
-                {/* 底部三个数据指标项 */}
+                {/* 底部数据统计卡片项 */}
                 <div className="flex items-center gap-2 justify-between w-full mt-1">
                     <Link
                         href={show({ channel: studio.id, slug: studio.slug })}

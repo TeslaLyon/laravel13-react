@@ -18,7 +18,7 @@ return new class extends Migration
             $table->text('screen_img')->nullable()->comment('视频片段截图');
             $table->text('list_img_large_meta')->nullable()->comment('详情页头图');
             $table->text('download_info')->nullable()->comment('下载信息');
-            $table->string('movie_length')->default('')->comment('视频长度，单位：秒');
+            $table->unsignedInteger('movie_length')->default(0)->comment('视频长度，单位：秒');
             $table->text('description')->nullable()->comment('描述');
             $table->timestamps();
         });
