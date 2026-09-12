@@ -1,4 +1,4 @@
-import { usePage, Link } from '@inertiajs/react';
+import { usePage, Link, router } from '@inertiajs/react';
 import { ChevronsUpDown, UserCircle, LogIn, UserPlus } from 'lucide-react';
 import {
     DropdownMenu,
@@ -16,15 +16,22 @@ import {
 import { UserInfo } from '@/components/user-info';
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { login, register } from '@/routes';
+import { register } from '@/routes';
 
 export function NavUser() {
     const { auth } = usePage().props;
     const { state } = useSidebar();
     const isMobile = useIsMobile();
 
-    // === 修正后的未登录状态代码块 ===
-    if (!auth.user) {
+    // 🌟 登录处理：获取当前完整路径并携带 redirect 参数跳转
+    const handleLogin = (e: Event) => {
+        e.preventDefault();
+        const currentPath = window.location.pathname + window.location.search;
+        router.get('/login', { redirect: currentPath });
+    };
+
+    // === 游客状态（未登录） ===
+    if (!auth?.user) {
         return (
             <SidebarMenu>
                 <SidebarMenuItem>
@@ -36,12 +43,10 @@ export function NavUser() {
                                 data-test="sidebar-menu-button"
                                 tooltip="登录 / 注册"
                             >
-                                {/* 模拟一个标准头像容器，完美解决折叠不对齐问题 */}
                                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                                     <UserCircle className="size-5" />
                                 </div>
 
-                                {/* 侧边栏折叠时，这部分文本会被原生组件自动隐藏 */}
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-semibold">游客模式</span>
                                     <span className="truncate text-xs">点击登录或注册</span>
@@ -62,13 +67,15 @@ export function NavUser() {
                             }
                         >
                             <DropdownMenuGroup>
-                                {/* 使用原生的 DropdownMenuItem 配合图标，样式更加清爽 */}
-                                <DropdownMenuItem asChild>
-                                    <Link href={login()} className="cursor-pointer flex items-center">
-                                        <LogIn className="mr-2 size-4" />
-                                        <span>登录账号</span>
-                                    </Link>
+                                {/* 🌟 绑定带参登录逻辑 */}
+                                <DropdownMenuItem
+                                    className="cursor-pointer flex items-center"
+                                    onSelect={handleLogin}
+                                >
+                                    <LogIn className="mr-2 size-4" />
+                                    <span>登录账号</span>
                                 </DropdownMenuItem>
+
                                 <DropdownMenuItem asChild>
                                     <Link href={register()} className="cursor-pointer flex items-center">
                                         <UserPlus className="mr-2 size-4" />
@@ -83,7 +90,7 @@ export function NavUser() {
         );
     }
 
-    // === 已登录用户的代码块（未更改） ===
+    // === 已登录用户 ===
     return (
         <SidebarMenu>
             <SidebarMenuItem>
@@ -91,11 +98,11 @@ export function NavUser() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="group text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent"
+                            className="group text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent group-data-[collapsible=icon]:overflow-visible"
                             data-test="sidebar-menu-button"
                         >
                             <UserInfo user={auth.user} />
-                            <ChevronsUpDown className="ml-auto size-4" />
+                            <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent

@@ -15,6 +15,7 @@ import { XIcon, InstagramIcon, YoutubeIcon, FacebookIcon, WebsiteIcon } from '@/
 import { formatChineseUnit } from '@/lib/utils';
 import { VideoCard } from "@/components/video/Card";
 import { show } from '@/routes/videos';
+import { SubscribeButton, NotificationType } from '@/components/subscribe-button';
 
 // 独立视频分页组件
 import { VideoPagination } from '@/components/VideoPagination';
@@ -140,6 +141,7 @@ export default function BaseDetailShow({
 }: BaseDetailShowProps) {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchKeyword, setSearchKeyword] = useState('');
+    const [subscribersCount, setSubscribersCount] = useState(entity.subscribersCount ?? 0);
 
     // 路由前缀
     const routePrefix = moduleType === 'category' ? '/categories' : `/${moduleType}s`;
@@ -225,7 +227,7 @@ export default function BaseDetailShow({
 
                         <div className="flex flex-wrap items-center gap-2 mt-3 text-sm text-muted-foreground">
                             <span className="font-semibold text-foreground bg-muted px-2 py-0.5 rounded-md">
-                                {formatChineseUnit(entity?.follow_num || 0)}位关注者
+                                {formatChineseUnit(subscribersCount.toLocaleString() || 0)}位订阅者
                             </span>
                             <div className="flex flex-wrap gap-1.5 ml-2">
                                 {nicknamesList.map((nickname, index) => (
@@ -242,12 +244,16 @@ export default function BaseDetailShow({
 
                         <div className="mt-5 flex flex-wrap items-center gap-3">
                             {entity?.id && (
-                                <FollowBtn
-                                    moduleType={moduleType}
-                                    id={entity.id}
-                                    slug={entity.slug || ''}
-                                    initisFollowed={initisFollowed}
-                                />
+                                <>
+                                    <SubscribeButton
+                                        type={moduleType}
+                                        id={entity.id}
+                                        name={entity.name_zh || entity.name}
+                                        initialIsSubscribed={initisFollowed ?? false}
+                                        initialNotificationType={entity.notificationType || 'personalized'}
+                                        onSubscriptionChange={(_, delta) => setSubscribersCount((prev: number) => Math.max(0, prev + delta))}
+                                    />
+                                </>
                             )}
 
                             {moduleType === 'actor' && entity && (

@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | V免签网关配置
+    |--------------------------------------------------------------------------
+    */
+    'vmq' => [
+        'base_url' => env('VMQ_GATEWAY_URL', 'http://127.0.0.1:8080'),
+        'cashier_url' => env('VMQ_CASHIER_URL', 'https://pay.536969.xyz'),
+        'app_key' => env('VMQ_APP_KEY'),
+        'app_secret' => env('VMQ_APP_SECRET'),
+        'timeout' => env('VMQ_API_TIMEOUT', 10),
+    ],
+
 ];

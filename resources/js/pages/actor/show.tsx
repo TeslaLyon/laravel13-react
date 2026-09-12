@@ -6,6 +6,7 @@ export default function ActorShow(props: any) {
         <BaseDetailShow
             moduleType="actor"  // 指定模块为 actor，会自动开启“修正资料”
             entity={props.actor}
+            initisFollowed={props.isSubscribed}
             {...props}
         />
     );

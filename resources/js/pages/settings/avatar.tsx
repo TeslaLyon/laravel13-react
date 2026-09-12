@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import getCroppedImg, { PixelCrop } from '@/lib/cropImage';
 import { edit as editAvatar, update as updateAvatarUrl } from '@/routes/profile/avatar';
 import type { Auth } from '@/types';
+import { ImageUploadGuidelines } from '@/components/image-upload-guidelines';
 
 type PageProps = {
     auth: Auth;
@@ -19,13 +20,13 @@ const MIN_ZOOM = 1.0;
 const MAX_ZOOM = 3.0;
 const ZOOM_STEP = 0.05;
 
-const MAX_RAW_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_RAW_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
 
 // 平铺裁剪容器的响应式样式
 const inlineCropperContainerStyles: React.CSSProperties = {
-    height: 'min(55vh, 460px)',
-    minHeight: '340px',
+    height: 'min(50vh, 420px)',
+    minHeight: '320px',
     background: '#111111',
     borderRadius: '12px',
     overflow: 'hidden',
@@ -151,11 +152,17 @@ export default function AvatarSettings() {
         <>
             <Head title="修改头像" />
 
-            <div className="space-y-6">
+            {/* 🎯 重点修改：设置 max-w-2xl 约束头像页面的最大宽度 */}
+            <div className="w-full max-w-2xl space-y-6">
                 <Heading
                     variant="small"
                     title="修改个人头像"
                     description="上传您在社区和个人主页公开展示的头像照片"
+                />
+
+                <ImageUploadGuidelines
+                    title="头像上传与使用规范"
+                    compact={true}
                 />
 
                 <input
@@ -208,7 +215,7 @@ export default function AvatarSettings() {
                     </div>
                 </div>
 
-                {/* 🎯 核心改变：直接在按钮下方平铺展开的裁剪工作区 */}
+                {/* 🎯 平铺展开的裁剪工作区 */}
                 {imageSrc && (
                     <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-xs space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">
                         <div className="flex items-center justify-between border-b border-border/60 pb-3">
@@ -233,7 +240,7 @@ export default function AvatarSettings() {
                             </div>
                         )}
 
-                        {/* 🎯 平铺视口 (文档流天然真实物理尺寸，零动画干扰) */}
+                        {/* 平铺裁剪视口 */}
                         <div
                             className="w-full select-none"
                             style={inlineCropperContainerStyles}
@@ -250,17 +257,6 @@ export default function AvatarSettings() {
                                 onCropChange={setCrop}
                                 onZoomChange={setZoom}
                                 onCropComplete={onCropComplete}
-                                // style={{
-                                //     containerStyle: {
-                                //         backgroundColor: 'transparent',
-                                //     },
-                                //     cropAreaStyle: {
-                                //         border: '2px solid rgba(255, 255, 255, 0.95)',
-                                //     },
-                                //     mediaStyle: {
-                                //         opacity: 0.98,
-                                //     },
-                                // }}
                             />
                         </div>
 

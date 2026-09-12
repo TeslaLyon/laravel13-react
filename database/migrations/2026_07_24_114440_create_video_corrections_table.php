@@ -20,8 +20,11 @@ return new class extends Migration {
             // 用于存储 JSON 数组字符串或纯文本
             $table->text('payload');
 
-            // 审核状态: pending (待审核), approved (已通过), rejected (已拒绝)
-            $table->string('status')->default('pending')->index();
+            // 🌟 审核状态：1-待审核(pending), 2-已通过(approved), 3-已拒绝(rejected)
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('审核状态: 1-待审核(pending), 2-已通过(approved), 3-已拒绝(rejected)');
 
             // 审核相关信息
             $table->foreignId('reviewer_id')->nullable()->constrained('users');

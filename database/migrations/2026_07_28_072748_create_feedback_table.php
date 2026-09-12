@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -23,8 +22,11 @@ return new class extends Migration
             $table->string('type', 50);
             // 补充说明
             $table->text('content')->nullable();
-            // 处理状态：pending (待处理), processing (处理中), resolved (已解决)
-            $table->string('status', 20)->default('pending');
+            // 处理状态
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('处理状态: 1-待处理, 2-处理中, 3-已解决');
             $table->timestamps();
         });
     }

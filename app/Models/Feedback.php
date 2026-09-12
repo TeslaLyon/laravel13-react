@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FeedbackStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 
@@ -13,6 +14,10 @@ class Feedback extends Model
         'type',
         'content',
         'status',
+    ];
+
+    protected $casts = [
+        'status' => FeedbackStatus::class, // 自动转换整型 <-> 枚举对象
     ];
 
     /**

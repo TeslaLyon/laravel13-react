@@ -27,7 +27,7 @@ class VideoSubtitleFeedbackController extends Controller
             'video_subtitle_id' => $subtitle->id,
             'user_id' => $request->user() ? $request->user()->id : null,
             'content' => $validated['content'],
-            'status' => 'pending',
+            'status' => 1,
         ]);
 
         // 3. 【核心修复】：返回 back() 重定向，而不是 JSON。

@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use App\Models\Actor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Sleep;
+use App\Models\User;
 
 // TODO:考虑演员别名存储问题
 class ActorController extends Controller
@@ -68,11 +69,16 @@ class ActorController extends Controller
         $actor->load('detail');
 
         // 3. 处理关注状态逻辑
-        $user = $request->user();
-        $initisFollowed = false;
-        if ($user) {
-            $initisFollowed = $actor->viaLoveReactant()->isReactedBy($user, 'FollowActor');
-        }
+        /** @var User|null $currentUser */
+        $currentUser = $request->user();
+
+        // 1. 初始化默认状态（未登录 / 未订阅时的默认返回值）
+        $isSubscribed = false;
+
+        // 3. 计算实体的总订阅人数（独立于具体用户）
+        $subscribersCount = $currentUser
+            ? $currentUser->getEntitySubscribersCount($actor)
+            : (new User)->getEntitySubscribersCount($actor);
 
         // 4. 数据结构拍平处理，适配前端组件
         $actorData = $actor->toArray();
@@ -87,6 +93,17 @@ class ActorController extends Controller
             $actorData['socials'] = [];
         }
 
+        $actorData['notificationType'] = 'personalized';
+
+        // 2. 已登录分支：仅在用户登录时查询个人偏好并更新状态
+        if ($currentUser) {
+            $activeType = $currentUser->getSubscriptionNotificationType($actor);
+            if ($activeType !== null) {
+                $isSubscribed = true;
+                $actorData['notificationType'] = $activeType;
+            }
+        }
+
         // 5. 返回响应：使用 Inertia::defer 延迟加载大体积/慢查询数据
         return Inertia::render('actor/show', [
             'breadcrumbs' => [
@@ -95,7 +112,8 @@ class ActorController extends Controller
                 ['title' => $actor->name, 'href' => null],
             ],
             'actor' => $actorData,
-            'initisFollowed' => $initisFollowed,
+            'isSubscribed' => $isSubscribed,
+            'subscribersCount' => $subscribersCount,
             'currentTab' => $tab,
 
             // 🌟 首页需要显示的最新少量数据（使用 defer 延迟拉取）

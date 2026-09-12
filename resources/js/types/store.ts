@@ -1,30 +1,97 @@
-// types/store.ts
-export type MediaType = 'video' | 'image';
+export interface BreadcrumbItem {
+    title: string;
+    href: string | null;
+}
+
+export interface StoreCategory {
+    label: string;
+    type: string | null;
+}
+
+export interface ProductTag {
+    id: number;
+    name: string;
+    name_zh: string;
+    style_preset: string;
+}
+
+export interface SpecBadge {
+    label: string;
+    color?: string;
+}
 
 export interface Product {
     id: number;
     title: string;
-    author: string;
-    avatar: string;
-    price: number;
-    originalPrice?: number;
-    type: MediaType;
+    slug: string;
+    type: 'video' | 'image' | 'source_code' | 'asset';
     thumbnail: string;
-    duration?: string; // 仅视频有
-    resolution?: string; // 仅图片有
-    views: string;
-    tags?: Tag[];
+    preview_type: 'video' | 'carousel' | 'gif' | 'image';
+    preview_data?: Record<string, any> | null;
+    duration?: string;
+    resolution?: string | null;
+    spec_badge?: SpecBadge | null;
+    price: number;
+    original_price?: number | null;
+    has_discount: boolean;
+    views_count: number;
+    sales_count: number;
+    created_at_human: string;
+    author: string;
+    avatar?: string;
+    tags: ProductTag[];
 }
 
-export interface Tag {
-  /** * 标签文本内容
-   * @example "4K", "独家", "LUTs"
-   */
-  label: string;
-
-  /** * 标签的颜色类名 (Tailwind CSS 格式)
-   * 包含背景色和文字颜色，建议支持暗黑模式 (dark:)
-   * @example "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400"
-   */
-  color?: string;
+export interface PaginatedData<T> {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    links: { url: string | null; label: string; active: boolean }[];
+}
+export interface ProductShowData {
+    id: number;
+    title: string;
+    slug?: string;
+    type: 'video' | 'image' | 'source_code' | 'asset';
+    thumbnail: string;
+    preview_type: 'video' | 'carousel' | 'gif' | 'image';
+    preview_data?: {
+        video_url?: string;
+        gif_url?: string;
+        images?: string[];
+        [key: string]: any;
+    } | null;
+    duration?: string;
+    resolution?: string | null;
+    spec_badge?: { label: string; color?: string } | null;
+    price: number;
+    original_price?: number | null;
+    has_discount: boolean;
+    views_count: number;
+    sales_count: number;
+    created_at_human: string;
+    publish_date: string;
+    has_purchased: boolean; // 购买授权状态
+    author: {
+        name: string;
+        avatar?: string;
+        title: string;
+        bio: string;
+    };
+    tags: Array<{ id: number; name: string, name_zh: string }>;
+    detail?: {
+        specs: Record<string, string>;
+        content: string;
+        delivery_type: 'netdisk' | 'card_key' | 'download' | 'online_view';
+        delivery_summary: string;
+        delivery_content?: {
+            pan_url?: string;
+            pan_code?: string;
+            unzip_password?: string;
+            license_key?: string;
+            [key: string]: any;
+        } | null;
+    } | null;
 }

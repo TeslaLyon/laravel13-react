@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Enums\VideoSubtitleFeedbackStatus;
 
 
 class VideoSubtitleFeedback extends Model
@@ -14,6 +14,13 @@ class VideoSubtitleFeedback extends Model
         'content',           // 反馈的具体内容
         'status',            // 处理状态 (如 pending, resolved, ignored)
         'admin_notes',       // 管理员后台处理备注
+    ];
+
+    /**
+     * 原生属性类型转换
+     */
+    protected $casts = [
+        'status' => VideoSubtitleFeedbackStatus::class, // 🌟 自动双向转换枚举与整型
     ];
 
     /**

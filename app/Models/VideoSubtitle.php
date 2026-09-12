@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Enums\VideoSubtitleStatus;
 
 
 class VideoSubtitle extends Model
@@ -21,7 +22,7 @@ class VideoSubtitle extends Model
         'file_size',   // 文件大小
         'status',      // 审核状态 (pending, approved, rejected)
     ];
-    
+
     /**
      * 属性类型转换 (Casting)。
      * 确保从数据库取出的数据是正确的数据类型。
@@ -29,6 +30,7 @@ class VideoSubtitle extends Model
     protected $casts = [
         'file_size' => 'integer',
         'is_external' => 'boolean', // 确保自动转换为布尔值
+        'status' => VideoSubtitleStatus::class,
     ];
 
     /**

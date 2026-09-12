@@ -39,7 +39,23 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => function () use ($request) {
+                    if (!$user = $request->user()) {
+                        return null;
+                    }
+
+                    // 🌟 1. 自动自愈：若佩戴已过期则立即清理置空
+                    $user->cleanIfDecorationExpired();
+
+                    // 🌟 2. 预加载挂件信息，补全 is_active 字段
+                    $user->loadMissing([
+                        'avatarDecoration' => function ($query) {
+                        $query->select(['id', 'title', 'code', 'image_url', 'is_active']);
+                    },
+                    ]);
+
+                    return $user;
+                },
             ],
             'sidebarOpen' => $request->cookie('sidebar_state') === 'true',
         ];

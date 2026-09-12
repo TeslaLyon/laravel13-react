@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use App\Enums\ActorCorrectionStatus;
 
 
 class ActorCorrection extends Model
@@ -18,6 +19,7 @@ class ActorCorrection extends Model
     protected function casts(): array
     {
         return [
+            'status' => ActorCorrectionStatus::class,
             'payload' => 'array',
         ];
     }

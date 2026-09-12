@@ -25,6 +25,10 @@ return new class extends Migration {
             // 🎯 XenForo 右侧最新动态 (Last Post) 高效缓存
             $table->unsignedBigInteger('last_thread_id')->nullable();
             $table->string('last_thread_title')->nullable();
+
+            // 🎯 新增：最新主题绑定的彩色标签缓存 (直接存入 JSON 格式，如 [{"id":1,"name":"Verified","bg_color":"#6f42c1"}])
+            $table->json('last_thread_prefixes')->nullable();
+
             $table->unsignedBigInteger('last_post_id')->nullable();
             $table->foreignId('last_post_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('last_post_username')->nullable();

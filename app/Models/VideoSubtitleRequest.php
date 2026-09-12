@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
+use App\Enums\VideoSubtitleRequestStatus;
 
 
 class VideoSubtitleRequest extends Model
@@ -14,6 +15,13 @@ class VideoSubtitleRequest extends Model
         'video_id',
         'user_id',
         'status',
+    ];
+
+    /**
+     * 属性类型转换
+     */
+    protected $casts = [
+        'status' => VideoSubtitleRequestStatus::class, // 🌟 自动双向转换枚举与整型
     ];
 
     /**

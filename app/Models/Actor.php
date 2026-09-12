@@ -11,6 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Actor extends Model implements ReactableInterface
 {
     use Reactable;
+
+    protected $fillable = [
+        'name',
+        'slug',
+        'avatar',
+    ];
+
     protected $casts = [
         'booty_img' => 'array',
     ];
@@ -23,5 +30,10 @@ class Actor extends Model implements ReactableInterface
     public function videos(): BelongsToMany
     {
         return $this->belongsToMany(Video::class);
+    }
+
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class);
     }
 }

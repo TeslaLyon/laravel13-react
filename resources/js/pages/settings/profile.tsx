@@ -30,7 +30,8 @@ export default function Profile({
 
             <h1 className="sr-only">个人资料设置</h1>
 
-            <div className="space-y-6">
+            {/* 🎯 重点修改：添加 w-full max-w-xl 限制表单最大宽度 */}
+            <div className="w-full max-w-xl space-y-6">
                 <Heading
                     variant="small"
                     title="个人资料"
@@ -47,7 +48,9 @@ export default function Profile({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="name">用户名 <span className="text-destructive">(暂不支持修改用户名)</span></Label>
+                                <Label htmlFor="name">
+                                    用户名 <span className="text-destructive">(暂不支持修改用户名)</span>
+                                </Label>
 
                                 <Input
                                     id="name"

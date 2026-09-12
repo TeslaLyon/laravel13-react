@@ -9,6 +9,7 @@ use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * @property int $id
@@ -124,5 +125,44 @@ class Video extends Model implements ReactableInterface
         return $this->hasMany(VideoSubtitle::class)
             ->where('status', 'approved')
             ->with('user:id,name,nickname');
+    }
+
+    /**
+     * 🌟 本地作用域：按指定用户的交互时间倒序拉取视频
+     *
+     * 必须命名为 scopeWhereReactedBy，第一个参数必须是 Builder $query
+     */
+    public function scopeWhereReactedBy(Builder $query, User $user, string $reactionTypeName): Builder
+    {
+        // 若目标用户未初始化 Laravel Love Reacter 实体，直接返回空结果
+        if (!$user->love_reacter_id) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query
+            ->join('love_reactants', 'videos.love_reactant_id', '=', 'love_reactants.id')
+            ->join('love_reactions', 'love_reactants.id', '=', 'love_reactions.reactant_id')
+            ->join('love_reaction_types', 'love_reactions.reaction_type_id', '=', 'love_reaction_types.id')
+            ->where('love_reactions.reacter_id', $user->love_reacter_id)
+            ->where('love_reaction_types.name', $reactionTypeName)
+            ->orderByDesc('love_reactions.created_at')
+            ->select([
+                'videos.id',
+                'videos.name',
+                'videos.preview',
+                'videos.slug',
+                'videos.channel_id',
+                'videos.list_img',
+                'videos.preview',
+                'videos.release_at',
+                'videos.is_4k',
+                'videos.is_vr',
+                'videos.likes_count',
+                'videos.favorites_count',
+                'videos.created_at',
+                'videos.country',
+                // 'videos.duration',
+                'love_reactions.created_at as reacted_at',
+            ]);
     }
 }

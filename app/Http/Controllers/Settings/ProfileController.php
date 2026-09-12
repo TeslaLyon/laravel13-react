@@ -13,6 +13,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 
 class ProfileController extends Controller
 {
@@ -77,7 +79,7 @@ class ProfileController extends Controller
             'avatar' => Storage::url($path),
         ]);
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('Avatar updated successfully.')]);
+        Inertia::flash('toast', ['type' => 'success', 'message' =>'头像更新成功。']);
 
         return to_route('profile.avatar.edit');
     }

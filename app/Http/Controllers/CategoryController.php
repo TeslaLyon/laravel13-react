@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 
 
 class CategoryController extends Controller
@@ -66,10 +67,26 @@ class CategoryController extends Controller
      */
     public function show(Request $request, Category $category, string $slug, string $tab = 'home'): Response
     {
-        // 1. 获取当前登录用户是否已关注该分类 (根据项目实际关注逻辑调整)
-        $isFollowed = Auth::check()
-            ? Auth::user()->followedCategories()->where('category_id', $category->id)->exists()
-            : false;
+        /** @var User|null $currentUser */
+        $currentUser = $request->user();
+
+        // 1. 初始化默认状态（未登录 / 未订阅时的默认返回值）
+        $isSubscribed = false;
+        $notificationType = 'personalized';
+
+        // 2. 已登录分支：仅在用户登录时查询个人偏好并更新状态
+        if ($currentUser) {
+            $activeType = $currentUser->getSubscriptionNotificationType($category);
+            if ($activeType !== null) {
+                $isSubscribed = true;
+                $notificationType = $activeType;
+            }
+        }
+
+        // 3. 计算实体的总订阅人数（独立于具体用户）
+        $subscribersCount = $currentUser
+            ? $currentUser->getEntitySubscribersCount($category)
+            : (new User)->getEntitySubscribersCount($category);
 
         // 2. 处理搜索关键词 (支持在分类详情内部搜索)
         $searchKeyword = $request->input('search');
@@ -85,10 +102,13 @@ class CategoryController extends Controller
                 'follow_num' => $category->follow_num,
                 'bio' => $category->description ?: '探索该分类下的优质内容与创作者。',
                 'nicknames' => ['热门', '推荐'], // 标签角标
+                'notificationType' => $notificationType,
             ],
 
             'currentTab' => $tab,
-            'initisFollowed' => $isFollowed,
+            'initisFollowed' => $isSubscribed,
+            'subscribersCount' => $subscribersCount,
+            'isSubscribed' => $isSubscribed,
 
             // 🎯 3. 使用 Inertia::defer 延迟加载最新视频 (首页 Tab 场景)
             'latestVideos' => Inertia::defer(function () use ($category) {

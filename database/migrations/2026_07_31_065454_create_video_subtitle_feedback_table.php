@@ -12,7 +12,7 @@ return new class extends Migration {
     {
         Schema::create('video_subtitle_feedback', function (Blueprint $table) {
             $table->id();
-            
+
             // 关联的字幕 ID，如果字幕被删，反馈级联删除
             $table->foreignId('video_subtitle_id')->constrained()->cascadeOnDelete();
 
@@ -22,8 +22,11 @@ return new class extends Migration {
             // 反馈的具体内容
             $table->text('content');
 
-            // 反馈的处理状态 (如：pending-待处理, resolved-已解决, ignored-已忽略)
-            $table->string('status')->default('pending');
+            // 🌟 反馈处理状态：1-待处理(pending), 2-已解决(resolved), 3-已忽略(ignored)
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('处理状态: 1-待处理(pending), 2-已解决(resolved), 3-已忽略(ignored)');
 
             // 管理员的处理备注（可选）
             $table->text('admin_notes')->nullable();

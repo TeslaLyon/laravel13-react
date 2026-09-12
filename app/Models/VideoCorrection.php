@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use App\Enums\VideoCorrectionStatus;
 
 
 class VideoCorrection extends Model
@@ -26,6 +27,7 @@ class VideoCorrection extends Model
     {
         return [
             'reviewed_at' => 'datetime',
+            'status' => VideoCorrectionStatus::class, // 🌟 自动双向转换枚举与整型
         ];
     }
 

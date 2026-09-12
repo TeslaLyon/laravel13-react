@@ -49,7 +49,7 @@ class ActorCorrectionController extends Controller
                 'physical_info' => $physicalInfo,
                 'socials' => $socials,
             ],
-            'status' => 'pending',
+            'status' => 1,
         ]);
 
         return response()->json([

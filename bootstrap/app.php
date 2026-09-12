@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\SetIntendedUrl::class,
         ]);
+        // 🌟 豁免支付回调路由的 CSRF 拦截
+        $middleware->preventRequestForgery(except: [
+            'wallet/notify',
+            'wallet/notify/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

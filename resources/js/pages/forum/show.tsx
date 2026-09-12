@@ -1,38 +1,31 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
 import ThreadListItem from '@/components/forum/ThreadListItem';
-import { ThreadItem, ForumNode } from '@/types/forum';
-import { SquarePen, ChevronRight, Home } from 'lucide-react';
+import ForumNoticeBanner from '@/components/forum/ForumNoticeBanner';
+import { ThreadItem, ForumNode, ForumNoticeItem } from '@/types/forum';
+import { SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ForumShowProps {
     node: ForumNode;
+    notices?: ForumNoticeItem[]; // 🎯 1. 声明公告列表类型
     threads: {
         data: ThreadItem[];
         links: any[];
     };
 }
 
-export default function ForumShowPage({ node, threads }: ForumShowProps) {
+export default function ForumShowPage({ node, notices = [], threads }: ForumShowProps) {
     return (
         <div className="min-h-screen bg-background pb-16">
-            <Head title={`${node.name} - 主题列表`} />
+            <Head title={`${node.title} - 主题列表`} />
 
-            <main className="max-w-[1400px] mx-auto px-4 md:px-8 pt-6">
+            <main className="container mx-auto px-4 md:px-8 pt-6">
 
-                {/* 面包屑导航 */}
-                <nav className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
-                    <Link href="/forum" className="hover:text-foreground flex items-center gap-1">
-                        <Home className="w-3.5 h-3.5" /> 大厅
-                    </Link>
-                    <ChevronRight className="w-3 h-3" />
-                    <span className="text-foreground font-semibold">{node.name}</span>
-                </nav>
-
-                {/* 版块头部区域 */}
-                <div className="bg-card rounded-2xl border border-border/80 p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                {/* 1. 版块头部卡片区域 */}
+                <div className="bg-card rounded-2xl border border-border/80 p-6 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
                     <div>
-                        <h1 className="text-2xl font-bold text-foreground tracking-tight">{node.name}</h1>
+                        <h1 className="text-2xl font-bold text-foreground tracking-tight">{node.title}</h1>
                         {node.description && (
                             <p className="text-sm text-muted-foreground mt-1">{node.description}</p>
                         )}
@@ -46,8 +39,15 @@ export default function ForumShowPage({ node, threads }: ForumShowProps) {
                     </Link>
                 </div>
 
-                {/* 主题列表卡片 */}
-                <div className="bg-card rounded-2xl border border-border/80 shadow-sm overflow-hidden">
+                {/* 🎯 2. 版块/全局公告通知模块 (位于头部卡片与主题列表卡片之间) */}
+                {notices && notices.length > 0 && (
+                    <div className="mb-6">
+                        <ForumNoticeBanner notices={notices} />
+                    </div>
+                )}
+
+                {/* 3. 主题列表卡片 */}
+                <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden">
                     <div className="px-5 py-3 bg-muted/60 border-b border-border/80 font-bold text-sm text-foreground">
                         全部讨论话题
                     </div>

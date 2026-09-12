@@ -18,10 +18,11 @@ return new class extends Migration {
             // 是哪个用户发起的申请
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
 
-            // 申请的状态：
-            // pending: 正在求字幕中
-            // fulfilled: 已有热心用户/官方上传了字幕，愿望达成
-            $table->enum('status', ['pending', 'fulfilled'])->default('pending')->comment('申请状态');
+            // 🌟 申请状态：1-求字幕中(pending), 2-愿望达成(fulfilled), 3-已取消/关闭(closed)
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('申请状态: 1-求字幕中(pending), 2-愿望达成(fulfilled), 3-已关闭(closed)');
 
             // 确保同一个用户对同一个视频只能发起一次申请
             $table->unique(['video_id', 'user_id']);

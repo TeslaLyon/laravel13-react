@@ -42,7 +42,7 @@ class FeedbackController extends Controller
             'user_id' => Auth::id(),
             'type' => $validated['data']['type'],
             'content' => $validated['data']['content'] ?? null,
-            'status' => 'pending',
+            'status' => 1,
         ]);
 
         return response()->json([

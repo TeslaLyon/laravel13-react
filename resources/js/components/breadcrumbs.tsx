@@ -19,26 +19,39 @@ export function Breadcrumbs({
         <>
             {breadcrumbs.length > 0 && (
                 <Breadcrumb>
-                    <BreadcrumbList>
+                    {/* 1. 强制单行不折行 */}
+                    <BreadcrumbList className="flex-nowrap">
                         {breadcrumbs.map((item, index) => {
                             const isLast = index === breadcrumbs.length - 1;
 
                             return (
                                 <Fragment key={index}>
-                                    <BreadcrumbItem>
+                                    {/* 2. 最后一项允许收缩 (min-w-0)，非最后一项保持固定尺寸 (shrink-0) */}
+                                    <BreadcrumbItem className={isLast ? "min-w-0" : "shrink-0"}>
                                         {isLast ? (
-                                            <BreadcrumbPage>
+                                            /* 3. 移动端限宽 130px 截断，平板 260px，桌面端取消限制 */
+                                            <BreadcrumbPage
+                                                title={item.title}
+                                                className="block max-w-[130px] truncate sm:max-w-[260px] md:max-w-none"
+                                            >
                                                 {item.title}
                                             </BreadcrumbPage>
                                         ) : (
-                                            <BreadcrumbLink asChild>
+                                            /* 4. 中间链接项也加入防超长截断保护 */
+                                            <BreadcrumbLink
+                                                asChild
+                                                title={item.title}
+                                                className="block max-w-[100px] truncate sm:max-w-none"
+                                            >
                                                 <Link href={item.href}>
                                                     {item.title}
                                                 </Link>
                                             </BreadcrumbLink>
                                         )}
                                     </BreadcrumbItem>
-                                    {!isLast && <BreadcrumbSeparator />}
+
+                                    {/* 5. 分隔符图标禁止被挤压 */}
+                                    {!isLast && <BreadcrumbSeparator className="shrink-0" />}
                                 </Fragment>
                             );
                         })}

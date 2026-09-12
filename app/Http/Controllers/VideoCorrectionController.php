@@ -27,7 +27,7 @@ class VideoCorrectionController extends Controller
             'video_id' => $video->id,
             'type' => $validated['type'],
             'payload' => $payloadValue,
-            'status' => 'pending',
+            'status' => 1,
         ]);
 
         Sleep::for(1000)->milliseconds();

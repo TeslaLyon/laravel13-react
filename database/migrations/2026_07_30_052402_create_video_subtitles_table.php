@@ -30,11 +30,10 @@ return new class extends Migration {
             // 字幕文件格式 (srt, ass, vtt 等)
             $table->string('format', 10)->nullable()->comment('字幕格式');
 
-            // 【核心设计】状态字段：
-            // pending: 用户刚上传，待审核
-            // approved: 审核通过，对外展示并提供下载
-            // rejected: 审核驳回
-            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending')->comment('审核状态');
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('审核状态: 1-待审核(pending), 2-已通过(approved), 3-已拒绝(rejected)');
 
             // 记录文件大小，便于前端展示
             $table->unsignedBigInteger('file_size')->nullable()->comment('文件大小(字节)');

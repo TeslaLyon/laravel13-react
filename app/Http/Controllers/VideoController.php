@@ -402,7 +402,7 @@ class VideoController extends Controller
             'is_external' => $isExternal, // 外部链接标识
             'format' => $extension,
             'file_size' => $fileSize,
-            'status' => 'pending',   // 默认进入待审核状态
+            'status' => 1,   // 默认进入待审核状态
         ]);
 
         // 4. 返回 JSON 响应
@@ -483,7 +483,7 @@ class VideoController extends Controller
                 'user_id' => \Illuminate\Support\Facades\Auth::id(),
             ],
             [
-                'status' => 'pending'
+                'status' => 1
             ]
         );
 

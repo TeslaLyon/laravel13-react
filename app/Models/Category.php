@@ -4,9 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
+use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
+use App\Concerns\SubscribesWithLove;
 
-class Category extends Model
+// TODO: 待添加 Reactable
+class Category extends Model implements ReactableInterface
 {
+    use Reactable, SubscribesWithLove;
+
     public function videos(): BelongsToMany
     {
         return $this->belongsToMany(Video::class);

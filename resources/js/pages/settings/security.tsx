@@ -27,112 +27,115 @@ export default function Security(props: Props) {
 
             <h1 className="sr-only">安全设置</h1>
 
-            <div className="space-y-6">
-                <Heading
-                    variant="small"
-                    title="更新密码"
-                    description="请确保您的账号使用了长且随机的密码，以保障安全。"
+            {/* 🎯 重点修改：统一包裹所有安全模块，控制在 max-w-xl 舒适宽度以内 */}
+            <div className="w-full max-w-xl space-y-12">
+                <div className="space-y-6">
+                    <Heading
+                        variant="small"
+                        title="更新密码"
+                        description="请确保您的账号使用了长且随机的密码，以保障安全。"
+                    />
+
+                    <Form
+                        {...SecurityController.update.form()}
+                        options={{
+                            preserveScroll: true,
+                        }}
+                        resetOnError={[
+                            'password',
+                            'password_confirmation',
+                            'current_password',
+                        ]}
+                        resetOnSuccess
+                        onError={(errors) => {
+                            if (errors.password) {
+                                passwordInput.current?.focus();
+                            }
+
+                            if (errors.current_password) {
+                                currentPasswordInput.current?.focus();
+                            }
+                        }}
+                        className="space-y-6"
+                    >
+                        {({ errors, processing }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="current_password">
+                                        当前密码
+                                    </Label>
+
+                                    <PasswordInput
+                                        id="current_password"
+                                        ref={currentPasswordInput}
+                                        name="current_password"
+                                        className="mt-1 block w-full"
+                                        autoComplete="current-password"
+                                        placeholder="当前密码"
+                                    />
+
+                                    <InputError message={errors.current_password} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="password">新密码</Label>
+
+                                    <PasswordInput
+                                        id="password"
+                                        ref={passwordInput}
+                                        name="password"
+                                        className="mt-1 block w-full"
+                                        autoComplete="new-password"
+                                        placeholder="新密码"
+                                        passwordrules={props.passwordRules}
+                                    />
+
+                                    <InputError message={errors.password} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="password_confirmation">
+                                        确认密码
+                                    </Label>
+
+                                    <PasswordInput
+                                        id="password_confirmation"
+                                        name="password_confirmation"
+                                        className="mt-1 block w-full"
+                                        autoComplete="new-password"
+                                        placeholder="确认密码"
+                                        passwordrules={props.passwordRules}
+                                    />
+
+                                    <InputError
+                                        message={errors.password_confirmation}
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <Button
+                                        disabled={processing}
+                                        data-test="update-password-button"
+                                    >
+                                        保存
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </div>
+
+                <ManageTwoFactor
+                    canManageTwoFactor={props.canManageTwoFactor}
+                    requiresConfirmation={props.requiresConfirmation}
+                    twoFactorEnabled={props.twoFactorEnabled}
                 />
 
-                <Form
-                    {...SecurityController.update.form()}
-                    options={{
-                        preserveScroll: true,
-                    }}
-                    resetOnError={[
-                        'password',
-                        'password_confirmation',
-                        'current_password',
-                    ]}
-                    resetOnSuccess
-                    onError={(errors) => {
-                        if (errors.password) {
-                            passwordInput.current?.focus();
-                        }
-
-                        if (errors.current_password) {
-                            currentPasswordInput.current?.focus();
-                        }
-                    }}
-                    className="space-y-6"
-                >
-                    {({ errors, processing }) => (
-                        <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="current_password">
-                                    当前密码
-                                </Label>
-
-                                <PasswordInput
-                                    id="current_password"
-                                    ref={currentPasswordInput}
-                                    name="current_password"
-                                    className="mt-1 block w-full"
-                                    autoComplete="current-password"
-                                    placeholder="当前密码"
-                                />
-
-                                <InputError message={errors.current_password} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">新密码</Label>
-
-                                <PasswordInput
-                                    id="password"
-                                    ref={passwordInput}
-                                    name="password"
-                                    className="mt-1 block w-full"
-                                    autoComplete="new-password"
-                                    placeholder="新密码"
-                                    passwordrules={props.passwordRules}
-                                />
-
-                                <InputError message={errors.password} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="password_confirmation">
-                                    确认密码
-                                </Label>
-
-                                <PasswordInput
-                                    id="password_confirmation"
-                                    name="password_confirmation"
-                                    className="mt-1 block w-full"
-                                    autoComplete="new-password"
-                                    placeholder="确认密码"
-                                    passwordrules={props.passwordRules}
-                                />
-
-                                <InputError
-                                    message={errors.password_confirmation}
-                                />
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <Button
-                                    disabled={processing}
-                                    data-test="update-password-button"
-                                >
-                                    保存
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
+                <ManagePasskeys
+                    canManagePasskeys={props.canManagePasskeys}
+                    passkeys={props.passkeys}
+                />
             </div>
-
-            <ManageTwoFactor
-                canManageTwoFactor={props.canManageTwoFactor}
-                requiresConfirmation={props.requiresConfirmation}
-                twoFactorEnabled={props.twoFactorEnabled}
-            />
-
-            <ManagePasskeys
-                canManagePasskeys={props.canManagePasskeys}
-                passkeys={props.passkeys}
-            />
         </>
     );
 }

@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use Illuminate\Http\Request;
 use App\Models\Channel;
 use Illuminate\Support\Sleep;
+use App\Models\User;
 
 class ChannelController extends Controller
 {
@@ -39,11 +40,16 @@ class ChannelController extends Controller
     {
         abort_if($channel->slug !== $slug, 404);
 
-        $user = $request->user();
-        $initisFollowed = false;
-        if ($user) {
-            $initisFollowed = $channel->viaLoveReactant()->isReactedBy($user, 'FollowChannel');
-        }
+        /** @var User|null $currentUser */
+        $currentUser = $request->user();
+
+        // 1. 初始化默认状态（未登录 / 未订阅时的默认返回值）
+        $isSubscribed = false;
+
+        // 3. 计算实体的总订阅人数（独立于具体用户）
+        $subscribersCount = $currentUser
+            ? $currentUser->getEntitySubscribersCount($channel)
+            : (new User)->getEntitySubscribersCount($channel);
 
         // ==========================================
         // 4. 数据结构拍平处理，适配前端 BaseDetailShow 组件
@@ -60,6 +66,17 @@ class ChannelController extends Controller
             $channelData['socials'] = [];
         }
 
+        $channelData['notificationType'] = 'personalized';
+
+        // 2. 已登录分支：仅在用户登录时查询个人偏好并更新状态
+        if ($currentUser) {
+            $activeType = $currentUser->getSubscriptionNotificationType($channel);
+            if ($activeType !== null) {
+                $isSubscribed = true;
+                $channelData['notificationType'] = $activeType;
+            }
+        }
+
         // ==========================================
         // 5. 渲染前端 Inertia 组件并使用 defer 延迟加载大体积数据
         // ==========================================
@@ -70,7 +87,8 @@ class ChannelController extends Controller
                 ['title' => $channel->name, 'href' => null],
             ],
             'channel' => $channelData,
-            'initisFollowed' => $initisFollowed,
+            'subscribersCount' => $subscribersCount,
+            'isSubscribed' => $isSubscribed,
             'currentTab' => $tab,
 
             // 🌟 首页 Tab：最新视频（延迟加载，并关联预加载演员数据）

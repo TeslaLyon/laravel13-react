@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -18,7 +17,10 @@ return new class extends Migration
 
             // 使用 JSONB 存储用户提交的完整修正数据（包括自定义的 key-value）
             $table->jsonb('payload')->comment('修正的内容 JSON');
-            $table->string('status')->default('pending')->comment('审核状态: pending, approved, rejected');
+            $table->unsignedTinyInteger('status')
+                ->default(1)
+                ->index()
+                ->comment('审核状态: 1-待审核(pending), 2-已通过(approved), 3-已拒绝(rejected)');
             $table->timestamps();
         });
     }

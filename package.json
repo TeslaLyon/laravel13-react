@@ -62,6 +62,7 @@
         "framer-motion": "^12.42.2",
         "globals": "^15.14.0",
         "input-otp": "^1.4.2",
+        "isomorphic-dompurify": "^3.22.0",
         "laravel-vite-plugin": "^3.0.0",
         "lucide-react": "^0.475.0",
         "next-themes": "^0.4.6",

@@ -16,6 +16,10 @@ export default function TwoFactorChallenge() {
     const [showRecoveryInput, setShowRecoveryInput] = useState<boolean>(false);
     const [code, setCode] = useState<string>('');
 
+    // 🌟 1. 从当前 URL 获取 redirect 参数
+    const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const redirectUrl = searchParams?.get('redirect') || '';
+
     const authConfigContent = useMemo<{
         title: string;
         description: string;
@@ -62,6 +66,11 @@ export default function TwoFactorChallenge() {
                 >
                     {({ errors, processing, clearErrors }) => (
                         <>
+                            {/* 🌟 2. 存在 redirect 参数时，追加隐藏输入框传给后端 */}
+                            {redirectUrl && (
+                                <input type="hidden" name="redirect" value={redirectUrl} />
+                            )}
+
                             {showRecoveryInput ? (
                                 <>
                                     <Input

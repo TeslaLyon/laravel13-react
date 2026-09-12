@@ -37,8 +37,11 @@ return new class extends Migration {
             $table->softDeletes();
 
             // 索引优化
-            $table->index(['thread_id', 'position']);
-            $table->index(['user_id', 'created_at']);
+            // 🎯 核心高频主索引：覆盖版块内楼层正序加载、深分页与最新回帖
+            $table->index(['thread_id', 'message_state', 'position'], 'idx_posts_thread_state_pos');
+
+            // 🎯 用户发帖与管理审计索引
+            $table->index(['user_id', 'created_at'], 'idx_posts_user_created');
         });
     }
 

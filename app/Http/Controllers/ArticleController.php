@@ -27,7 +27,7 @@ class ArticleController extends Controller
                 $query = Article::query()
                     ->published()
                     ->with([
-                        'author:id,name',
+                        'author:id,name,avatar',
                         'categories:id,name,slug',
                         'tags:id,name,slug',
                     ]);
@@ -91,7 +91,7 @@ class ArticleController extends Controller
 
                 // 4. 预加载关联属性
                 $article->load([
-                    'author:id,name',
+                    'author:id,name,avatar',
                     'categories:id,name,slug',
                     'tags:id,name,slug',
                     'detail',
@@ -104,7 +104,7 @@ class ArticleController extends Controller
                     ->published()
                     ->where('id', '!=', $article->id)
                     ->whereHas('categories', fn($q) => $q->whereIn('categories.id', $categoryIds))
-                    ->with(['author:id,name', 'categories:id,name,slug'])
+                    ->with(['author:id,name,avatar', 'categories:id,name,slug'])
                     ->latest('published_at')
                     ->take(2)
                     ->get();

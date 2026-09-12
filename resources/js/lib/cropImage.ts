@@ -6,14 +6,24 @@ export interface PixelCrop {
 }
 
 /**
- * 将图片裁剪区域绘制到 Canvas 并固定输出为 400x400 像素的高清头像
- * 支持图片缩小后的安全边界填充
+ * 将图片裁剪区域绘制到 Canvas 并导出为指定尺寸与比例的 File 对象
+ * 通用支持：圆形头像 (1:1)、宽幅横幅 (2560 × 424) 及任意长宽比图片
+ *
+ * @param imageSrc 原图 URL 或 Blob 链接
+ * @param pixelCrop react-easy-crop 计算出的真实像素选框坐标
+ * @param fileName 导出的文件名称（默认 'cropped.jpg'）
+ * @param outputWidth 期望输出的宽度（默认 2560）
+ * @param outputHeight 可选：显式指定期望输出的高度；若不传则根据 pixelCrop 比例自动换算
+ * @param quality 导出图片质量 (0 ~ 1，默认 0.92)
+ * @returns Promise<File> 返回可直接通过 FormData 上传的 File 对象
  */
 export default async function getCroppedImg(
     imageSrc: string,
     pixelCrop: PixelCrop,
-    fileName = 'avatar.jpg',
-    outputSize = 400
+    fileName = 'cropped.jpg',
+    outputWidth = 2560,
+    outputHeight?: number,
+    quality = 0.92
 ): Promise<File> {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
@@ -23,19 +33,25 @@ export default async function getCroppedImg(
         throw new Error('无法创建 Canvas 2D 上下文');
     }
 
-    // 🎯 1. 严格锁定输出画布尺寸为 400 x 400
-    canvas.width = outputSize;
-    canvas.height = outputSize;
+    // 🎯 1. 动态计算目标高度：显式传入优先，否则按选框比例严格推导
+    const targetHeight =
+        outputHeight && outputHeight > 0
+            ? outputHeight
+            : Math.round((pixelCrop.height / pixelCrop.width) * outputWidth);
 
-    // 🎯 2. 先用纯白背景填充底色 (防止缩小后四周产生黑边)
+    // 🎯 2. 设置画布输出分辨率
+    canvas.width = outputWidth;
+    canvas.height = targetHeight;
+
+    // 🎯 3. 填充纯白背景 (防止透明 PNG 导出 JPEG 时出现黑底或边缘黑边)
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, outputSize, outputSize);
+    ctx.fillRect(0, 0, outputWidth, targetHeight);
 
-    // 🎯 3. 开启高质量图像插值平滑算法
+    // 🎯 4. 开启高质量图像插值平滑算法
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // 🎯 4. 绘制裁剪区域并等比缩放到 400x400
+    // 🎯 5. 将选区像素精确绘制并缩放到目标画布尺寸
     ctx.drawImage(
         image,
         pixelCrop.x,
@@ -44,11 +60,11 @@ export default async function getCroppedImg(
         pixelCrop.height,
         0,
         0,
-        outputSize,
-        outputSize
+        outputWidth,
+        targetHeight
     );
 
-    // 🎯 5. 导出为标准 JPEG
+    // 🎯 6. 导出为标准 JPEG File 对象
     return new Promise((resolve, reject) => {
         canvas.toBlob(
             (blob) => {
@@ -60,11 +76,14 @@ export default async function getCroppedImg(
                 resolve(file);
             },
             'image/jpeg',
-            0.85
+            quality
         );
     });
 }
 
+/**
+ * 辅助函数：异步加载图片并支持跨域资源
+ */
 function createImage(url: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
         const image = new Image();
