@@ -263,6 +263,9 @@ class WalletController extends Controller
                     ->lockForUpdate()
                     ->first();
 
+                Log::info("钱包信息: $wallet->status");
+                Log::info(" Wallet::STATUS_ACTIVE: " . Wallet::STATUS_ACTIVE);
+
                 if (!$wallet) {
                     throw new Exception("用户 [{$order->user_id}] 钱包主体不存在");
                 }
