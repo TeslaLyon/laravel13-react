@@ -202,38 +202,63 @@ class WalletController extends Controller
      */
     public function notify(Request $request)
     {
-        $params = $request->all();
-        Log::info('收到第三方支付到账通知报文:', $params);
+        // 1. 记录原始请求以便审计排查
+        Log::info('收到第三方支付回调通知 (GET):', [
+            'headers' => [
+                'x-app-key' => $request->header('X-App-Key'),
+                'x-timestamp' => $request->header('X-Timestamp'),
+                'x-nonce' => $request->header('X-Nonce'),
+                'x-signature' => $request->header('X-Signature'),
+            ],
+            'query' => $request->query(),
+        ]);
 
-        // 1. 提取网关关键定位参数
-        $gatewayOrderId = $request->input('order_id') ?? $request->input('payId');
-        $reallyPrice = (int) ($request->input('really_price') ?? $request->input('price', 0));
+        // 🌟 2. 校验 Header 中的凭证与 HMAC-SHA256 签名
+        if (!$this->verifyHeaderSignature($request)) {
+            Log::warning('支付通知 Header 验签失败或请求超时，拒绝处理');
+            return response('fail: signature verification failed', 401)
+                ->header('Content-Type', 'text/plain');
+        }
+
+        // 🌟 3. 提取 GET 查询参数
+        $gatewayOrderId = (string) $request->query('order_id', '');
+        $rawType = $request->query('type');
+        $rawPrice = $request->query('price');
+        $rawReallyPrice = $request->query('reallyPrice');
 
         if (empty($gatewayOrderId)) {
-            Log::warning('支付通知缺失核心网关单号');
-            return response('fail', 400);
+            Log::warning('支付通知缺失核心参数: order_id');
+            return response('fail: missing order_id', 400)
+                ->header('Content-Type', 'text/plain');
         }
 
         try {
-            // 2. 开启事务保障资金绝对安全
-            DB::transaction(function () use ($gatewayOrderId, $reallyPrice, $params) {
-                // A. 加行级排他锁查找充值订单
+            // 🌟 4. 开启数据库事务，原子比对参数并执行入账
+            DB::transaction(function () use ($gatewayOrderId, $rawType, $rawPrice, $rawReallyPrice, $request) {
+                // A. 加行级排他锁锁定充值订单
                 $order = WalletOrder::where('gateway_order_id', $gatewayOrderId)
                     ->lockForUpdate()
                     ->first();
 
-                // 幂等性校验：如果订单不存在或早已处理完毕，直接跳过
+                // 幂等性防御：如果订单不存在或已处理完毕，安全退出
                 if (!$order) {
                     Log::warning("未找到匹配的本地订单，网关单号: [{$gatewayOrderId}]");
-                    return;
+                    throw new Exception("订单不存在");
                 }
 
                 if ($order->status === WalletOrder::STATUS_PAID) {
-                    Log::info("订单 [{$order->order_no}] 已经入账过，跳过重复通知");
+                    Log::info("订单 [{$order->order_no}] 早已成功入账，直接幂等返回");
                     return;
                 }
 
-                // B. 加行级排他锁锁定该用户的钱包记录
+                // 🌟 B. 逐项严格对比 GET 参数与本地数据库订单
+                $this->assertOrderParametersMatch($order, $rawType, $rawPrice);
+
+                // C. 解析实付金额（单位：分）
+                // 若网关以元为单位返回，将其转换为分；若已是分则直接使用
+                $reallyAmountInCents = $this->normalizeAmountToCents($rawReallyPrice, $order->amount);
+
+                // D. 加行级排他锁锁定用户钱包
                 $wallet = Wallet::where('user_id', $order->user_id)
                     ->lockForUpdate()
                     ->first();
@@ -246,13 +271,13 @@ class WalletController extends Controller
                     throw new Exception("用户钱包已被冻结或禁用，暂停入账");
                 }
 
-                // C. 计算余额快照与校验和
+                // E. 计算余额快照与校验和
                 $creditAmount = $order->amount; // 充值金额（单位：分）
                 $balanceBefore = $wallet->balance;
                 $balanceAfter = $balanceBefore + $creditAmount;
                 $newVersion = $wallet->version + 1;
 
-                // 计算新的 HMAC 防篡改摘要
+                // 生成新的 HMAC 防篡改摘要
                 $newChecksum = Wallet::generateChecksum(
                     $wallet->user_id,
                     $balanceAfter,
@@ -260,7 +285,7 @@ class WalletController extends Controller
                     $newVersion
                 );
 
-                // D. 更新钱包资金与审计字段
+                // F. 更新钱包资产
                 $wallet->update([
                     'balance' => $balanceAfter,
                     'total_recharge' => $wallet->total_recharge + $creditAmount,
@@ -269,7 +294,7 @@ class WalletController extends Controller
                     'last_activity_at' => now(),
                 ]);
 
-                // E. 生成全局唯一交易流水号并写入 wallet_transactions
+                // G. 写入钱包审计流水
                 $trxNo = 'TRX' . date('YmdHis') . strtoupper(Str::random(8));
                 $tissues = $creditAmount / 100;
 
@@ -290,31 +315,144 @@ class WalletController extends Controller
                     'metadata' => [
                         'order_no' => $order->order_no,
                         'gateway_pay_id' => $order->gateway_pay_id,
-                        'really_amount' => $reallyPrice > 0 ? $reallyPrice : $creditAmount,
+                        'really_amount' => $reallyAmountInCents,
                         'payment_method' => $order->payment_method,
+                        'query_params' => $request->query(),
                     ],
                 ]);
 
-                // F. 更新充值订单状态为已完成
+                // H. 更新订单状态为已支付
                 $order->update([
                     'status' => WalletOrder::STATUS_PAID,
-                    'really_amount' => $reallyPrice > 0 ? $reallyPrice : $creditAmount,
+                    'really_amount' => $reallyAmountInCents,
                     'paid_at' => now(),
-                    'raw_callback' => $params,
+                    'raw_callback' => $request->query(),
                 ]);
 
-                Log::info("充值订单 [{$order->order_no}] 成功到账，流水号: [{$trxNo}]，新增余额: {$creditAmount} 分");
+                Log::info("充值订单 [{$order->order_no}] 参数对比一致并成功入账，流水号: [{$trxNo}]");
             });
 
-            // 3. 按照网关规范返回纯文本 success
+            // 5. 按照免签网关规范，输出纯文本小写 success，触发网关停止重试
             return response('success', 200)->header('Content-Type', 'text/plain');
 
         } catch (Exception $e) {
-            Log::error('支付回调入账发生异常: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response('error', 500);
+            Log::error('支付回调核验入账失败: ' . $e->getMessage());
+            return response('fail: ' . $e->getMessage(), 400)->header('Content-Type', 'text/plain');
         }
+    }
+
+    /**
+     * 校验 Header 签名与时间戳防重放
+     */
+    protected function verifyHeaderSignature(Request $request): bool
+    {
+        $appKey = (string) $request->header('X-App-Key', '');
+        $timestamp = (string) $request->header('X-Timestamp', '');
+        $nonce = (string) $request->header('X-Nonce', '');
+        $signature = (string) $request->header('X-Signature', '');
+
+        // 1. 基础完整性检查
+        if (empty($appKey) || empty($timestamp) || empty($nonce) || empty($signature)) {
+            Log::warning('验签失败：缺少必要的认证 Header 参数');
+            return false;
+        }
+
+        // 2. 校验 AppKey 是否匹配本系统配置
+        $configuredAppKey = (string) config('services.vmq.app_key');
+        if (!hash_equals($configuredAppKey, $appKey)) {
+            Log::warning("验签失败：AppKey 不匹配，接收到: [{$appKey}]");
+            return false;
+        }
+
+        // 3. 时间戳格式与防重放窗口检查（限制 300 秒以内）
+        if (!is_numeric($timestamp)) {
+            return false;
+        }
+
+        $now = time();
+        if (abs($now - (int) $timestamp) > 300) {
+            Log::warning("验签失败：请求时间戳超出 300 秒允许窗口，当前时间: {$now}, 传入: {$timestamp}");
+            return false;
+        }
+
+        // 4. 计算预期签名并比对
+        $appSecret = (string) config('services.vmq.app_secret');
+        if (empty($appSecret)) {
+            Log::error('系统未配置 VMQ_APP_SECRET');
+            return false;
+        }
+
+        // 拼接签名规则：AppKey + Timestamp + Nonce
+        $signPayload = $appKey . $timestamp . $nonce;
+        $expectedSignature = hash_hmac('sha256', $signPayload, $appSecret);
+
+        // 使用恒定时间比较防止时序攻击，不区分大小写
+        return hash_equals(strtolower($expectedSignature), strtolower($signature));
+    }
+
+    /**
+     * 逐项核对 GET 参数与本地订单的一致性
+     */
+    protected function assertOrderParametersMatch(WalletOrder $order, mixed $rawType, mixed $rawPrice): void
+    {
+        // 1. 对比支付渠道类型（1=微信，2=支付宝）
+        if ($rawType !== null) {
+            $expectedChannel = match ((int) $rawType) {
+                1 => 'wechat',
+                2 => 'alipay',
+                default => 'unknown',
+            };
+
+            if ($order->payment_method !== $expectedChannel) {
+                throw new Exception("支付渠道类型不匹配：订单记录为 [{$order->payment_method}]，网关回调为 [{$expectedChannel}]");
+            }
+        }
+
+        // 2. 对比标价金额（单位换算兼容）
+        if ($rawPrice !== null) {
+            $incomingPrice = (float) $rawPrice;
+            $orderCents = (int) $order->amount;
+
+            // 如果网关传的是“元”（例如 10.00），换算为分：10.00 * 100 = 1000
+            $incomingCents = (int) round($incomingPrice * 100);
+
+            // 同时兼容网关直接传“分”（例如 1000）的情况
+            $isMatch = ($incomingCents === $orderCents) || ((int) $incomingPrice === $orderCents);
+
+            if (!$isMatch) {
+                throw new Exception("订单金额不匹配：订单标价分值为 [{$orderCents}]，网关回调金额为 [{$rawPrice}]");
+            }
+        }
+    }
+
+    /**
+     * 将金额参数安全转换为“分”
+     */
+    protected function normalizeAmountToCents(mixed $rawAmount, int $defaultCents): int
+    {
+        if ($rawAmount === null || $rawAmount === '') {
+            return $defaultCents;
+        }
+
+        $numericVal = (float) $rawAmount;
+        if ($numericVal <= 0) {
+            return $defaultCents;
+        }
+
+        // 优先按“元”换算为“分”
+        $converted = (int) round($numericVal * 100);
+
+        // 如果换算后的值与原订单金额一致，则采用换算值
+        if ($converted === $defaultCents) {
+            return $converted;
+        }
+
+        // 若数值本身就已经等于分值，直接采用原整型
+        if ((int) $numericVal === $defaultCents) {
+            return (int) $numericVal;
+        }
+
+        return $converted;
     }
 
     /**

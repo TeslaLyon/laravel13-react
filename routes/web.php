@@ -51,6 +51,7 @@ use Illuminate\Support\Facades\DB;
 // https://pdcams.com/cam/bongacams/DemonicAngel/
 // TODO:前端支付页面的倒计时功能在切换到别的标签页后会暂停，导致支付超时后用户还在继续支付，应该在切换标签页时继续倒计时
 // TODO：修复支付端 tmp_price 表有脏数据的问题
+// TODO:跳转支付页面默认不要是空白的，能不能来个正在加载中的动画？
 
 // Route::inertia('/', 'welcome')->name('home');
 
