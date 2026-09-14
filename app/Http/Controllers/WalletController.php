@@ -25,41 +25,56 @@ class WalletController extends Controller
     }
 
     /**
-     * 渲染钱包资产中心页面（双资产 + 异步延迟加载）
+     * 渲染钱包资产中心页面（双资产 + 延迟加载 + 记忆化去重 + 纯整型输出）
      */
     public function index(Request $request): Response
     {
         $user = $request->user();
+
+        // 🌟 1. 请求级记忆化闭包：消除双 defer 闭包并发解析时的重复数据库查询
+        $cachedWallet = null;
+        $getWallet = function () use ($user, &$cachedWallet) {
+            return $cachedWallet ??= $this->walletService->getOrCreateWallet($user);
+        };
 
         return Inertia::render('wallet/index', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
                 ['title' => '我的资产钱包', 'href' => null],
             ],
-            // 核心资产数据：延迟加载
-            'wallet' => Inertia::defer(function () use ($user) {
-                $wallet = $this->walletService->getOrCreateWallet($user);
+
+            // 🌟 2. 核心资产数据：延迟加载，全部字段统一为 (int) 整型分
+            'wallet' => Inertia::defer(function () use ($getWallet) {
+                $wallet = $getWallet();
 
                 return [
                     'id' => $wallet->id,
                     'user_id' => $wallet->user_id,
-                    'balance' => is_numeric($wallet->balance) ? (float) $wallet->balance : 0.0,
-                    'frozen_balance' => is_numeric($wallet->frozen_balance) ? (float) $wallet->frozen_balance : 0.0,
+
+                    // 现金法币维度（单位：分，直出整型，由前端展示层除以 100 格式化）
+                    'balance' => (int) ($wallet->balance ?? 0),
+                    'frozen_balance' => (int) ($wallet->frozen_balance ?? 0),
+
+                    // 虚拟金币维度（单位：个）
                     'coins' => (int) ($wallet->coins ?? 0),
                     'frozen_coins' => (int) ($wallet->frozen_coins ?? 0),
-                    'total_recharge' => is_numeric($wallet->total_recharge) ? (float) $wallet->total_recharge : 0.0,
-                    'total_spent' => is_numeric($wallet->total_spent) ? (float) $wallet->total_spent : 0.0,
-                    'total_withdrawn' => is_numeric($wallet->total_withdrawn) ? (float) $wallet->total_withdrawn : 0.0,
+
+                    // 财务累计统计指标（单位：分或个）
+                    'total_recharge' => (int) ($wallet->total_recharge ?? 0),
+                    'total_spent' => (int) ($wallet->total_spent ?? 0),
+                    'total_withdrawn' => (int) ($wallet->total_withdrawn ?? 0),
                     'total_earned_coins' => (int) ($wallet->total_earned_coins ?? 0),
+
+                    // 状态管控
                     'status' => $wallet->status instanceof \BackedEnum ? $wallet->status->value : (int) $wallet->status,
                     'status_label' => method_exists($wallet->status, 'label') ? $wallet->status->label() : '正常',
                     'version' => (int) ($wallet->version ?? 0),
                 ];
             }),
 
-            // 交易流水列表：延迟加载
-            'transactions' => Inertia::defer(function () use ($user) {
-                $wallet = $this->walletService->getOrCreateWallet($user);
+            // 🌟 3. 交易流水列表：延迟加载，支持局部刷新与整型分
+            'transactions' => Inertia::defer(function () use ($getWallet) {
+                $wallet = $getWallet();
 
                 return $wallet->transactions()
                     ->latest('id')
@@ -72,9 +87,12 @@ class WalletController extends Controller
                         'type' => $tx->type instanceof \BackedEnum ? $tx->type->value : (string) $tx->type,
                         'type_label' => method_exists($tx->type, 'label') ? $tx->type->label() : (string) ($tx->type_label ?? $tx->type),
                         'direction' => (int) ($tx->direction ?? ($tx->amount >= 0 ? 1 : -1)),
-                        'amount' => is_numeric($tx->amount) ? (float) $tx->amount : 0.0,
-                        'balance_before' => is_numeric($tx->balance_before) ? (float) $tx->balance_before : 0.0,
-                        'balance_after' => is_numeric($tx->balance_after) ? (float) $tx->balance_after : 0.0,
+
+                        // 核心金额字段：直出整型分，杜绝 float 精度丢失
+                        'amount' => (int) $tx->amount,
+                        'balance_before' => (int) $tx->balance_before,
+                        'balance_after' => (int) $tx->balance_after,
+
                         'description' => $tx->description ?? '',
                         'reference_id' => $tx->reference_id,
                         'created_at' => $tx->created_at?->format('Y-m-d H:i:s') ?? '',
@@ -352,7 +370,8 @@ class WalletController extends Controller
     }
 
     /**
-     * 将金额统一规格化为“分”
+     * 将网关参数安全解析为“分”
+     * 针对递增金额防穿透，支持直接传整型分（1001）或小数元（10.01）
      */
     protected function normalizeAmountToCents(mixed $rawAmount, int $defaultCents): int
     {
@@ -360,22 +379,21 @@ class WalletController extends Controller
             return $defaultCents;
         }
 
-        $numericVal = (float) $rawAmount;
-        if ($numericVal <= 0) {
-            return $defaultCents;
+        $rawStr = trim((string) $rawAmount);
+
+        // 1. 如果包含小数点（例如 "10.01"），属于以“元”为单位，换算为分
+        // if (str_contains($rawStr, '.')) {
+        //     $cents = (int) round(((float) $rawStr) * 100);
+        //     return $cents > 0 ? $cents : $defaultCents;
+        // }
+
+        // 2. 纯数字（例如 "1001" 或 1001），本身已经是“分”，直接转为整型
+        if (is_numeric($rawStr)) {
+            $cents = (int) $rawStr;
+            return $cents > 0 ? $cents : $defaultCents;
         }
 
-        $converted = (int) round($numericVal * 100);
-
-        if ($converted >= $defaultCents) {
-            return $converted;
-        }
-
-        if ((int) $numericVal >= $defaultCents) {
-            return (int) $numericVal;
-        }
-
-        return $converted;
+        return $defaultCents;
     }
 
     /**

@@ -11,13 +11,21 @@ interface Props {
     transactions: PaginatedData<WalletTransactionItem>;
 }
 
+/**
+ * 🌟 表现层金额格式化：将后端传来的分安全转换为元展示
+ * 纯前端处理，避免后端浮点精度漂移
+ */
+function formatCentsToYuan(cents: number | string | undefined | null): string {
+    const numeric = Number(cents) || 0;
+    return (numeric / 100).toFixed(2);
+}
+
 export function WalletTransactionsTable({ transactions }: Props) {
     return (
         <Card className="w-full rounded-2xl border-border/70 bg-card/60 shadow-xs">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 pt-6 px-6 gap-2">
                 <div>
                     <CardTitle className="text-base sm:text-lg font-bold text-foreground">收支流水账单</CardTitle>
-                    {/* 🌟 文案调整：明确聚焦于充值、消费及社区互动 */}
                     <CardDescription className="text-sm text-muted-foreground mt-1">
                         展示最近账户发生的充值、消费扣款、签到奖励及社区互动变动明细。
                     </CardDescription>
@@ -53,8 +61,10 @@ export function WalletTransactionsTable({ transactions }: Props) {
                             transactions.data.map((tx) => {
                                 const isIncome = tx.direction === 1 || Number(tx.amount) > 0;
                                 const isCoins = tx.currency_type === 'coins';
-                                const amountNum = Math.abs(Number(tx.amount));
-                                const afterNum = Number(tx.balance_after);
+
+                                // 取绝对值进行显示
+                                const rawAmount = Math.abs(Number(tx.amount));
+                                const rawAfter = Number(tx.balance_after);
 
                                 return (
                                     <TableRow key={tx.id} className="h-[53px] border-border/40 hover:bg-muted/40 transition-colors">
@@ -83,22 +93,22 @@ export function WalletTransactionsTable({ transactions }: Props) {
                                             </Badge>
                                         </TableCell>
 
-                                        {/* 变动金额：Apple/Google 规范，采用 tabular-nums 避免对齐错位 */}
+                                        {/* 变动金额 */}
                                         <TableCell className={cn(
                                             'font-mono font-bold text-sm tabular-nums',
                                             isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                                         )}>
                                             {isIncome ? '+' : '-'}
                                             {isCoins
-                                                ? `${amountNum} 币`
-                                                : `¥${amountNum.toFixed(2)}`}
+                                                ? `${rawAmount} 币`
+                                                : `¥${formatCentsToYuan(rawAmount)}`}
                                         </TableCell>
 
                                         {/* 变动后结余 */}
                                         <TableCell className="font-mono text-sm font-semibold text-foreground tabular-nums">
                                             {isCoins
-                                                ? `${afterNum} 币`
-                                                : `¥${afterNum.toFixed(2)}`}
+                                                ? `${rawAfter} 币`
+                                                : `¥${formatCentsToYuan(rawAfter)}`}
                                         </TableCell>
 
                                         {/* 业务描述 */}
@@ -117,7 +127,7 @@ export function WalletTransactionsTable({ transactions }: Props) {
                     </TableBody>
                 </Table>
 
-                {/* 分页组件集成 */}
+                {/* 分页组件 */}
                 <div className="pt-4 border-t border-border/40 flex justify-center">
                     <VideoPagination links={transactions.links} />
                 </div>
