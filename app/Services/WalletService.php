@@ -127,7 +127,7 @@ class WalletService
         return $this->changeBalance(
             wallet: $wallet,
             amountCents: $amountCents,
-            type: TransactionType::DEPOSIT,
+            type: TransactionType::RECHARGE,
             description: $description,
             source: null,
             referenceId: $referenceId,
