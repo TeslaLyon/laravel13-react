@@ -7,6 +7,13 @@ return [
     |--------------------------------------------------------------------------
     */
     'deposit_amounts' => [
+        [
+            'amount' => 10,           // 真实金额：10 分 (即 0.10 元)
+            'tissues' => 0.1,          // 获得代币：0.1 纸巾
+            'bonus' => 0,            // 额外赠送：0 纸巾
+            'label' => '0.1 纸巾',   // 前端展示文本
+            'popular' => false,        // 是否主推/热门标签
+        ],
         ['amount' => 100, 'tissues' => 1, 'bonus' => 0, 'label' => '1 纸巾', 'popular' => false],
         ['amount' => 1000, 'tissues' => 10, 'bonus' => 0, 'label' => '10 纸巾', 'popular' => false],
         ['amount' => 3000, 'tissues' => 30, 'bonus' => 0, 'label' => '30 纸巾', 'popular' => false],
