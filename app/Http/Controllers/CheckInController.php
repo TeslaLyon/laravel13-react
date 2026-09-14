@@ -10,8 +10,9 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
-use Illuminate\Support\Sleep;
 use Carbon\Carbon;
+use RuntimeException;
+use Illuminate\Support\Facades\Log;
 
 class CheckInController extends Controller
 {
@@ -85,8 +86,10 @@ class CheckInController extends Controller
                 'message' => $date ? '补签成功！' : '打卡成功！',
                 'data' => $result,
             ]);
-        } catch (Throwable $e) {
-            // 🌟 2. 异常统一转为 422 JSON，前端精准捕获
+
+        } catch (RuntimeException $e) {
+            // 🌟 2. 预期内的业务逻辑拦截（如：今日已签到、补签卡不足、补签未开启）
+            // 属于正常业务规则阻断，直接反馈业务提示，无需污染系统 Error 日志
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -95,6 +98,30 @@ class CheckInController extends Controller
             }
 
             return back()->with('error', $e->getMessage());
+
+        } catch (Throwable $e) {
+            // 🌟 3. 预期外的系统级致命错误（如：方法不存在、语法错误、数据库挂掉）
+            // 必须显式记录详细日志，方便开发和运维在 storage/logs/ 中精准排查！
+            Log::error('[签到功能发生异常] ' . $e->getMessage(), [
+                'user_id' => $user?->id,
+                'date_param' => $date,
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // 生产环境安全防御：对前端屏蔽具体的代码报错细节
+            $friendlyMessage = app()->isProduction()
+                ? '签到服务繁忙，请稍后重试'
+                : $e->getMessage();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $friendlyMessage,
+                ], 500); // 系统崩溃建议返回 500，语义更加符合 HTTP 规范
+            }
+
+            return back()->with('error', $friendlyMessage);
         }
     }
 }

@@ -13,8 +13,8 @@ return [
 
     'make_up' => [
         'enabled' => true,
-        'max_per_month' => 99,
-        'initial_gift_cards' => 1,
+        'max_per_month' => 20,
+        'initial_gift_cards' => 0,
         'max_days_limit' => 30,
     ],
 ];

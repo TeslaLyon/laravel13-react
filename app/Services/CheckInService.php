@@ -14,7 +14,8 @@ use RuntimeException;
 class CheckInService
 {
     public function __construct(
-        protected CheckInConfigService $configService
+        protected CheckInConfigService $configService,
+        protected WalletService $walletService
     ) {
     }
 
@@ -187,12 +188,24 @@ class CheckInService
 
                 // 10. 钱包加金币
                 /** @var Wallet $wallet */
-                $wallet = $user->wallet ?? $user->wallet()->create();
-                $wallet->changeCoins(
+                // 🌟 使用 getOrCreateWallet 安全获取或初始化带防篡改签名的钱包[cite: 4]
+                $wallet = $this->walletService->getOrCreateWallet($user);
+
+                // 🌟 调用 WalletService 的 changeCoins 进行安全加币并写入审计流水[cite: 4]
+                $this->walletService->changeCoins(
+                    wallet: $wallet,
                     amount: $totalCoins,
                     type: $isMakeUp ? 'make_up_reward' : 'check_in',
                     description: ($isMakeUp ? '补签打卡奖励' : '每日签到打卡') . " (当月连签第 {$newContinuousDays} 天" . ($bonusCoins > 0 ? "，含里程碑 +{$bonusCoins}" : "") . ")",
-                    source: $checkInRecord
+                    source: $checkInRecord,
+                    metadata: [
+                        'check_in_id'      => $checkInRecord->id,
+                        'check_in_date'    => $targetDate->toDateString(),
+                        'continuous_days'  => $newContinuousDays,
+                        'base_coins'       => $baseCoins,
+                        'bonus_coins'      => $bonusCoins,
+                        'is_make_up'       => $isMakeUp,
+                    ]
                 );
 
                 return [
