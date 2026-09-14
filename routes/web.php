@@ -55,7 +55,6 @@ use Illuminate\Support\Facades\DB;
 // TODO：每次发布代码后日志文件就会重新生成，历史日志文件消失，不应该消失。
 // TODO：将实际支付金额改为递增，因为考虑到一旦用户发现是递减的会重复下单，但是在递增的情况下，实际到账金额应该是实际支付金额
 // TODO:充值指定金额赠送相应的纸巾
-// TODO：加载流水分页数据时采用inertiajs的只读取 table 中的数据，而不是整个页面
 // TODO: table 表格中的业务说明文字太多无法完全展示，考虑 hover 后显示全部
 
 // Route::inertia('/', 'welcome')->name('home');

@@ -198,7 +198,7 @@ export function WalletCards({ wallet }: Props) {
                         setDialogStep('success');
 
                         // 局部刷新 Inertia 钱包数据，平滑无白屏
-                        router.reload({ only: ['wallet'] });
+                        router.reload({ only: ['wallet', 'transactions'] });
 
                         // 停留 2 秒展示成功勾选状态，随后优雅关闭
                         setTimeout(() => {

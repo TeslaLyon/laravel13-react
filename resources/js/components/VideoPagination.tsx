@@ -16,12 +16,18 @@ interface VideoPaginationProps {
     hideEndPages?: boolean;
     /** 在当前页之后最多显示的页码数量，默认为 2 */
     maxPagesAfterCurrent?: number;
+    /**
+     * 🌟 Inertia.js 局部重载属性名列表
+     * 例如传入 ['transactions']，翻页时后端仅查询并返回该属性数据，避免整页重新加载
+     */
+    only?: string[];
 }
 
 export function VideoPagination({
     links,
     hideEndPages = true,
-    maxPagesAfterCurrent = 2
+    maxPagesAfterCurrent = 2,
+    only,
 }: VideoPaginationProps) {
     // 🎯 1. 边界防御：无数据或只有 1 页时直接隐藏
     if (!links || links.length <= 3) {
@@ -52,14 +58,11 @@ export function VideoPagination({
 
         // 如果是数字页码
         if (!isNaN(pageNum)) {
-            // 过滤条件：只保留“小于等于当前页”的页码，以及“当前页往后延伸 maxPagesAfterCurrent 页”以内的页码
-            // 比如当前第 2 页，maxPagesAfterCurrent=2，则保留 1, 2, 3, 4，大于 4 的（即最后几页）全部隐藏
             return pageNum <= currentPage + maxPagesAfterCurrent;
         }
 
         // 对于省略号 "..."：如果是位于当前页之后的省略号，直接隐藏
         if (link.label === "...") {
-            // 前面的省略号可以保留，后面的省略号过滤掉
             const isAfterCurrent = index > links.findIndex(l => l.active);
             return !isAfterCurrent;
         }
@@ -80,6 +83,7 @@ export function VideoPagination({
                         <Link
                             key={index}
                             href={link.url}
+                            only={only}
                             preserveScroll
                             preserveState
                             className="flex items-center gap-1 px-3 py-2 text-[15px] font-medium rounded-xl hover:bg-muted transition-colors text-primary"
@@ -104,6 +108,7 @@ export function VideoPagination({
                         <Link
                             key={index}
                             href={link.url}
+                            only={only}
                             preserveScroll
                             preserveState
                             className="flex items-center gap-1 px-3 py-2 text-[15px] font-medium rounded-xl hover:bg-muted transition-colors text-primary"
@@ -151,6 +156,7 @@ export function VideoPagination({
                     <Link
                         key={index}
                         href={link.url}
+                        only={only}
                         preserveScroll
                         preserveState
                         className="w-10 h-10 flex items-center justify-center text-[15px] font-medium rounded-xl hover:bg-muted transition-colors text-primary"
