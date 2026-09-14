@@ -7,13 +7,13 @@ return [
     |--------------------------------------------------------------------------
     */
     'deposit_amounts' => [
-        ['amount' => 100, 'tissues' => 1, 'label' => '1 纸巾', 'popular' => false],
-        ['amount' => 1000, 'tissues' => 10, 'label' => '10 纸巾', 'popular' => false],
-        ['amount' => 3000, 'tissues' => 30, 'label' => '30 纸巾', 'popular' => false],
-        ['amount' => 5000, 'tissues' => 50, 'label' => '50 纸巾', 'popular' => true],
-        ['amount' => 10000, 'tissues' => 100, 'label' => '100 纸巾', 'popular' => false],
-        ['amount' => 20000, 'tissues' => 200, 'label' => '200 纸巾', 'popular' => false],
-        ['amount' => 50000, 'tissues' => 500, 'label' => '500 纸巾', 'popular' => false],
+        ['amount' => 100, 'tissues' => 1, 'bonus' => 0, 'label' => '1 纸巾', 'popular' => false],
+        ['amount' => 1000, 'tissues' => 10, 'bonus' => 0, 'label' => '10 纸巾', 'popular' => false],
+        ['amount' => 3000, 'tissues' => 30, 'bonus' => 0, 'label' => '30 纸巾', 'popular' => false],
+        ['amount' => 5000, 'tissues' => 50, 'bonus' => 0, 'label' => '50 纸巾', 'popular' => true],
+        ['amount' => 10000, 'tissues' => 100, 'bonus' => 0, 'label' => '100 纸巾', 'popular' => false],
+        ['amount' => 20000, 'tissues' => 200, 'bonus' => 20, 'label' => '200 纸巾', 'popular' => false],
+        ['amount' => 50000, 'tissues' => 500, 'bonus' => 50, 'label' => '500 纸巾', 'popular' => false],
     ],
 
     /*

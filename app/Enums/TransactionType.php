@@ -12,7 +12,7 @@ enum TransactionType: string
     case REWARD = 'reward';          // 社区打赏/点赞奖励
 
     // ==================== 资金与电商流转业务 ====================
-    case RECHARGE = 'recharge';        // 账户充值
+    case DEPOSIT = 'deposit';        // 账户充值
     case CONSUME = 'consume';         // 业务消费/道具购买
     case WITHDRAW = 'withdraw';        // 提现支出
     case REFUND = 'refund';          // 交易退款
@@ -31,7 +31,7 @@ enum TransactionType: string
             self::CHECK_IN => '每日签到',
             self::MAKE_UP_REWARD => '补签打卡',
             self::REWARD => '社区打赏',
-            self::RECHARGE => '账户充值',
+            self::DEPOSIT => '账户充值',
             self::CONSUME => '业务消费',
             self::WITHDRAW => '提现支出',
             self::REFUND => '交易退款',
@@ -50,7 +50,7 @@ enum TransactionType: string
             self::CHECK_IN,
             self::MAKE_UP_REWARD,
             self::REWARD,
-            self::RECHARGE,
+            self::DEPOSIT,
             self::REFUND => true,
 
             self::CONSUME,
@@ -69,7 +69,7 @@ enum TransactionType: string
         return match ($this) {
             self::CHECK_IN,
             self::MAKE_UP_REWARD,
-            self::RECHARGE,
+            self::DEPOSIT,
             self::REWARD,
             self::REFUND => 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
 

@@ -160,9 +160,22 @@ export function WalletCards({ wallet }: Props) {
     const handleOpenChange = (open: boolean) => {
         setDepositOpen(open);
         if (!open) {
-            resetDialogState();
+            stopPolling();
         }
     };
+
+    // 🌟 核心：当弹窗关闭时，延时 300ms（等待 Radix UI 退出淡出动画完全播放完毕）再静默重置步骤
+    useEffect(() => {
+        if (!depositOpen) {
+            stopPolling();
+            const timer = setTimeout(() => {
+                setDialogStep('select');
+                setCurrentOrder(null);
+            }, 300);
+
+            return () => clearTimeout(timer);
+        }
+    }, [depositOpen]);
 
     // 🌟 3. 核心轮询监听器：当状态进入 pending 且有单号时自动触发
     useEffect(() => {
