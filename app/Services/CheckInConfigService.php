@@ -93,14 +93,50 @@ class CheckInConfigService
             }
         }
 
+        // 未命中或数据损坏时，从 config 获取并重新缓存
+        return $this->reloadMakeUpConfigFromConfigFile();
+    }
+
+    /**
+     * 强制从配置文件重新加载并回写 Redis
+     */
+    public function reloadMakeUpConfigFromConfigFile(): array
+    {
         $default = (array) config('checkin.make_up', [
             'enabled' => true,
             'max_per_month' => 3,
             'initial_gift_cards' => 1,
             'max_days_limit' => 30,
         ]);
+
         $this->setMakeUpConfig($default);
+
         return $default;
+    }
+
+    /**
+     * 写入 Redis 配置
+     *
+     * @param array $config 配置内容
+     * @param int|null $ttl 建议设置过期时间（如 86400 秒/1天），防止产生无法清理的死缓存
+     */
+    public function setMakeUpConfig(array $config, ?int $ttl = 86400): void
+    {
+        $payload = json_encode($config, JSON_UNESCAPED_UNICODE);
+
+        if ($ttl) {
+            Redis::setex(self::KEY_MAKE_UP_CONFIG, $ttl, $payload);
+        } else {
+            Redis::set(self::KEY_MAKE_UP_CONFIG, $payload);
+        }
+    }
+
+    /**
+     * 清除 Redis 配置缓存
+     */
+    public function clearMakeUpConfigCache(): void
+    {
+        Redis::del(self::KEY_MAKE_UP_CONFIG);
     }
 
     /**
@@ -117,14 +153,6 @@ class CheckInConfigService
     public function setMilestones(array $milestones): void
     {
         Redis::set(self::KEY_MILESTONES, json_encode($milestones, JSON_UNESCAPED_UNICODE));
-    }
-
-    /**
-     * 设置补签配置至 Redis
-     */
-    public function setMakeUpConfig(array $config): void
-    {
-        Redis::set(self::KEY_MAKE_UP_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
     }
 
     /**
