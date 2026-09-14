@@ -18,6 +18,7 @@ use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use App\Enums\WalletStatus;
 
 class WalletController extends Controller
 {
@@ -263,14 +264,20 @@ class WalletController extends Controller
                     ->lockForUpdate()
                     ->first();
 
-                Log::info("钱包信息: $wallet->status");
+                Log::info("钱包状态数值: {$wallet->status->value}");
+                Log::info("钱包状态文本: {$wallet->status->label()}");
+                Log::info('钱包信息', [
+                    'user_id' => $wallet->user_id,
+                    'status' => $wallet->status->value,
+                    'label' => $wallet->status->label(),
+                ]);
                 Log::info(" Wallet::STATUS_ACTIVE: " . Wallet::STATUS_ACTIVE);
 
                 if (!$wallet) {
                     throw new Exception("用户 [{$order->user_id}] 钱包主体不存在");
                 }
 
-                if ($wallet->status !== Wallet::STATUS_ACTIVE) {
+                if ($wallet->status !== WalletStatus::ACTIVE) {
                     throw new Exception("用户钱包已被冻结或禁用，暂停入账");
                 }
 
