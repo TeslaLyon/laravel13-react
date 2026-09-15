@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserGroup;
 use App\Services\UserSpaceTabService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -73,6 +74,36 @@ class UserSpaceController extends Controller
             'image_url' => $decoration->image_url,
         ] : null;
 
+        // 6. 动态解析用户的真实用户组与成长等级信息
+        $primaryGroup = $user->group;
+        $totalCredits = (float) ($user->total_credits ?? 0.00);
+
+        // 解析对应的积分成长组（若主组本身就是积分组则直接使用，否则根据当前积分匹配对应阶梯）
+        $creditGroup = ($primaryGroup && $primaryGroup->is_credit_based)
+            ? $primaryGroup
+            : UserGroup::query()
+                ->where('is_credit_based', true)
+                ->where('credits_min', '<=', $totalCredits)
+                ->orderByDesc('level')
+                ->first()
+            ?? UserGroup::query()->where('is_credit_based', true)->orderBy('level')->first();
+
+        $currentLevel = (int) ($creditGroup?->level ?? 1);
+        $levelTitle = $creditGroup?->banner_text
+            ?: (string) preg_replace('/^Lv\.\d+\s*/', '', (string) ($creditGroup?->title ?? '循规初试'));
+
+        // 获取下一阶梯以确定所需总积分门槛
+        $nextGroup = UserGroup::query()
+            ->where('is_credit_based', true)
+            ->where('level', '>', $currentLevel)
+            ->orderBy('level', 'asc')
+            ->first();
+
+        $currentExp = round($totalCredits, 1);
+        $nextLevelExp = $nextGroup
+            ? (float) $nextGroup->credits_min
+            : max(1.0, $currentExp); // 满级时进度锁定为 100%
+
         return Inertia::render('UserSpace/Show', [
             'activeTab' => $currentTab,
 
@@ -89,15 +120,15 @@ class UserSpaceController extends Controller
                 'isFollowing' => $activeNotificationType !== null,
                 'isSelf' => $currentUser ? $currentUser->id === $user->id : false,
                 'group' => [
-                    'id' => $user->group?->id ?? 1,
-                    'name' => $user->group?->name ?? '普通成员',
-                    'slug' => $user->group?->slug ?? 'member',
+                    'id' => $primaryGroup?->id ?? 1,
+                    'name' => $primaryGroup?->title ?? $primaryGroup?->name ?? '注册会员',
+                    'slug' => $primaryGroup?->name ?? 'member',
                 ],
                 'tier' => [
-                    'level' => $user->level ?? 1,
-                    'title' => $user->level_title ?? '青铜探索者',
-                    'currentExp' => $user->current_exp ?? 320,
-                    'nextLevelExp' => $user->next_level_exp ?? 500,
+                    'level' => $currentLevel,
+                    'title' => $levelTitle,
+                    'currentExp' => $currentExp,
+                    'nextLevelExp' => $nextLevelExp,
                 ],
                 'medals' => $medals,
                 'avatarDecoration' => $avatarDecorationData,
