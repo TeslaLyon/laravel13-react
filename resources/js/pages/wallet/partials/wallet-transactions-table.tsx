@@ -21,6 +21,52 @@ function formatCentsToYuan(cents: number | string | undefined | null): string {
 }
 
 /**
+ * 🌟 业务类型多彩徽章样式映射 (基于微彩度高质感语义体系)
+ */
+function getTransactionBadgeStyle(type: string, isIncome: boolean, label?: string): string {
+    const key = type?.toLowerCase() || '';
+    const text = label || '';
+
+    // 每日签到 / 补签打卡：清新翠绿 (活跃习惯与金币奖励)
+    if (key === 'check_in' || key === 'make_up_reward' || text.includes('签到') || text.includes('打卡')) {
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+    }
+    // 社区打赏 / 激励：活力金橙 (社区互动与赞赏)
+    if (key === 'reward' || text.includes('打赏') || text.includes('奖励')) {
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+    }
+    // 账户充值：清爽天蓝 (充值入账与增资)
+    if (key === 'recharge' || text.includes('充值')) {
+        return 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20';
+    }
+    // 业务消费 / 道具购买：雅致紫罗兰 (商品特权与商城消费)
+    if (key === 'consume' || text.includes('消费') || text.includes('购买')) {
+        return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+    }
+    // 提现支出：珊瑚绯红 (资金提取出账)
+    if (key === 'withdraw' || text.includes('提现')) {
+        return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20';
+    }
+    // 交易退款：碧海青绿 (售后资金返还保障)
+    if (key === 'refund' || text.includes('退款')) {
+        return 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20';
+    }
+    // 资金冻结 / 解冻：石板蓝灰 (风控与安全质押)
+    if (key === 'freeze' || key === 'unfreeze' || text.includes('冻结')) {
+        return 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20';
+    }
+    // 系统调账：科技靛青 (官方运维审计)
+    if (key === 'admin_adjust' || text.includes('调账')) {
+        return 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20';
+    }
+
+    // 默认回退：按收支方向区隔色彩
+    return isIncome
+        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20';
+}
+
+/**
  * 🌟 交易单号单元格组件：单行完整展示并提供点击复制
  */
 function TrxNoCell({ trxNo, id }: { trxNo?: string | null; id: number }) {
@@ -147,7 +193,13 @@ export function WalletTransactionsTable({ transactions }: Props) {
 
                                             {/* 业务类型 */}
                                             <TableCell className="w-[105px] min-w-[105px] whitespace-nowrap">
-                                                <Badge variant={isIncome ? 'default' : 'secondary'} className="text-xs px-2 py-0.5 font-medium rounded-md">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        'text-xs px-2 py-0.5 font-medium rounded-md border',
+                                                        getTransactionBadgeStyle(tx.type, isIncome, tx.type_label)
+                                                    )}
+                                                >
                                                     {tx.type_label}
                                                 </Badge>
                                             </TableCell>
