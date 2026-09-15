@@ -104,6 +104,18 @@ class UserSpaceController extends Controller
             ? (float) $nextGroup->credits_min
             : max(1.0, $currentExp); // 满级时进度锁定为 100%
 
+        // 🎯 规范化分工：【身份角色 (group)】 vs 【成长阶梯 (tier)】
+        // 1. 若用户在 Lv.4 及以上配置了有效的个性自定义头衔，身份徽章优先展示个性名号
+        // 2. 若用户属于管理团队或系统特殊组（如超级管理员、版主等），展示其管理身份
+        // 3. 普通积分成长组用户，身份统一定义为「注册会员」，成长荣誉则由 tier 展示 (如: Lv.1 循规初试)
+        if (!empty($user->custom_title) && $user->canCustomTitle()) {
+            $groupDisplayName = $user->custom_title;
+        } elseif ($primaryGroup && ($primaryGroup->is_system || $primaryGroup->is_staff || !$primaryGroup->is_credit_based)) {
+            $groupDisplayName = $primaryGroup->title;
+        } else {
+            $groupDisplayName = '注册会员';
+        }
+
         return Inertia::render('UserSpace/Show', [
             'activeTab' => $currentTab,
 
@@ -122,6 +134,7 @@ class UserSpaceController extends Controller
                 'group' => [
                     'id' => $primaryGroup?->id ?? 1,
                     'name' => $primaryGroup?->title ?? $primaryGroup?->name ?? '注册会员',
+                    'name' => $groupDisplayName,
                     'slug' => $primaryGroup?->name ?? 'member',
                 ],
                 'tier' => [

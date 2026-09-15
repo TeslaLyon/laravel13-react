@@ -52,6 +52,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile }) => {
     const medalsList: UserMedal[] = profile.medals || [];
     const userMedalsUrl = userMedals.url({ user: profile.name });
 
+    // 🌟 防止身份组名称与成长等级名称完全相同时造成视觉冗余展示
+    const isGroupDuplicate =
+        !profile.group?.name ||
+        profile.group.name === profile.tier?.title ||
+        profile.group.name === `Lv.${profile.tier?.level} ${profile.tier?.title}`;
 
     return (
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2">
@@ -83,13 +88,15 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile }) => {
                             {profile.nickname}
                         </h1>
 
-                        <Badge
-                            variant="secondary"
-                            className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full border border-primary/20 bg-primary/10 text-primary"
-                        >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            {profile.group.name}
-                        </Badge>
+                        {!isGroupDuplicate && (
+                            <Badge
+                                variant="secondary"
+                                className="flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full border border-primary/20 bg-primary/10 text-primary"
+                            >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                {profile.group.name}
+                            </Badge>
+                        )}
 
                         <TooltipProvider>
                             <Tooltip>
