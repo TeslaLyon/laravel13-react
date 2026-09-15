@@ -49,25 +49,25 @@ class WalletSeeder extends Seeder
         // 2. 模拟一组真实的连续交易记录
         $timelineEvents = [
             [
-                'type' => TransactionType::DEPOSIT,
+                'type' => TransactionType::RECHARGE,
                 'amount' => 1000.00,
                 'desc' => '微信支付快速充值',
                 'created_at' => now()->subDays(10)->setHour(10)->setMinute(15),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -199.00,
                 'desc' => '购买年度专业版会员服务',
                 'created_at' => now()->subDays(9)->setHour(14)->setMinute(30),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -45.50,
                 'desc' => 'API 接口调用额度抵扣',
                 'created_at' => now()->subDays(8)->setHour(9)->setMinute(12),
             ],
             [
-                'type' => TransactionType::DEPOSIT,
+                'type' => TransactionType::RECHARGE,
                 'amount' => 500.00,
                 'desc' => '支付宝充值入账',
                 'created_at' => now()->subDays(7)->setHour(16)->setMinute(45),
@@ -79,7 +79,7 @@ class WalletSeeder extends Seeder
                 'created_at' => now()->subDays(6)->setHour(11)->setMinute(20),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -88.00,
                 'desc' => '购买开发者资源包',
                 'created_at' => now()->subDays(5)->setHour(20)->setMinute(05),
@@ -91,31 +91,31 @@ class WalletSeeder extends Seeder
                 'created_at' => now()->subDays(5)->setHour(20)->setMinute(10),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -320.00,
                 'desc' => '云存储容量扩容续费',
                 'created_at' => now()->subDays(3)->setHour(15)->setMinute(33),
             ],
             [
-                'type' => TransactionType::DEPOSIT,
+                'type' => TransactionType::RECHARGE,
                 'amount' => 2000.00,
                 'desc' => '企业对公转账充值',
                 'created_at' => now()->subDays(2)->setHour(10)->setMinute(00),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -699.00,
                 'desc' => '续费企业高级支持席位',
                 'created_at' => now()->subDays(1)->setHour(18)->setMinute(40),
             ],
             [
-                'type' => TransactionType::PAYMENT,
+                'type' => TransactionType::CONSUME,
                 'amount' => -12.50,
                 'desc' => '短信验证码增量发送费',
                 'created_at' => now()->subHours(3),
             ],
             [
-                'type' => TransactionType::DEPOSIT,
+                'type' => TransactionType::RECHARGE,
                 'amount' => 300.00,
                 'desc' => '活动奖励金充值',
                 'created_at' => now()->subMinutes(25),
@@ -136,11 +136,11 @@ class WalletSeeder extends Seeder
             $currentBalance = $balanceAfter;
             $version++;
 
-            if ($item['type'] === TransactionType::DEPOSIT || $item['type'] === TransactionType::REFUND) {
+            if ($item['type'] === TransactionType::RECHARGE || $item['type'] === TransactionType::REFUND) {
                 $totalRecharge += $amount;
             } elseif ($item['type'] === TransactionType::WITHDRAW) {
                 $totalWithdrawn += abs($amount);
-            } elseif ($item['type'] === TransactionType::PAYMENT) {
+            } elseif ($item['type'] === TransactionType::CONSUME) {
                 $totalSpent += abs($amount);
             }
 
