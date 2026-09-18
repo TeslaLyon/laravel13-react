@@ -29,6 +29,9 @@ services:
       - QUEUE_CONNECTION=redis
     volumes:
       - ./.env:/app/.env
+    dns:
+      - 8.8.8.8
+      - 114.114.114.114
     networks:
       - gateway_net
       - backend_net
@@ -58,6 +61,9 @@ services:
       - QUEUE_CONNECTION=redis
     volumes:
       - ./.env:/app/.env
+    dns:
+      - 8.8.8.8
+      - 114.114.114.114
     command: ["php", "artisan", "horizon"]
     networks:
       - backend_net

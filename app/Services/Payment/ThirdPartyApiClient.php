@@ -2,6 +2,7 @@
 
 namespace App\Services\Payment;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -15,13 +16,17 @@ class ThirdPartyApiClient
     protected string $appKey;
     protected string $appSecret;
     protected int $timeout;
+    protected int $connectTimeout;
+    protected int $maxRetries;
 
     public function __construct()
     {
         $this->baseUrl = rtrim((string) config('services.vmq.base_url', 'localhost'), '/');
         $this->appKey = (string) config('services.vmq.app_key');
         $this->appSecret = (string) config('services.vmq.app_secret');
-        $this->timeout = (int) config('services.vmq.timeout', 10);
+        $this->timeout = (int) config('services.vmq.timeout', 15);
+        $this->connectTimeout = (int) config('services.vmq.connect_timeout', 5);
+        $this->maxRetries = (int) config('services.vmq.max_retries', 2);
 
         if (empty($this->appKey) || empty($this->appSecret)) {
             throw new Exception('第三方 API 客户端初始化失败：请在 .env 中配置 VMQ_APP_KEY 与 VMQ_APP_SECRET');
@@ -44,7 +49,12 @@ class ThirdPartyApiClient
         $signature = hash_hmac('sha256', $signPayload, $this->appSecret);
 
         return Http::baseUrl($this->baseUrl)
+            ->connectTimeout($this->connectTimeout)
             ->timeout($this->timeout)
+            ->retry($this->maxRetries, 500, function ($exception) {
+                // 仅针对网络连接超时、网络中断等网络层错误重试，业务错误不盲目重试
+                return $exception instanceof ConnectionException;
+            })
             ->acceptJson()
             ->asJson()
             ->withHeaders([
@@ -117,6 +127,9 @@ class ThirdPartyApiClient
 
             // 返回核心数据包（包含 pay_url, order_id 等）
             return $result['data'];
+        } catch (ConnectionException $e) {
+            Log::error('调用充值订单接口网络超时/中断: ' . $e->getMessage());
+            throw new Exception('支付网关网络连接超时，请稍后重试');
         } catch (Exception $e) {
             Log::error('调用充值订单接口异常: ' . $e->getMessage());
             throw $e;

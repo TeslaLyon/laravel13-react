@@ -45,7 +45,9 @@ return [
         'cashier_url' => env('VMQ_CASHIER_URL', 'https://pay.536969.xyz'),
         'app_key' => env('VMQ_APP_KEY'),
         'app_secret' => env('VMQ_APP_SECRET'),
-        'timeout' => env('VMQ_API_TIMEOUT', 10),
+        'timeout' => (int) env('VMQ_API_TIMEOUT', 15),
+        'connect_timeout' => (int) env('VMQ_API_CONNECT_TIMEOUT', 5),
+        'max_retries' => (int) env('VMQ_API_MAX_RETRIES', 2),
     ],
 
 ];

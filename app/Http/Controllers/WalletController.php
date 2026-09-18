@@ -191,6 +191,8 @@ class WalletController extends Controller
         } catch (Exception $e) {
             $walletOrder->update(['status' => WalletOrder::STATUS_CLOSED]);
 
+            Log::error("充值下单异常 [{$walletOrder->order_no}]: " . $e->getMessage());
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -203,7 +205,8 @@ class WalletController extends Controller
      */
     public function notify(Request $request)
     {
-        Sleep::for(6000)->milliseconds();
+        // 🧪 模拟商户端业务报错/被拦截，不执行入账，直接返回 fail
+        return response('fail: 数据库异常或业务拦截测试', 400)->header('Content-Type', 'text/plain');
         Log::info('[NOTIFY-RECEIVE] 收到网关回调 (GET):', [
             'headers' => [
                 'x-app-key' => $request->header('X-App-Key'),
