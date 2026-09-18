@@ -596,7 +596,7 @@ function CheckInContent({
                             <Button
                                 onClick={handleCheckIn}
                                 disabled={checkInHttp.processing}
-                                className="w-full h-13 rounded-2xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-bold text-base shadow-lg shadow-rose-500/25 active:scale-98 transition-transform gap-2"
+                                className="w-full h-13 rounded-2xl bg-linear-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-bold text-base shadow-lg shadow-rose-500/25 active:scale-98 transition-transform gap-2"
                             >
                                 <Sparkles className={cn("w-5 h-5", checkInHttp.processing && "animate-spin")} />
                                 {checkInHttp.processing ? '正在提交打卡...' : '立即打卡领取'}
@@ -711,18 +711,20 @@ function CheckInContent({
                         </div>
                     ) : null}
 
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex gap-3 pt-3">
                         <Button
+                            type="button"
                             variant="outline"
                             onClick={() => setMakeUpDate(null)}
-                            className="flex-1 rounded-2xl text-xs sm:text-sm"
+                            className="flex-1 h-11 sm:h-12 rounded-full border border-border/80 bg-background/80 hover:bg-muted text-foreground font-medium text-sm transition-all duration-200 active:scale-[0.98]"
                         >
                             取消
                         </Button>
                         <Button
+                            type="button"
                             onClick={handleConfirmMakeUp}
                             disabled={makeUpHttp.processing || makeUpCards < 1 || remainingMonthMakeUp <= 0}
-                            className="flex-1 rounded-2xl text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                            className="flex-1 h-11 sm:h-12 rounded-full text-sm font-bold bg-linear-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white shadow-md shadow-rose-500/25 hover:shadow-lg hover:shadow-rose-500/35 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                             {makeUpHttp.processing
                                 ? '正在补签...'
@@ -783,9 +785,15 @@ function CheckInContent({
                         )}
                     </div>
 
-                    <Button onClick={() => setRewardModal(null)} className="w-full rounded-2xl text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white">
-                        开心收下
-                    </Button>
+                    <div className="pt-2">
+                        <Button
+                            type="button"
+                            onClick={() => setRewardModal(null)}
+                            className="w-full h-11 sm:h-12 rounded-full text-sm sm:text-base font-bold bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white shadow-lg shadow-rose-500/25 hover:shadow-rose-500/40 active:scale-[0.98] transition-all duration-200"
+                        >
+                            开心收下
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

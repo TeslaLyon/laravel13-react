@@ -51,11 +51,19 @@ function DialogOverlay({
 }
 DialogOverlay.displayName = "DialogOverlay"
 
+interface DialogContentProps
+    extends React.ComponentProps<typeof DialogPrimitive.Content> {
+    showCloseButton?: boolean
+    closeClassName?: string
+}
+
 function DialogContent({
     className,
     children,
+    showCloseButton = true,
+    closeClassName,
     ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: DialogContentProps) {
     return (
         <DialogPortal data-slot="dialog-portal">
             <DialogOverlay />
@@ -69,11 +77,22 @@ function DialogContent({
             >
                 {children}
 
-                {/* 完美融合的高对比度、带微交互的关闭按钮 */}
-                <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 right-3 p-1.5 rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:text-slate-50 dark:hover:bg-slate-800 opacity-85 hover:opacity-100 transition-all duration-200 active:scale-95 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
-                    <X />
-                    <span className="sr-only">Close</span>
-                </DialogPrimitive.Close>
+                {/* 🌟 增大尺寸、饱满触控区域、Gemini/M3 风格的高对比微交互关闭按钮（适配亮色与暗色模式） */}
+                {showCloseButton && (
+                    <DialogPrimitive.Close
+                        className={cn(
+                            "absolute top-3.5 right-3.5 sm:top-4 sm:right-4 size-9 sm:size-10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200",
+                            "text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 active:bg-slate-300/80",
+                            "dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:active:bg-slate-700",
+                            "active:scale-90 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none",
+                            "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+                            closeClassName
+                        )}
+                    >
+                        <X />
+                        <span className="sr-only">Close</span>
+                    </DialogPrimitive.Close>
+                )}
             </DialogPrimitive.Content>
         </DialogPortal>
     )
