@@ -16,6 +16,7 @@ use App\Models\WalletOrder;
 use App\Models\Wallet;
 use App\Enums\WalletStatus;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Sleep;
 
 class WalletController extends Controller
 {
@@ -202,6 +203,7 @@ class WalletController extends Controller
      */
     public function notify(Request $request)
     {
+        Sleep::for(6000)->milliseconds();
         Log::info('[NOTIFY-RECEIVE] 收到网关回调 (GET):', [
             'headers' => [
                 'x-app-key' => $request->header('X-App-Key'),
