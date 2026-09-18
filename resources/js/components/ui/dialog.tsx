@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react" // 优化：使用标准的 X 图标组件
 
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 function Dialog({
     ...props
@@ -55,6 +56,7 @@ interface DialogContentProps
     extends React.ComponentProps<typeof DialogPrimitive.Content> {
     showCloseButton?: boolean
     closeClassName?: string
+    closeTooltip?: string
 }
 
 function DialogContent({
@@ -62,6 +64,7 @@ function DialogContent({
     children,
     showCloseButton = true,
     closeClassName,
+    closeTooltip = "关闭",
     ...props
 }: DialogContentProps) {
     return (
@@ -77,21 +80,28 @@ function DialogContent({
             >
                 {children}
 
-                {/* 🌟 增大尺寸、饱满触控区域、Gemini/M3 风格的高对比微交互关闭按钮（适配亮色与暗色模式） */}
+                {/* 🌟 增大尺寸、饱满触控区域、带 Tooltip 提示的高对比微交互关闭按钮（适配亮色与暗色模式） */}
                 {showCloseButton && (
-                    <DialogPrimitive.Close
-                        className={cn(
-                            "absolute top-3.5 right-3.5 sm:top-4 sm:right-4 size-9 sm:size-10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200",
-                            "text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 active:bg-slate-300/80",
-                            "dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:active:bg-slate-700",
-                            "active:scale-90 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none",
-                            "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
-                            closeClassName
-                        )}
-                    >
-                        <X />
-                        <span className="sr-only">Close</span>
-                    </DialogPrimitive.Close>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <DialogPrimitive.Close
+                                className={cn(
+                                    "absolute top-3.5 right-3.5 sm:top-4 sm:right-4 size-9 sm:size-10 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200",
+                                    "text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 active:bg-slate-300/80",
+                                    "dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:active:bg-slate-700",
+                                    "active:scale-90 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none",
+                                    "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+                                    closeClassName
+                                )}
+                            >
+                                <X />
+                                <span className="sr-only">Close</span>
+                            </DialogPrimitive.Close>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="end" className="text-xs font-medium">
+                            {closeTooltip}
+                        </TooltipContent>
+                    </Tooltip>
                 )}
             </DialogPrimitive.Content>
         </DialogPortal>
