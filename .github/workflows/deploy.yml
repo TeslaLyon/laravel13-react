@@ -93,6 +93,15 @@ jobs:
             echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
             docker compose -f compose.prod.yaml exec -T app php artisan migrate --force
 
+            echo "⚡ 正在清空旧缓存并重新生成生产配置与路由缓存..."
+            docker compose -f compose.prod.yaml exec -T app php artisan optimize:clear
+            docker compose -f compose.prod.yaml exec -T app php artisan optimize
+            docker compose -f compose.prod.yaml exec -T app php artisan view:cache
+
+            echo "🔄 正在平滑重载 Octane Web 进程与 Horizon 队列进程..."
+            docker compose -f compose.prod.yaml exec -T app php artisan octane:reload || true
+            docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate || true
+
             docker logout ghcr.io
             docker image prune -f
 
