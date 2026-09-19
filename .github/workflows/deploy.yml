@@ -75,7 +75,7 @@ jobs:
 
             echo "📁 确保宿主机持久化日志目录存在并赋予完全读写权限（不丢失历史日志）..."
             mkdir -p storage/logs
-            chmod -R 777 storage/logs
+            sudo -n chmod -R 777 storage/logs 2>/dev/null || chmod -R 777 storage/logs 2>/dev/null || true
 
             echo "📝 正在全量注入生产环境变量..."
             echo "$PROD_ENV_CONTENT" > .env
