@@ -85,6 +85,7 @@ export function WalletCards({ wallet }: Props) {
     const [depositOpen, setDepositOpen] = useState(false);
     const [isReady, setIsReady] = useState(false);
 
+    // 🌟 1. 弹窗交互状态机：'select' (选择中) | 'pending' (等待支付) | 'success' (支付成功)
     const [dialogStep, setDialogStep] = useState<'select' | 'pending' | 'success'>('select');
     const [currentOrder, setCurrentOrder] = useState<{
         orderNo: string;
@@ -582,45 +583,48 @@ export function WalletCards({ wallet }: Props) {
 
                                 {/* ================= STEP 2: 等待支付状态面板 ================= */}
                                 {dialogStep === 'pending' && (
-                                    <div className="py-4 flex flex-col items-center text-center space-y-5">
+                                    <div className="py-6 flex flex-col items-center text-center space-y-5">
                                         {/* 呼吸脉冲光环 */}
                                         <div className="relative flex items-center justify-center">
-                                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center animate-pulse">
-                                                <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+                                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center animate-pulse text-red-600">
+                                                <Loader2 className="w-9 h-9 animate-spin" />
                                             </div>
                                         </div>
 
-                                        <div className="space-y-1.5">
-                                            <h3 className="text-base font-bold text-foreground">
+                                        <div className="space-y-2">
+                                            <h3 className="text-lg font-bold text-foreground">
                                                 支付页面已在新标签页打开
                                             </h3>
-                                            <p className="text-xs text-muted-foreground max-w-[340px] leading-relaxed">
+                                            <p className="text-sm sm:text-base text-muted-foreground max-w-[360px] leading-relaxed">
                                                 请在打开的收银台完成付款。系统检测到到账通知后将自动增加可用纸巾。
                                             </p>
                                         </div>
 
                                         {/* 订单信息摘要 */}
-                                        <div className="w-full bg-muted/40 rounded-xl p-3.5 border border-border/60 text-left space-y-2">
-                                            <div className="flex items-center justify-between text-xs">
+                                        <div className="w-full bg-muted/40 rounded-xl p-4 border border-border/60 text-left space-y-2.5">
+                                            <div className="flex items-center justify-between text-sm">
                                                 <span className="text-muted-foreground">充值商品</span>
                                                 <span className="font-semibold text-foreground">
-                                                    {currentOrder?.tissues} 纸巾 (¥{currentOrder ? (currentOrder.reallyAmount !== undefined ? (currentOrder.reallyAmount / 100).toFixed(2) : Number(currentOrder.tissues).toFixed(2)) : '0.00'})
+                                                    <span className="text-red-600 dark:text-red-400 font-bold">{currentOrder?.tissues}</span> 纸巾
+                                                    <span className="text-muted-foreground font-normal text-xs sm:text-sm ml-1.5">
+                                                        (¥{currentOrder ? (currentOrder.reallyAmount !== undefined ? (currentOrder.reallyAmount / 100).toFixed(2) : Number(currentOrder.tissues).toFixed(2)) : '0.00'})
+                                                    </span>
                                                 </span>
                                             </div>
-                                            <div className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center justify-between text-sm">
                                                 <span className="text-muted-foreground">商户订单号</span>
-                                                <span className="font-mono text-[11px] text-foreground/80">
+                                                <span className="font-mono text-xs text-foreground/80">
                                                     {currentOrder?.orderNo}
                                                 </span>
                                             </div>
                                         </div>
 
                                         {/* 交互操作栏 */}
-                                        <div className="w-full space-y-2.5 pt-2">
+                                        <div className="w-full space-y-3 pt-1">
                                             <Button
                                                 type="button"
                                                 onClick={handleManualVerify}
-                                                className="w-full h-10 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
+                                                className="w-full h-11 rounded-xl text-sm sm:text-base font-medium bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
                                             >
                                                 我已完成支付
                                             </Button>
@@ -633,18 +637,18 @@ export function WalletCards({ wallet }: Props) {
                                                             window.open(currentOrder.payUrl, '_blank');
                                                         }
                                                     }}
-                                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                                                    className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
                                                 >
-                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                    <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                     <span>重新打开支付页</span>
                                                 </button>
 
                                                 <button
                                                     type="button"
                                                     onClick={resetDialogState}
-                                                    className="text-xs text-muted-foreground hover:text-rose-600 flex items-center gap-1 transition-colors"
+                                                    className="text-xs sm:text-sm text-muted-foreground hover:text-rose-600 flex items-center gap-1.5 transition-colors"
                                                 >
-                                                    <RotateCcw className="w-3.5 h-3.5" />
+                                                    <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                     <span>更换支付方式</span>
                                                 </button>
                                             </div>
@@ -655,15 +659,15 @@ export function WalletCards({ wallet }: Props) {
                                 {/* ================= STEP 3: 支付成功动效 ================= */}
                                 {dialogStep === 'success' && (
                                     <div className="py-8 flex flex-col items-center text-center space-y-4">
-                                        <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 animate-in zoom-in-75 duration-300">
-                                            <CheckCircle2 className="w-8 h-8" />
+                                        <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 animate-in zoom-in-75 duration-300">
+                                            <CheckCircle2 className="w-9 h-9" />
                                         </div>
-                                        <div className="space-y-1">
-                                            <h3 className="text-base font-bold text-foreground">
+                                        <div className="space-y-2">
+                                            <h3 className="text-lg font-bold text-foreground">
                                                 充值成功！
                                             </h3>
-                                            <p className="text-xs text-muted-foreground">
-                                                已成功增加 {currentOrder?.tissues} 纸巾，正在同步钱包数据...
+                                            <p className="text-sm sm:text-base text-muted-foreground">
+                                                已成功增加 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{currentOrder?.tissues}</span> 纸巾，正在同步钱包数据...
                                             </p>
                                         </div>
                                     </div>
