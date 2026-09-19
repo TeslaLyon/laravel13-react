@@ -35,6 +35,14 @@ function getTransactionBadgeStyle(type: string, isIncome: boolean, label?: strin
     if (key === 'reward' || text.includes('打赏') || text.includes('奖励')) {
         return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
     }
+    // 微信充值：微信翡翠绿高质感微彩度
+    if (text.includes('微信') || key === 'wechat') {
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+    }
+    // 支付宝充值：支付宝清爽深蓝微彩度
+    if (text.includes('支付宝') || key === 'alipay') {
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+    }
     // 账户充值：清爽天蓝 (充值入账与增资)
     if (key === 'recharge' || text.includes('充值')) {
         return 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20';
@@ -133,7 +141,7 @@ export function WalletTransactionsTable({ transactions }: Props) {
                                 <TableHead className="w-[95px] min-w-[95px] text-xs font-semibold whitespace-nowrap">
                                     资产类型
                                 </TableHead>
-                                <TableHead className="w-[105px] min-w-[105px] text-xs font-semibold whitespace-nowrap">
+                                <TableHead className="w-[115px] min-w-[115px] text-xs font-semibold whitespace-nowrap">
                                     业务类型
                                 </TableHead>
                                 <TableHead className="w-[125px] min-w-[125px] text-xs font-semibold whitespace-nowrap">
@@ -192,7 +200,7 @@ export function WalletTransactionsTable({ transactions }: Props) {
                                             </TableCell>
 
                                             {/* 业务类型 */}
-                                            <TableCell className="w-[105px] min-w-[105px] whitespace-nowrap">
+                                            <TableCell className="w-[115px] min-w-[115px] whitespace-nowrap">
                                                 <Badge
                                                     variant="outline"
                                                     className={cn(

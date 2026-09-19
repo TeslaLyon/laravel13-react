@@ -24,6 +24,8 @@ export interface WalletTransactionItem {
     currency_type: 'balance' | 'coins' | 'frozen_balance'; // 资产类型
     type: string;                   // 业务类型标识 (check_in, recharge 等)
     type_label: string;             // 业务类型中文描述
+    payment_method?: string | null; // 支付/充值渠道标识 (wechat, alipay 等)
+    payment_method_label?: string | null; // 充值渠道中文名称 (微信, 支付宝 等)
     direction: 1 | -1;              // 资金流向: 1-收入(+), -1-支出(-)
     amount: number;                 // 变动数值
     balance_before: number;         // 变动前资产快照

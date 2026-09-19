@@ -80,26 +80,58 @@ class WalletController extends Controller
                 $wallet = $getWallet();
 
                 return $wallet->transactions()
+                    ->with('source')
                     ->latest('id')
                     ->paginate(10)
                     ->withQueryString()
-                    ->through(fn($tx) => [
-                        'id' => $tx->id,
-                        'trx_no' => $tx->trx_no ?? ('#' . $tx->id),
-                        'currency_type' => $tx->currency_type ?? 'balance',
-                        'type' => $tx->type instanceof \BackedEnum ? $tx->type->value : (string) $tx->type,
-                        'type_label' => method_exists($tx->type, 'label') ? $tx->type->label() : (string) ($tx->type_label ?? $tx->type),
-                        'direction' => (int) ($tx->direction ?? ($tx->amount >= 0 ? 1 : -1)),
+                    ->through(function ($tx) {
+                        $type = $tx->type instanceof \BackedEnum ? $tx->type->value : (string) $tx->type;
+                        $typeLabel = method_exists($tx->type, 'label') ? $tx->type->label() : (string) ($tx->type_label ?? $tx->type);
 
-                        // 核心金额字段：直出整型分，杜绝 float 精度丢失
-                        'amount' => (int) $tx->amount,
-                        'balance_before' => (int) $tx->balance_before,
-                        'balance_after' => (int) $tx->balance_after,
+                        // 🌟 提取充值方式：优先从流水 metadata，其次从关联充值订单 source
+                        $paymentMethod = $tx->metadata['payment_method'] ?? null;
+                        if (!$paymentMethod && !empty($tx->metadata['request_payload']['type'])) {
+                            $paymentMethod = match ((int) $tx->metadata['request_payload']['type']) {
+                                1 => 'wechat',
+                                2 => 'alipay',
+                                default => null,
+                            };
+                        }
+                        if (!$paymentMethod && $tx->source instanceof \App\Models\WalletOrder) {
+                            $paymentMethod = $tx->source->payment_method ?? null;
+                        }
 
-                        'description' => $tx->description ?? '',
-                        'reference_id' => $tx->reference_id,
-                        'created_at' => $tx->created_at?->format('Y-m-d H:i:s') ?? '',
-                    ]);
+                        $paymentMethodLabel = match ($paymentMethod) {
+                            'wechat', 'wxpay' => '微信',
+                            'alipay' => '支付宝',
+                            default => null,
+                        };
+
+                        // 若为充值业务类型，将充值方式融合进业务类型名称（如“微信充值”、“支付宝充值”）
+                        if ($type === 'recharge' && $paymentMethodLabel) {
+                            $typeLabel = "{$paymentMethodLabel}充值";
+                        }
+
+                        return [
+                            'id' => $tx->id,
+                            'trx_no' => $tx->trx_no ?? ('#' . $tx->id),
+                            'currency_type' => $tx->currency_type ?? 'balance',
+                            'type' => $type,
+                            'type_label' => $typeLabel,
+                            'payment_method' => $paymentMethod,
+                            'payment_method_label' => $paymentMethodLabel,
+                            'direction' => (int) ($tx->direction ?? ($tx->amount >= 0 ? 1 : -1)),
+
+                            // 核心金额字段：直出整型分，杜绝 float 精度丢失
+                            'amount' => (int) $tx->amount,
+                            'balance_before' => (int) $tx->balance_before,
+                            'balance_after' => (int) $tx->balance_after,
+
+                            'description' => $tx->description ?? '',
+                            'reference_id' => $tx->reference_id,
+                            'created_at' => $tx->created_at?->format('Y-m-d H:i:s') ?? '',
+                        ];
+                    });
             }),
         ]);
     }
