@@ -174,11 +174,14 @@ class WalletController extends Controller
                 ? "{$cashierBaseUrl}/{$gatewayOrderId}"
                 : ($gatewayData['pay_url'] ?? '');
 
+            $reallyAmountInCents = $this->normalizeAmountToCents($gatewayData['really_price'] ?? null, $amountInCents);
+            $reallyTissues = (float) round($reallyAmountInCents / 100, 2);
+
             $walletOrder->update([
                 'gateway_order_id' => $gatewayOrderId,
                 'gateway_pay_id' => $gatewayData['pay_id'] ?? null,
                 'pay_url' => $cashierPayUrl,
-                'really_amount' => (int) ($gatewayData['really_price'] ?? $amountInCents),
+                'really_amount' => $reallyAmountInCents,
             ]);
 
             return response()->json([
@@ -187,7 +190,9 @@ class WalletController extends Controller
                     'order_no' => $walletOrder->order_no,
                     'order_id' => $gatewayOrderId,
                     'pay_url' => $cashierPayUrl,
-                    'tissues' => $tissues,
+                    'tissues' => $reallyTissues,
+                    'really_amount' => $reallyAmountInCents,
+                    'amount' => $amountInCents,
                 ],
             ]);
         } catch (Exception $e) {
@@ -424,12 +429,15 @@ class WalletController extends Controller
     {
         $order = WalletOrder::where('order_no', $orderNo)
             ->where('user_id', Auth::id())
-            ->select(['order_no', 'status', 'really_amount', 'paid_at'])
+            ->select(['order_no', 'status', 'amount', 'really_amount', 'paid_at'])
             ->first();
 
         if (!$order) {
             return response()->json(['success' => false, 'message' => '订单不存在'], 404);
         }
+
+        $effectiveAmount = (int) ($order->really_amount ?: $order->amount);
+        $reallyTissues = (float) round($effectiveAmount / 100, 2);
 
         return response()->json([
             'success' => true,
@@ -437,6 +445,9 @@ class WalletController extends Controller
                 'order_no' => $order->order_no,
                 'is_paid' => $order->status === WalletOrder::STATUS_PAID,
                 'status' => $order->status,
+                'amount' => $order->amount,
+                'really_amount' => $effectiveAmount,
+                'tissues' => $reallyTissues,
             ],
         ]);
     }

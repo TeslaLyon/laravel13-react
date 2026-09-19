@@ -85,12 +85,12 @@ export function WalletCards({ wallet }: Props) {
     const [depositOpen, setDepositOpen] = useState(false);
     const [isReady, setIsReady] = useState(false);
 
-    // 🌟 1. 弹窗交互状态机：'select' (选择中) | 'pending' (等待支付) | 'success' (支付成功)
     const [dialogStep, setDialogStep] = useState<'select' | 'pending' | 'success'>('select');
     const [currentOrder, setCurrentOrder] = useState<{
         orderNo: string;
         payUrl: string;
         tissues: number;
+        reallyAmount?: number;
     } | null>(null);
 
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -195,6 +195,24 @@ export function WalletCards({ wallet }: Props) {
 
                     if (result?.success && result?.data?.is_paid) {
                         stopPolling();
+
+                        // 🌟 若接口返回了实际支付金额 (really_amount)，动态更新订单纸巾数与金额
+                        const paidReallyAmount = result.data.really_amount !== undefined
+                            ? Number(result.data.really_amount)
+                            : undefined;
+
+                        if (paidReallyAmount !== undefined) {
+                            const paidTissues = result.data.tissues !== undefined
+                                ? Number(result.data.tissues)
+                                : Number((paidReallyAmount / 100).toFixed(2));
+
+                            setCurrentOrder(prev => prev ? {
+                                ...prev,
+                                reallyAmount: paidReallyAmount,
+                                tissues: paidTissues,
+                            } : null);
+                        }
+
                         setDialogStep('success');
 
                         // 局部刷新 Inertia 钱包数据，平滑无白屏
@@ -281,11 +299,19 @@ export function WalletCards({ wallet }: Props) {
                     window.location.href = targetUrl;
                 }
 
-                // 🌟 切换到 pending 状态，不关闭弹窗
+                // 🌟 切换到 pending 状态，优先采用网关返回的实际金额 (really_amount)
+                const initialReallyAmount = resData?.really_amount !== undefined
+                    ? Number(resData.really_amount)
+                    : selectedAmount;
+                const initialTissues = resData?.tissues !== undefined
+                    ? Number(resData.tissues)
+                    : Number((initialReallyAmount / 100).toFixed(2));
+
                 setCurrentOrder({
                     orderNo: resData?.order_no,
                     payUrl: targetUrl,
-                    tissues: selectedAmount / 100,
+                    tissues: initialTissues,
+                    reallyAmount: initialReallyAmount,
                 });
                 setDialogStep('pending');
             },
@@ -315,8 +341,26 @@ export function WalletCards({ wallet }: Props) {
 
             if (result?.success && result?.data?.is_paid) {
                 stopPolling();
+
+                // 🌟 若接口返回了实际支付金额 (really_amount)，动态更新订单纸巾数与金额
+                const paidReallyAmount = result.data.really_amount !== undefined
+                    ? Number(result.data.really_amount)
+                    : undefined;
+
+                if (paidReallyAmount !== undefined) {
+                    const paidTissues = result.data.tissues !== undefined
+                        ? Number(result.data.tissues)
+                        : Number((paidReallyAmount / 100).toFixed(2));
+
+                    setCurrentOrder(prev => prev ? {
+                        ...prev,
+                        reallyAmount: paidReallyAmount,
+                        tissues: paidTissues,
+                    } : null);
+                }
+
                 setDialogStep('success');
-                router.reload({ only: ['wallet'] });
+                router.reload({ only: ['wallet', 'transactions'] });
 
                 setTimeout(() => {
                     setDepositOpen(false);
@@ -560,7 +604,7 @@ export function WalletCards({ wallet }: Props) {
                                             <div className="flex items-center justify-between text-xs">
                                                 <span className="text-muted-foreground">充值商品</span>
                                                 <span className="font-semibold text-foreground">
-                                                    {currentOrder?.tissues} 纸巾 (¥{currentOrder ? currentOrder.tissues : 0}.00)
+                                                    {currentOrder?.tissues} 纸巾 (¥{currentOrder ? (currentOrder.reallyAmount !== undefined ? (currentOrder.reallyAmount / 100).toFixed(2) : Number(currentOrder.tissues).toFixed(2)) : '0.00'})
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs">
