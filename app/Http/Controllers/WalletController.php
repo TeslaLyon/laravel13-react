@@ -12,6 +12,8 @@ use Exception;
 use App\Services\Payment\ThirdPartyApiClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use App\Models\User;
 use App\Models\WalletOrder;
 use App\Models\Wallet;
 use App\Enums\WalletStatus;
@@ -205,29 +207,27 @@ class WalletController extends Controller
      */
     public function notify(Request $request)
     {
-        // 🧪 模拟商户端业务报错/被拦截，不执行入账，直接返回 fail
-        return response('fail: 数据库异常或业务拦截测试', 400)->header('Content-Type', 'text/plain');
-        Log::info('[NOTIFY-RECEIVE] 收到网关回调 (GET):', [
+        Log::info('[NOTIFY-RECEIVE] 收到网关回调:', [
             'headers' => [
                 'x-app-key' => $request->header('X-App-Key'),
                 'x-timestamp' => $request->header('X-Timestamp'),
                 'x-nonce' => $request->header('X-Nonce'),
                 'x-signature' => $request->header('X-Signature'),
             ],
-            'query' => $request->query(),
+            'payload' => $request->all(),
         ]);
 
-        // 1. 校验 Header 签名与时间戳防重放
+        // 1. 校验 Header 签名、时间戳与 Nonce 防重放
         if (!$this->verifyHeaderSignature($request)) {
-            Log::warning('[NOTIFY-REJECT] Header 验签未通过或时间戳超时');
+            Log::warning('[NOTIFY-REJECT] Header 验签未通过、时间戳超时或 Nonce 重放');
             return response('fail: signature verification failed', 401)->header('Content-Type', 'text/plain');
         }
 
-        // 2. 获取 GET 参数
-        $gatewayOrderId = (string) $request->query('order_id', '');
-        $rawType = $request->query('type');
-        $rawPrice = $request->query('price');
-        $rawReallyPrice = $request->query('reallyPrice');
+        // 2. 获取参数（全面兼容 GET、POST 表单及 JSON 请求体，并支持下划线与驼峰命名）
+        $gatewayOrderId = (string) ($request->input('order_id') ?? $request->input('orderId') ?? '');
+        $rawType = $request->input('type');
+        $rawPrice = $request->input('price');
+        $rawReallyPrice = $request->input('reallyPrice') ?? $request->input('really_price');
 
         if (empty($gatewayOrderId)) {
             Log::warning('[NOTIFY-REJECT] 缺少核心参数: order_id');
@@ -254,25 +254,19 @@ class WalletController extends Controller
                 // B. 核对渠道与标价一致性
                 $this->assertOrderParametersMatch($order, $rawType, $rawPrice);
 
-                // C. 解析实付金额（单位：分）并执行递增“防少付”拦截
+                // C. 准确解析实付金额（单位：分）并执行递增“防少付”拦截
                 $reallyAmountInCents = $this->normalizeAmountToCents($rawReallyPrice, $order->amount);
                 if ($reallyAmountInCents < $order->amount) {
                     throw new Exception("实付金额不足：订单标价={$order->amount}分, 实付={$reallyAmountInCents}分");
                 }
 
-                // D. 锁定用户钱包主体
-                $wallet = Wallet::where('user_id', $order->user_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$wallet) {
-                    throw new Exception("用户 [{$order->user_id}] 钱包主体不存在");
-                }
+                // D. 获取或自动初始化用户钱包（确保即便首次充值的用户也能顺利创建钱包入账）
+                $user = $order->user ?? User::findOrFail($order->user_id);
+                $wallet = $this->walletService->getOrCreateWallet($user);
 
                 $tissuesFormatted = number_format($reallyAmountInCents / 100, 2, '.', '');
 
                 // 🌟 核心：直接委托给 WalletService 完成资产入账、签名更新与流水落盘
-                // 彻底替代手动加锁计算以及 4 参数调用 6 参数的报错！
                 $transaction = $this->walletService->changeBalance(
                     wallet: $wallet,
                     amountCents: $reallyAmountInCents,
@@ -286,7 +280,7 @@ class WalletController extends Controller
                         'order_amount' => $order->amount,
                         'really_amount' => $reallyAmountInCents,
                         'payment_method' => $order->payment_method,
-                        'query_params' => $request->query(),
+                        'request_payload' => $request->all(),
                     ]
                 );
 
@@ -295,7 +289,7 @@ class WalletController extends Controller
                     'status' => WalletOrder::STATUS_PAID,
                     'really_amount' => $reallyAmountInCents,
                     'paid_at' => now(),
-                    'raw_callback' => $request->query(),
+                    'raw_callback' => $request->all(),
                 ]);
 
                 Log::info("[NOTIFY-SUCCESS] 订单 [{$order->order_no}] 递增金额核验一致并成功入账！流水号: [{$transaction->trx_no}]");
@@ -308,12 +302,12 @@ class WalletController extends Controller
             Log::error('[NOTIFY-ERROR] 回调核验入账失败: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
             ]);
-            return response('fail: ' . $e->getMessage(), 400)->header('Content-Type', 'text/plain');
+            return response('fail: verification or processing failed', 400)->header('Content-Type', 'text/plain');
         }
     }
 
     /**
-     * 校验 Header 签名与时间戳防重放
+     * 校验 Header 签名与时间戳、Nonce 防重放
      */
     protected function verifyHeaderSignature(Request $request): bool
     {
@@ -328,17 +322,32 @@ class WalletController extends Controller
         }
 
         $configuredAppKey = (string) config('services.vmq.app_key');
+        $appSecret = (string) config('services.vmq.app_secret');
+
+        if (empty($configuredAppKey) || empty($appSecret)) {
+            Log::error('[VERIFY-FAIL] 系统未正确配置 VMQ_APP_KEY 或 VMQ_APP_SECRET');
+            return false;
+        }
+
         if (!hash_equals($configuredAppKey, $appKey)) {
             Log::warning("[VERIFY-FAIL] AppKey 不匹配: [{$appKey}]");
             return false;
         }
 
+        // 时间戳窗口限制在 300 秒以内
         if (!is_numeric($timestamp) || abs(time() - (int) $timestamp) > 300) {
             Log::warning("[VERIFY-FAIL] 时间戳超时或不合法: [{$timestamp}]");
             return false;
         }
 
-        $appSecret = (string) config('services.vmq.app_secret');
+        // 🌟 核心防重放：利用 Cache 原子锁，300 秒内同一个 Nonce 仅允许消费一次
+        $nonceCacheKey = "vmq:notify:nonce:{$nonce}";
+        if (!Cache::add($nonceCacheKey, 1, 300)) {
+            Log::warning("[VERIFY-FAIL] Nonce 已被使用，拒绝重放请求: [{$nonce}]");
+            return false;
+        }
+
+        // 计算预期签名并恒定时间比对
         $signPayload = $appKey . $timestamp . $nonce;
         $expectedSignature = hash_hmac('sha256', $signPayload, $appSecret);
 
@@ -346,7 +355,7 @@ class WalletController extends Controller
     }
 
     /**
-     * 核对 GET 参数一致性
+     * 核对 GET/POST 参数一致性
      */
     protected function assertOrderParametersMatch(WalletOrder $order, mixed $rawType, mixed $rawPrice): void
     {
@@ -376,7 +385,7 @@ class WalletController extends Controller
 
     /**
      * 将网关参数安全解析为“分”
-     * 针对递增金额防穿透，支持直接传整型分（1001）或小数元（10.01）
+     * 严谨兼容：浮点“元”（10.01 / 10.00）、整型“分”（1001）、纯整型“元”（10）
      */
     protected function normalizeAmountToCents(mixed $rawAmount, int $defaultCents): int
     {
@@ -385,20 +394,27 @@ class WalletController extends Controller
         }
 
         $rawStr = trim((string) $rawAmount);
-
-        // 1. 如果包含小数点（例如 "10.01"），属于以“元”为单位，换算为分
-        // if (str_contains($rawStr, '.')) {
-        //     $cents = (int) round(((float) $rawStr) * 100);
-        //     return $cents > 0 ? $cents : $defaultCents;
-        // }
-
-        // 2. 纯数字（例如 "1001" 或 1001），本身已经是“分”，直接转为整型
-        if (is_numeric($rawStr)) {
-            $cents = (int) $rawStr;
-            return $cents > 0 ? $cents : $defaultCents;
+        if (!is_numeric($rawStr)) {
+            return $defaultCents;
         }
 
-        return $defaultCents;
+        $numericVal = (float) $rawStr;
+        if ($numericVal <= 0) {
+            return $defaultCents;
+        }
+
+        // 1. 如果包含小数点（例如 "10.01" 或 "10.00"），绝对是以“元”为单位，换算为分
+        if (str_contains($rawStr, '.')) {
+            return (int) round($numericVal * 100);
+        }
+
+        // 2. 如果不带小数点且数值本身已经大于等于标价分值（例如 1000、1001），说明本身就是“分”
+        if ((int) $numericVal >= $defaultCents) {
+            return (int) $numericVal;
+        }
+
+        // 3. 不带小数点的整型“元”（例如标价 1000 分，网关回传整型 10 元）
+        return (int) round($numericVal * 100);
     }
 
     /**

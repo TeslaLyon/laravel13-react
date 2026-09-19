@@ -22,6 +22,7 @@ php artisan view:cache
 # 将刚刚由 root 权限编译生成的缓存文件，强行重置所有权给 www-data
 chown -R www-data:www-data /app/storage /app/bootstrap/cache
 chmod -R 775 /app/storage /app/bootstrap/cache
+chmod -R 777 /app/storage/logs
 
 echo "✅ [Initialization] Bootstrapping completed successfully."
 echo "⚡ [Runtime] Launching FrankenPHP via Octane..."
