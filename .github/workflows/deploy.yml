@@ -73,9 +73,9 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            echo "📁 确保宿主机持久化日志目录存在并赋予完全读写权限（不丢失历史日志）..."
-            mkdir -p storage/logs
-            sudo -n chmod -R 777 storage/logs 2>/dev/null || chmod -R 777 storage/logs 2>/dev/null || true
+            echo "📁 确保宿主机持久化日志与文件存储目录存在并赋予完全读写权限（不丢失历史数据）..."
+            mkdir -p storage/logs storage/app/public/avatars
+            sudo -n chmod -R 777 storage/logs storage/app/public 2>/dev/null || chmod -R 777 storage/logs storage/app/public 2>/dev/null || true
 
             echo "📝 正在全量注入生产环境变量..."
             echo "$PROD_ENV_CONTENT" > .env
@@ -94,9 +94,10 @@ jobs:
             echo "📦 正在无损更新应用容器与队列容器..."
             docker compose -f compose.prod.yaml up -d --no-deps app horizon
 
-            echo "🔒 正在校准容器日志目录权限（确保日志正常生成与写入）..."
-            docker compose -f compose.prod.yaml exec -T app chmod -R 777 /app/storage/logs || true
-            docker compose -f compose.prod.yaml exec -T horizon chmod -R 777 /app/storage/logs || true
+            echo "🔒 正在校准容器日志与存储目录权限及建立公共软链接..."
+            docker compose -f compose.prod.yaml exec -T app php artisan storage:link --force || true
+            docker compose -f compose.prod.yaml exec -T app chmod -R 777 /app/storage/logs /app/storage/app/public || true
+            docker compose -f compose.prod.yaml exec -T horizon chmod -R 777 /app/storage/logs /app/storage/app/public || true
 
             echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
             docker compose -f compose.prod.yaml exec -T app php artisan migrate --force

@@ -10,19 +10,23 @@ mkdir -p storage/framework/app
 mkdir -p storage/framework/sessions
 mkdir -p storage/framework/views
 mkdir -p storage/logs
+mkdir -p storage/app/public/avatars
 
 # 2. 清理可能残余的旧缓存
 rm -f bootstrap/cache/*.php
 
-# 3. 在容器启动时（拿到真实的生产环境 env 后）生成全新的路由、配置全量缓存
+# 3. 确保静态存储软链接存在（映射 public/storage -> storage/app/public）
+php artisan storage:link --force || true
+
+# 4. 在容器启动时（拿到真实的生产环境 env 后）生成全新的路由、配置全量缓存
 php artisan optimize
 php artisan view:cache
 
-# 4. 🔑 核心权限校准：
-# 将刚刚由 root 权限编译生成的缓存文件，强行重置所有权给 www-data
-chown -R www-data:www-data /app/storage /app/bootstrap/cache
+# 5. 🔑 核心权限校准：
+# 将刚刚由 root 权限编译生成的缓存文件与持久化挂载目录，强行重置所有权与读写权限给 www-data
+chown -R www-data:www-data /app/storage /app/bootstrap/cache /app/public/storage 2>/dev/null || true
 chmod -R 775 /app/storage /app/bootstrap/cache
-chmod -R 777 /app/storage/logs
+chmod -R 777 /app/storage/logs /app/storage/app/public
 
 echo "✅ [Initialization] Bootstrapping completed successfully."
 echo "⚡ [Runtime] Launching FrankenPHP via Octane..."
