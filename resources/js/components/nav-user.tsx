@@ -72,18 +72,11 @@ export function NavUser() {
                                     e.preventDefault();
                                 }
                             }}
-                            onPointerDownOutside={(e) => {
-                                // 点击侧边栏内其他区域时，仅关闭当前下拉菜单，阻止该事件冒泡穿透关闭移动端侧边栏 Sheet
-                                const target = e.target as HTMLElement | null;
-                                if (target && target.closest('[data-sidebar="sidebar"], [data-slot="sidebar"]')) {
-                                    e.preventDefault();
-                                }
-                            }}
                         >
                             <DropdownMenuGroup className="space-y-1">
                                 {/* 🌟 绑定带参登录逻辑 */}
                                 <DropdownMenuItem
-                                    className="cursor-pointer flex items-center h-11 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
+                                    className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                                     onSelect={handleLogin}
                                 >
                                     <LogIn className="mr-2.5 size-4.5 text-primary" />
@@ -93,7 +86,7 @@ export function NavUser() {
                                 <DropdownMenuItem asChild>
                                     <Link
                                         href={register()}
-                                        className="cursor-pointer flex items-center h-11 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
+                                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                                     >
                                         <UserPlus className="mr-2.5 size-4.5 text-primary" />
                                         <span>注册新账号</span>
@@ -124,6 +117,7 @@ export function NavUser() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                         className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-xl p-1.5 shadow-lg"
                         align="end"
                         side={
                             isMobile
@@ -135,12 +129,6 @@ export function NavUser() {
                         sideOffset={8}
                         onCloseAutoFocus={(e) => {
                             if (isMobile) {
-                                e.preventDefault();
-                            }
-                        }}
-                        onPointerDownOutside={(e) => {
-                            const target = e.target as HTMLElement | null;
-                            if (target && target.closest('[data-sidebar="sidebar"], [data-slot="sidebar"]')) {
                                 e.preventDefault();
                             }
                         }}

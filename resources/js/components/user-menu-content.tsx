@@ -52,96 +52,81 @@ export function UserMenuContent({ user }: Props) {
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                <div className="flex items-center gap-2.5 px-3 py-2 text-left text-sm rounded-lg bg-muted/40">
                     <UserInfo user={user} showEmail={true} />
                 </div>
             </DropdownMenuLabel>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
+            <DropdownMenuSeparator className="-mx-1.5 my-1.5" />
+            <DropdownMenuGroup className="space-y-1">
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={AvatarDecorationIndex()}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <Sparkles className="mr-2 h-4 w-4" />
+                        <Sparkles className="mr-2.5 size-4.5 text-primary" />
                         <span>头像装饰</span>
                     </Link>
                 </DropdownMenuItem>
-            </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={GrowthIndex()}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <ChartNoAxesCombined className="mr-2 h-4 w-4" />
+                        <ChartNoAxesCombined className="mr-2.5 size-4.5 text-primary" />
                         <span>成长等级中心</span>
                     </Link>
                 </DropdownMenuItem>
-            </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={checkIn()}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <CalendarCheck2 className="mr-2 h-4 w-4" />
+                        <CalendarCheck2 className="mr-2.5 size-4.5 text-primary" />
                         <span>每日签到</span>
                     </Link>
                 </DropdownMenuItem>
-            </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={WalletIndex()}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <Wallet className="mr-2 h-4 w-4" />
+                        <Wallet className="mr-2.5 size-4.5 text-primary" />
                         <span>钱包</span>
                     </Link>
                 </DropdownMenuItem>
-            </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={UserSpaceShow({ user: user.name })}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <House className="mr-2 h-4 w-4" />
+                        <House className="mr-2.5 size-4.5 text-primary" />
                         <span>个人主页</span>
                     </Link>
                 </DropdownMenuItem>
-            </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                     <Link
-                        className="block w-full cursor-pointer"
+                        className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                         href={edit()}
                         // prefetch
                         onClick={cleanup}
                     >
-                        <Settings className="mr-2 h-4 w-4" />
+                        <Settings className="mr-2.5 size-4.5 text-primary" />
                         <span>设置</span>
                     </Link>
                 </DropdownMenuItem>
@@ -151,11 +136,11 @@ export function UserMenuContent({ user }: Props) {
 
             {/* 🌟 退出登录项 */}
             <DropdownMenuItem
-                className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
+                className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive active:scale-[0.99]"
                 onSelect={handleLogout}
                 data-test="logout-button"
             >
-                <LogOut className="mr-2 h-4 w-4" />
+                <LogOut className="mr-2.5 size-4.5 text-destructive" />
                 <span>退出</span>
             </DropdownMenuItem>
         </>
