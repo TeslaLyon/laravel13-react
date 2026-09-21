@@ -16,16 +16,19 @@ import {
 import { UserInfo } from '@/components/user-info';
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { register } from '@/routes';
 
 export function NavUser() {
     const { auth } = usePage().props;
     const { state } = useSidebar();
     const isMobile = useIsMobile();
+    const cleanup = useMobileNavigation();
 
     // 🌟 登录处理：获取当前完整路径并携带 redirect 参数跳转
     const handleLogin = (e: Event) => {
         e.preventDefault();
+        cleanup();
         const currentPath = window.location.pathname + window.location.search;
         router.get('/login', { redirect: currentPath });
     };
@@ -86,6 +89,7 @@ export function NavUser() {
                                 <DropdownMenuItem asChild>
                                     <Link
                                         href={register()}
+                                        onClick={cleanup}
                                         className="cursor-pointer flex items-center h-10 px-3 rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.99]"
                                     >
                                         <UserPlus className="mr-2.5 size-4.5 text-primary" />
@@ -116,7 +120,6 @@ export function NavUser() {
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
                         className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-xl p-1.5 shadow-lg"
                         align="end"
                         side={

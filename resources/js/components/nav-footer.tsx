@@ -10,6 +10,7 @@ import { toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 
 export function NavFooter({
     items,
@@ -19,6 +20,7 @@ export function NavFooter({
     items: NavItem[];
 }) {
     const { isCurrentUrl } = useCurrentUrl();
+    const cleanup = useMobileNavigation();
 
     return (
         <SidebarGroup
@@ -35,7 +37,7 @@ export function NavFooter({
                                 isActive={isCurrentUrl(item.href)}
                                 tooltip={{ children: item.title }}
                             >
-                                <Link href={item.href} prefetch>
+                                <Link href={item.href} prefetch onClick={cleanup}>
                                     {item.icon && (
                                         <item.icon className="h-5 w-5" />
                                     )}
