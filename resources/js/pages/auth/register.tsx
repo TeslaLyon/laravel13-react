@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import Turnstile from '@/components/turnstile';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
 
@@ -105,6 +106,11 @@ export default function Register({ passwordRules }: Props) {
                                 <InputError
                                     message={errors.password_confirmation}
                                 />
+                            </div>
+
+                            <div className="flex flex-col items-center">
+                                <Turnstile />
+                                <InputError message={(errors as Record<string, string>)['cf-turnstile-response']} />
                             </div>
 
                             <Button

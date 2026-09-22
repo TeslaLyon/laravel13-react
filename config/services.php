@@ -50,4 +50,14 @@ return [
         'max_retries' => (int) env('VMQ_API_MAX_RETRIES', 2),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cloudflare Turnstile 验证配置
+    |--------------------------------------------------------------------------
+    */
+    'turnstile' => [
+        'site_key'   => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
 ];

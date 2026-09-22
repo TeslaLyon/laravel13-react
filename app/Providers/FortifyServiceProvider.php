@@ -123,6 +123,27 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        // 🌟 登录时进行 Cloudflare Turnstile 验证并校验账号密码
+        Fortify::authenticateUsing(function (Request $request) {
+            $request->validate([
+                Fortify::username() => 'required|string',
+                'password' => 'required|string',
+                'cf-turnstile-response' => [new \App\Rules\Turnstile],
+            ], [
+                'cf-turnstile-response' => '人机安全验证失败，请重新验证。',
+            ]);
+
+            $model = App\Models\User::class;
+
+            $user = $model::where(Fortify::username(), $request->input(Fortify::username()))->first();
+
+            if ($user && Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+                return $user;
+            }
+
+            return null;
+        });
     }
 
     /**
