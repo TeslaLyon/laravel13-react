@@ -13,12 +13,48 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MoreHorizontal, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Loader2, User } from 'lucide-react';
 import ActorController from '@/actions/App/Http/Controllers/ActorController';
 import { useRequireAuth } from '@/components/require-auth-provider';
 
 interface ActorSquareProps {
     actors: Actor[];
+}
+
+/**
+ * 演员头像组件：当图片为空或加载失败时优雅展示占位符
+ */
+function ActorAvatar({ src, name }: { src?: string | null; name: string }) {
+    const [hasError, setHasError] = useState(false);
+
+    useEffect(() => {
+        setHasError(false);
+    }, [src]);
+
+    const hasValidSrc = Boolean(src && src.trim() && !hasError);
+
+    if (!hasValidSrc) {
+        return (
+            <div className="w-full h-full bg-muted/80 flex items-center justify-center text-muted-foreground select-none">
+                {name ? (
+                    <span className="text-xl sm:text-3xl font-bold uppercase tracking-wider text-muted-foreground/80">
+                        {name.charAt(0)}
+                    </span>
+                ) : (
+                    <User className="w-7 h-7 sm:w-10 sm:h-10 text-muted-foreground/60" />
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={src!}
+            alt={name}
+            onError={() => setHasError(true)}
+            className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-110"
+        />
+    );
 }
 
 // --------------------------------------------------------
@@ -172,11 +208,7 @@ export function ActorSquare({ actors }: ActorSquareProps) {
                             className="shrink-0 relative w-16 h-16 sm:w-[96px] sm:h-[96px] rounded-full overflow-hidden shadow-sm"
                         >
                             <div className="w-full h-full bg-muted">
-                                <img
-                                    src={actor.avatar}
-                                    alt={actor.name}
-                                    className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-110"
-                                />
+                                <ActorAvatar src={actor.avatar} name={actor.name} />
                             </div>
                         </Link>
 

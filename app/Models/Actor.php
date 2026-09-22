@@ -16,6 +16,11 @@ class Actor extends Model implements ReactableInterface
         'name',
         'slug',
         'avatar',
+        'booty_img',
+        'banner',
+        'gender',
+        'is_trans_model',
+        'original_id',
     ];
 
     protected $casts = [

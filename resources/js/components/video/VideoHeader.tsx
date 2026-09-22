@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     Play,
     Pause,
@@ -25,20 +25,47 @@ export interface ImageMeta {
 
 interface VideoHeaderProps {
     /** 图片响应式元数据列表 */
-    imgMetaList?: ImageMeta[];
+    imgMetaList?: ImageMeta[] | string | null;
     /** 视频链接 */
     videoUrl?: string;
     /** 视频标题 */
     title?: string;
+    /** 片商采集类型（1: 源站免鉴权直链，优先使用带 source 的图片） */
+    dataCrawlType?: number;
+    /** 兼容直接传入 video 对象 */
+    video?: {
+        channel?: {
+            data_crawl_type?: number;
+        };
+    };
 }
 
 export const VideoHeader: React.FC<VideoHeaderProps> = ({
     imgMetaList = [],
     videoUrl,
     title = 'Video poster',
+    dataCrawlType,
+    video,
 }) => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // 判断是否优先使用源站地址 (data_crawl_type === 1)
+    const isSource = (dataCrawlType ?? video?.channel?.data_crawl_type) === 1;
+
+    // 标准化并解析图片元数据列表
+    const normalizedMetaList: ImageMeta[] = useMemo(() => {
+        if (!imgMetaList) return [];
+        if (typeof imgMetaList === 'string') {
+            try {
+                const parsed = JSON.parse(imgMetaList);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+        return Array.isArray(imgMetaList) ? imgMetaList : [];
+    }, [imgMetaList]);
 
     // 播放器状态管理
     const [hasStarted, setHasStarted] = useState(false); // 是否已点击播放
@@ -50,7 +77,26 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
     const [showControls, setShowControls] = useState(true); // 控制条显隐
 
     // 获取默认备用图片（列表最后一项，通常规格最高清）
-    const defaultImg = imgMetaList?.[imgMetaList.length - 1]?.src || '';
+    const lastItem = normalizedMetaList?.[normalizedMetaList.length - 1];
+    const initialDefaultImg = isSource
+        ? (lastItem?.src_source || lastItem?.src || '')
+        : (lastItem?.src || lastItem?.src_source || '');
+
+    const [fallbackImg, setFallbackImg] = useState<string | null>(null);
+
+    useEffect(() => {
+        setFallbackImg(null);
+    }, [imgMetaList, isSource]);
+
+    const defaultImg = fallbackImg ?? initialDefaultImg;
+
+    const handleImgError = () => {
+        if (!lastItem) return;
+        const fallback = isSource ? lastItem.src : lastItem.src_source;
+        if (fallback && fallback !== defaultImg) {
+            setFallbackImg(fallback);
+        }
+    };
 
     // 时间格式化工具：例如 125秒 -> "02:05"
     const formatTime = (seconds: number) => {
@@ -143,35 +189,42 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
             onMouseLeave={() => isPlaying && setShowControls(false)}
         >
             {/* ===== 核心修复点：大图/封面图展示区域 ===== */}
-            {(!hasStarted || !videoUrl) && imgMetaList && imgMetaList.length > 0 && (
+            {(!hasStarted || !videoUrl) && normalizedMetaList && normalizedMetaList.length > 0 && (
                 <picture className="block absolute inset-0 w-full h-full z-10">
                     {/* WebP 响应式图片源 */}
-                    {imgMetaList.map((item, index) =>
-                        item.webp?.src ? (
+                    {normalizedMetaList.map((item, index) => {
+                        const webpSrc = isSource
+                            ? (item.webp?.src_source || item.webp?.src)
+                            : (item.webp?.src || item.webp?.src_source);
+                        return webpSrc ? (
                             <source
                                 key={`webp-${index}`}
                                 type="image/webp"
-                                srcSet={item.webp.src}
+                                srcSet={webpSrc}
                                 media={item.media}
                             />
-                        ) : null
-                    )}
+                        ) : null;
+                    })}
                     {/* JPG/PNG 响应式图片源 */}
-                    {imgMetaList.map((item, index) =>
-                        item.src ? (
+                    {normalizedMetaList.map((item, index) => {
+                        const imgSrc = isSource
+                            ? (item.src_source || item.src)
+                            : (item.src || item.src_source);
+                        return imgSrc ? (
                             <source
                                 key={`src-${index}`}
-                                srcSet={item.src}
+                                srcSet={imgSrc}
                                 media={item.media}
                             />
-                        ) : null
-                    )}
+                        ) : null;
+                    })}
                     {/* 兜底 img 标签 */}
                     <img
                         src={defaultImg}
                         alt={title}
                         className="w-full h-full object-cover"
                         loading="eager"
+                        onError={handleImgError}
                     />
                 </picture>
             )}

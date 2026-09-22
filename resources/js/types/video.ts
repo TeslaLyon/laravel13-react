@@ -116,10 +116,10 @@ export type VideoDetail = {
     video_urls: string;
 
     /**
-     * 原始数据为 JSON 字符串，解析后为 ScreenImageMeta 数组
+     * 原始数据为 JSON 字符串或解析后的 ScreenImageMeta 数组
      * 示例: "[{\"screen_img_full_url\": \"...\", ...}]"
      */
-    screen_img: string;
+    screen_img: ScreenImageMeta[] | string | null;
 
     /**
      * 原始数据为 JSON 字符串，解析后为 ListImageMeta 数组
@@ -149,7 +149,7 @@ export type VideoDetail = {
 
 export type ScreenImageMeta = {
     screen_img_full_url: string;
-    screen_img_full_width: number;
+    screen_img_full_width?: number;
     screen_img_full_height?: number;
     screen_img_default_url?: string;
     screen_img_default_width?: number;
@@ -157,6 +157,7 @@ export type ScreenImageMeta = {
     screen_img_full_source_url?: string;
     screen_img_full_source_width?: number;
     screen_img_full_source_height?: number;
+    screen_img_default_source_url?: string;
     screen_img_def_url?: string; // 兼容老数据
 };
 

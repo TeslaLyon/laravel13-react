@@ -64,6 +64,8 @@ class Video extends Model implements ReactableInterface
 {
     use Reactable;
 
+    protected $guarded = [];
+
     protected function casts(): array
     {
         return [

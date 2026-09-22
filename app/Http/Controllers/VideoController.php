@@ -37,6 +37,7 @@ class VideoController extends Controller
             ->select([
                 'id',
                 'name',
+                'name_zh',
                 'slug',
                 'channel_id',
                 'list_img',
@@ -167,7 +168,7 @@ class VideoController extends Controller
         }
 
         // 3. 获取侧边栏推荐视频
-        $recommendVideos = Video::with('channel:id,name,slug,avatar')
+        $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
             ->orderByDesc('created_at')
             ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'likes_count', 'favorites_count', 'created_at')
             ->take(10)
@@ -190,7 +191,7 @@ class VideoController extends Controller
                 'videoDetail',
                 'actors:id,name,slug,avatar,love_reactant_id',
                 'tags:id,name,name_zh,slug',
-                'channel:id,name,slug,avatar,love_reactant_id',
+                'channel:id,name,slug,avatar,love_reactant_id,data_crawl_type',
                 'categories:id,name,name_zh,slug',
                 'approvedSubtitles:id,video_id,user_id,language,file_path,file_size,is_external'
             ])->findOrFail($video->id)),

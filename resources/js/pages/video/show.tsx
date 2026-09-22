@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     CheckCircle2,
     ChevronDown,
@@ -49,14 +49,98 @@ interface VideoDetailPageProps {
 
 export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+    const [canExpandDescription, setCanExpandDescription] = useState(false);
+    const descriptionRef = useRef<HTMLParagraphElement>(null);
     const [subscribed, setSubscribed] = useState(isSubscribed);
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
 
+    // 分类展示状态：控制隐藏和显示（超过两行时可折叠与展开）
+    const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
+    const [canExpandCategories, setCanExpandCategories] = useState(false);
+    const [twoRowsHeight, setTwoRowsHeight] = useState<number | null>(null);
+    const categoriesRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = descriptionRef.current;
+        if (!el || !video?.video_detail?.description) {
+            setCanExpandDescription(false);
+            return;
+        }
+
+        const checkOverflow = () => {
+            if (!isDescriptionExpanded) {
+                // 未展开状态下，若实际滚动高度大于渲染高度，说明超过了 line-clamp-2 的两行限制
+                setCanExpandDescription(el.scrollHeight > el.clientHeight);
+            } else {
+                // 已展开状态下，计算单行行高，判断总高度是否超过两行
+                const computedLineHeight = parseFloat(window.getComputedStyle(el).lineHeight);
+                const lineHeight = isNaN(computedLineHeight) ? 20 : computedLineHeight;
+                setCanExpandDescription(el.scrollHeight > lineHeight * 2 + 2);
+            }
+        };
+
+        checkOverflow();
+
+        const resizeObserver = new ResizeObserver(() => {
+            checkOverflow();
+        });
+        resizeObserver.observe(el);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [video?.video_detail?.description, isDescriptionExpanded]);
+
+    useEffect(() => {
+        const el = categoriesRef.current;
+        if (!el || !video?.categories || video.categories.length === 0) {
+            setCanExpandCategories(false);
+            setTwoRowsHeight(null);
+            return;
+        }
+
+        const checkRows = () => {
+            const children = Array.from(el.children) as HTMLElement[];
+            if (children.length === 0) {
+                setCanExpandCategories(false);
+                setTwoRowsHeight(null);
+                return;
+            }
+
+            // 统计子元素的不同垂直位移(offsetTop)以计算实际渲染行数
+            const topsSet = new Set<number>();
+            children.forEach(child => {
+                topsSet.add(child.offsetTop);
+            });
+
+            const sortedTops = Array.from(topsSet).sort((a, b) => a - b);
+            if (sortedTops.length > 2) {
+                setCanExpandCategories(true);
+                const row1Top = sortedTops[0];
+                const row2Top = sortedTops[1];
+                const row2Child = children.find(c => c.offsetTop === row2Top);
+                const row2Height = row2Child ? row2Child.offsetHeight : children[0].offsetHeight;
+                // 计算两行完整高度（包含两行间距与微小阴影冗余）
+                setTwoRowsHeight((row2Top - row1Top) + row2Height + 2);
+            } else {
+                setCanExpandCategories(false);
+                setTwoRowsHeight(null);
+            }
+        };
+
+        checkRows();
+
+        const resizeObserver = new ResizeObserver(() => {
+            checkRows();
+        });
+        resizeObserver.observe(el);
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [video?.categories]);
+
     const VISIBLE_TAGS_COUNT = 5;
-    const mockPreviewImages = [
-        "https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-        "https://images.pexels.com/photos/3182773/pexels-photo-3182773.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1"
-    ];
 
     const getResolutionColor = (res: string) => {
         const resLower = res.toLowerCase();
@@ -102,6 +186,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                             imgMetaList={video?.video_detail?.list_img_large_meta}
                             videoUrl={video?.video_detail?.video_urls}
                             title={video?.name}
+                            dataCrawlType={video?.channel?.data_crawl_type}
                         />
                     </Deferred>
 
@@ -249,18 +334,25 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                 </div>
                             </div>
 
-                            <p className={`whitespace-pre-line mt-1 ${isDescriptionExpanded ? '' : 'line-clamp-2'}`}>
-                                欢迎来到本期教程！今天我们将利用现代前端技术栈（React, Tailwind CSS, shadcn/ui）从零开始复刻大厂级别的 UI 设计。
-                                {"\n\n"}
-                                如果你喜欢这个视频，请不要忘记点赞和订阅！
-                            </p>
-                            <Button
-                                variant="link"
-                                className="p-0 h-auto mt-2 text-foreground font-semibold"
-                                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                            <p
+                                ref={descriptionRef}
+                                className={`whitespace-pre-line mt-1 ${isDescriptionExpanded ? '' : 'line-clamp-2'}`}
                             >
-                                {isDescriptionExpanded ? "收起" : "展开"}
-                            </Button>
+                                {video?.video_detail?.description}
+                            </p>
+                            {canExpandDescription && (
+                                <Button
+                                    variant="link"
+                                    className="p-0 h-auto mt-2 text-foreground font-semibold inline-flex items-center gap-1"
+                                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                                >
+                                    {isDescriptionExpanded ? (
+                                        <>收起 <ChevronUp className="w-3.5 h-3.5" /></>
+                                    ) : (
+                                        <>展开 <ChevronDown className="w-3.5 h-3.5" /></>
+                                    )}
+                                </Button>
+                            )}
                         </div>
 
                         {/* ===================== 1. 演员模块 ===================== */}
@@ -323,7 +415,21 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                         </div>
 
                         {/* 预览图 */}
-                        <VideoPreviews images={mockPreviewImages} />
+                        <Deferred data="video" fallback={
+                            <div className="mt-6">
+                                <Skeleton className="h-6 w-24 mb-3" />
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 px-1">
+                                    {Array.from({ length: 4 }).map((_, index) => (
+                                        <Skeleton key={index} className="w-full aspect-video rounded-xl" />
+                                    ))}
+                                </div>
+                            </div>
+                        }>
+                            <VideoPreviews
+                                images={video?.video_detail?.screen_img}
+                                dataCrawlType={video?.channel?.data_crawl_type}
+                            />
+                        </Deferred>
 
                         {/* ===================== 2. 分类模块 ===================== */}
                         <div className="mt-6">
@@ -347,17 +453,36 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                             }>
                                 {/* 【空状态判断与引导】 */}
                                 {video?.categories && video.categories.length > 0 ? (
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        {video.categories.map(category => (
-                                            <Link
-                                                key={category.id}
-                                                href={`/categories/${category.id}`}
-                                                className="px-4 py-1.5 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 transition-colors rounded-xl text-sm font-semibold shadow-sm"
+                                    <>
+                                        <div
+                                            ref={categoriesRef}
+                                            className="flex items-center gap-2 flex-wrap transition-all duration-200"
+                                            style={!isCategoriesExpanded && twoRowsHeight ? { maxHeight: `${twoRowsHeight}px`, overflow: 'hidden' } : undefined}
+                                        >
+                                            {video.categories.map(category => (
+                                                <Link
+                                                    key={category.id}
+                                                    href={`/categories/${category.id}`}
+                                                    className="px-4 py-1.5 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 transition-colors rounded-xl text-sm font-semibold shadow-sm"
+                                                >
+                                                    {category.name}
+                                                </Link>
+                                            ))}
+                                        </div>
+                                        {canExpandCategories && (
+                                            <Button
+                                                variant="link"
+                                                className="p-0 h-auto mt-2 text-foreground font-semibold inline-flex items-center gap-1"
+                                                onClick={() => setIsCategoriesExpanded(!isCategoriesExpanded)}
                                             >
-                                                {category.name}
-                                            </Link>
-                                        ))}
-                                    </div>
+                                                {isCategoriesExpanded ? (
+                                                    <>隐藏 <ChevronUp className="w-3.5 h-3.5" /></>
+                                                ) : (
+                                                    <>显示 <ChevronDown className="w-3.5 h-3.5" /></>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="flex items-center justify-start gap-4 p-3.5 rounded-xl border border-dashed border-border/80 bg-muted/20 hover:bg-muted/40 transition-colors">
                                         <div className="flex items-center gap-2.5">

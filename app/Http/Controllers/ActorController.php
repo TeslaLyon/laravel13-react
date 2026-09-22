@@ -15,7 +15,7 @@ class ActorController extends Controller
     {
         // 1. 获取快捷筛选参数（默认 'all'）
         $filter = $request->input('filter', 'all');
-        $perPage = 1; // 设置固定的每页条数
+        $perPage = 12; // 设置固定的每页条数
 
         // 2. 构建主演员列表查询
         $query = Actor::query();

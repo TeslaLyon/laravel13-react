@@ -13,6 +13,8 @@ class Category extends Model implements ReactableInterface
 {
     use Reactable, SubscribesWithLove;
 
+    protected $guarded = [];
+
     public function videos(): BelongsToMany
     {
         return $this->belongsToMany(Video::class);

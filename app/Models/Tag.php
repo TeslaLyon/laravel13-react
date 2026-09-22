@@ -10,6 +10,8 @@ use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
 class Tag extends Model implements ReactableInterface
 {
     use Reactable;
+
+    protected $guarded = [];
     public function videos(): BelongsToMany
     {
         return $this->belongsToMany(Video::class);

@@ -18,6 +18,9 @@ export function VideoCard({ video }: { video: Video }) {
     // 🎯 1. 提取并校验 country 是否为有效的非空字符串
     const hasValidCountry = Boolean(video.country && video.country.trim());
 
+    // 🎯 2. 提取并校验 name_zh 是否为有效的非空字符串
+    const hasValidNameZh = Boolean(video.name_zh && video.name_zh.trim());
+
     return (
         <div className="group relative flex flex-col gap-1 cursor-pointer z-0">
             {/* 核心悬停背景框 */}
@@ -49,7 +52,7 @@ export function VideoCard({ video }: { video: Video }) {
 
                 <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-[15px] font-semibold leading-tight line-clamp-2 text-primary group-hover:text-blue-500 transition-colors pt-1.5">
+                        <h3 className="text-base font-semibold leading-tight line-clamp-2 text-primary hover:text-red-500 transition-colors pt-1.5">
                             {video.name}
                         </h3>
 
@@ -57,6 +60,12 @@ export function VideoCard({ video }: { video: Video }) {
                             <VideoMenu videoId={video.id} slug={video.slug} />
                         </div>
                     </div>
+
+                    {hasValidNameZh && (
+                        <p className="text-sm font-semibold text-muted-foreground/85 line-clamp-1 mt-1 hover:text-red-500 transition-colors truncate" title={video.name_zh}>
+                            {video.name_zh}
+                        </p>
+                    )}
 
                     <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
                         {video.channel.name}
