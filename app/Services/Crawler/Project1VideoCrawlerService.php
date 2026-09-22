@@ -226,19 +226,74 @@ class Project1VideoCrawlerService
             $videoDetailData['screen_img'] = $screenImg;
         }
 
-        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item) {
-            // 1. 写入或更新主视频记录
-            $video = Video::updateOrCreate(
-                ['source_uuid' => $sourceUUID],
-                $videoData
-            );
+        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item, $title) {
+            // 1. 查询现有视频记录（以 source_uuid 作为唯一标识）
+            $existingVideo = Video::where('source_uuid', $sourceUUID)->first();
 
-            // 2. 写入或更新详情附表
-            $videoDetailData['video_id'] = $video->id;
-            VideoDetail::updateOrCreate(
-                ['video_id' => $video->id],
-                $videoDetailData
-            );
+            if ($existingVideo) {
+                // 【核心防污染机制】：
+                // 1) 若新抓取的标题为空，坚决不覆盖原有标题
+                if (empty(trim($title))) {
+                    unset($videoData['name']);
+                    unset($videoData['slug']);
+                }
+                // 2) 若库中已有有效名称，且新抓取的标题与原名称不一致，不进行覆盖，防止数据污染
+                elseif (!empty(trim($existingVideo->name)) && $existingVideo->name !== $title) {
+                    Log::info("视频 [source_uuid: {$sourceUUID}] 抓取到新标题，已保护已有名称不被篡改污染", [
+                        'current_name' => $existingVideo->name,
+                        'crawled_name' => $title,
+                    ]);
+                    unset($videoData['name']);
+                    unset($videoData['slug']);
+                }
+
+                // 3) 其它重要字段的非空保护（新值为空时不冲掉旧值）
+                if (empty($videoData['preview']) && !empty($existingVideo->preview)) {
+                    unset($videoData['preview']);
+                }
+                if (empty($videoData['list_img']) && !empty($existingVideo->list_img)) {
+                    unset($videoData['list_img']);
+                }
+                if (empty($videoData['video_code']) && !empty($existingVideo->video_code)) {
+                    unset($videoData['video_code']);
+                }
+
+                $existingVideo->update($videoData);
+                $video = $existingVideo;
+            } else {
+                // 新建记录时若标题为空，兜底使用 video_code
+                if (empty(trim($title))) {
+                    $videoData['name'] = $videoData['video_code'] ?? $sourceUUID;
+                    $videoData['slug'] = Str::slug($videoData['name']);
+                }
+                $video = Video::create($videoData);
+            }
+
+            // 2. 写入或更新详情附表（同样做非空防污染保护）
+            $existingDetail = VideoDetail::where('video_id', $video->id)->first();
+            if ($existingDetail) {
+                // 简介非空保护
+                if (empty(trim($videoDetailData['description'] ?? '')) && !empty(trim($existingDetail->description ?? ''))) {
+                    unset($videoDetailData['description']);
+                }
+                // 播放地址非空保护
+                if (empty($videoDetailData['video_urls']) && !empty($existingDetail->video_urls)) {
+                    unset($videoDetailData['video_urls']);
+                }
+                // 剧照非空保护
+                if (empty($videoDetailData['screen_img']) && !empty($existingDetail->screen_img)) {
+                    unset($videoDetailData['screen_img']);
+                }
+                // 大图元数据非空保护
+                if (empty($videoDetailData['list_img_large_meta']) && !empty($existingDetail->list_img_large_meta)) {
+                    unset($videoDetailData['list_img_large_meta']);
+                }
+
+                $existingDetail->update($videoDetailData);
+            } else {
+                $videoDetailData['video_id'] = $video->id;
+                VideoDetail::create($videoDetailData);
+            }
 
             // 3. 处理关联演员
             $actorIds = [];
