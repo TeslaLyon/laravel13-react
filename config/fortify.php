@@ -120,6 +120,12 @@ return [
         'passkeys' => 'passkeys',
     ],
 
+    'rate_limits' => [
+        'login' => (int) env('FORTIFY_LOGIN_RATE_LIMIT', 5),
+        'two_factor' => (int) env('FORTIFY_TWO_FACTOR_RATE_LIMIT', 5),
+        'passkeys' => (int) env('FORTIFY_PASSKEY_RATE_LIMIT', 20),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Register View Routes
