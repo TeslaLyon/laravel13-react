@@ -38,3 +38,7 @@ compose.yaml
 
 frankenphp-worker.php
 
+# 爬虫与临时图片存储（避免污染 Git 仓库，大批量素材统一存 Cloudflare R2）
+/public/images/crawler/
+/public/images/temp/
+/storage/app/temp/
