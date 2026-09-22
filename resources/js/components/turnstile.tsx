@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePage } from '@inertiajs/react';
 
 declare global {
@@ -10,6 +10,8 @@ declare global {
                     sitekey: string;
                     theme?: 'light' | 'dark' | 'auto';
                     size?: 'normal' | 'compact' | 'flexible';
+                    'response-field'?: boolean;
+                    'response-field-name'?: string;
                     callback?: (token: string) => void;
                     'expired-callback'?: () => void;
                     'error-callback'?: (errorCode: string) => void;
@@ -27,6 +29,7 @@ type Props = {
     onError?: (error: string) => void;
     theme?: 'light' | 'dark' | 'auto';
     className?: string;
+    resetTrigger?: unknown;
 };
 
 export default function Turnstile({
@@ -35,10 +38,34 @@ export default function Turnstile({
     onError,
     theme = 'auto',
     className = '',
+    resetTrigger,
 }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const widgetIdRef = useRef<string | null>(null);
+    const [token, setToken] = useState<string>('');
     const { turnstileSiteKey } = usePage().props as { turnstileSiteKey?: string };
+
+    const resetWidget = () => {
+        if (widgetIdRef.current && window.turnstile) {
+            try {
+                window.turnstile.reset(widgetIdRef.current);
+            } catch {
+                // ignore
+            }
+        }
+        setToken('');
+        if (inputRef.current) {
+            inputRef.current.value = '';
+        }
+    };
+
+    // 当外层表单发生验证错误或传入 resetTrigger 时，自动重置 Turnstile
+    useEffect(() => {
+        if (resetTrigger && (typeof resetTrigger !== 'object' || Object.keys(resetTrigger as object).length > 0)) {
+            resetWidget();
+        }
+    }, [resetTrigger]);
 
     useEffect(() => {
         if (!turnstileSiteKey || !containerRef.current) {
@@ -67,25 +94,29 @@ export default function Turnstile({
                     sitekey: turnstileSiteKey,
                     theme,
                     size: 'flexible',
-                    callback: (token: string) => {
-                        const input = containerRef.current?.querySelector(
-                            'input[name="cf-turnstile-response"]'
-                        ) as HTMLInputElement | null;
-                        if (input) {
-                            input.value = token;
+                    'response-field': false, // 由 React 统一控制 input，避免 DOM 出现重复字段
+                    callback: (t: string) => {
+                        if (!isMounted) return;
+                        setToken(t);
+                        if (inputRef.current) {
+                            inputRef.current.value = t;
                         }
-                        onVerify?.(token);
+                        onVerify?.(t);
                     },
                     'expired-callback': () => {
-                        const input = containerRef.current?.querySelector(
-                            'input[name="cf-turnstile-response"]'
-                        ) as HTMLInputElement | null;
-                        if (input) {
-                            input.value = '';
+                        if (!isMounted) return;
+                        setToken('');
+                        if (inputRef.current) {
+                            inputRef.current.value = '';
                         }
                         onExpire?.();
                     },
                     'error-callback': (err: string) => {
+                        if (!isMounted) return;
+                        setToken('');
+                        if (inputRef.current) {
+                            inputRef.current.value = '';
+                        }
                         onError?.(err);
                     },
                 });
@@ -127,18 +158,23 @@ export default function Turnstile({
                 }
             }
         };
-    }, [turnstileSiteKey, theme, onVerify, onExpire, onError]);
+    }, [turnstileSiteKey, theme]);
 
     if (!turnstileSiteKey) {
         return null;
     }
 
     return (
-        <div className={`my-2 flex justify-center min-h-[65px] ${className}`}>
+        <div className={`my-2 flex flex-col items-center min-h-[65px] ${className}`}>
             <div ref={containerRef} className="w-full flex justify-center" />
-            {/* 隐藏的 input 兜底，确保原生 HTML 表单或 Inertia Form 组件能自然抓取该值 */}
-            <input type="hidden" name="cf-turnstile-response" defaultValue="" />
+            {/* 唯一由 React 管理的隐藏 input，保证 Inertia Form 收集的数据准确无误 */}
+            <input
+                ref={inputRef}
+                type="hidden"
+                name="cf-turnstile-response"
+                value={token}
+                readOnly
+            />
         </div>
     );
 }
-

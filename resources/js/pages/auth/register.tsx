@@ -109,7 +109,7 @@ export default function Register({ passwordRules }: Props) {
                             </div>
 
                             <div className="flex flex-col items-center">
-                                <Turnstile />
+                                <Turnstile resetTrigger={errors} />
                                 <InputError message={(errors as Record<string, string>)['cf-turnstile-response']} />
                             </div>
 

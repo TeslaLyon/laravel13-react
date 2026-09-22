@@ -28,14 +28,29 @@ class Turnstile implements ValidationRule
         }
 
         try {
-            $response = Http::asForm()->timeout(10)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+            $payload = [
                 'secret'   => $secretKey,
                 'response' => $value,
-                'remoteip' => request()->ip(),
-            ]);
+            ];
+
+            // 仅在真实公网 IP 时传递 remoteip，避免本地内网/Docker/反向代理 IP 干扰 Cloudflare 校验
+            $ip = request()->ip();
+            if ($ip && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                $payload['remoteip'] = $ip;
+            }
+
+            $response = Http::asForm()->timeout(10)->post(
+                'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+                $payload
+            );
 
             if (!$response->successful() || !$response->json('success')) {
-                $fail('人机安全验证未通过，请刷新后重试。');
+                \Illuminate\Support\Facades\Log::warning('Cloudflare Turnstile 验证未通过', [
+                    'status' => $response->status(),
+                    'error_codes' => $response->json('error-codes'),
+                    'response' => $response->json(),
+                ]);
+                $fail('人机安全验证未通过，请重试。');
             }
         } catch (\Throwable $e) {
             report($e);
