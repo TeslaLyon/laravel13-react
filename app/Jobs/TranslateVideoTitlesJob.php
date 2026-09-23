@@ -44,6 +44,11 @@ class TranslateVideoTitlesJob implements ShouldQueue
         Artisan::call('videos:translate-titles', [
             '--limit' => $this->limit,
         ]);
+
+        $output = trim(Artisan::output());
+        if (!empty($output)) {
+            Log::info("视频标题翻译任务执行输出:\n" . $output);
+        }
     }
 }
 

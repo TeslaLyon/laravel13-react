@@ -56,6 +56,7 @@ use Illuminate\Support\Facades\DB;
 // TODO：将实际支付金额改为递增，因为考虑到一旦用户发现是递减的会重复下单，但是在递增的情况下，实际到账金额应该是实际支付金额
 // TODO:充值指定金额赠送相应的纸巾
 // TODO: table 表格中的业务说明文字太多无法完全展示，考虑 hover 后显示全部
+// TODO: 考虑直接跳转到支付有风险，则采用卡密方式充值，兑换卡密时增加支付时间校验，防止撞库
 
 // Route::inertia('/', 'welcome')->name('home');
 

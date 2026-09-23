@@ -56,6 +56,11 @@ class CrawlProject1VideosJob implements ShouldQueue
         }
 
         Artisan::call('crawler:project1-videos', $params);
+
+        $output = trim(Artisan::output());
+        if (!empty($output)) {
+            Log::info("视频爬虫任务执行输出:\n" . $output);
+        }
     }
 }
 
