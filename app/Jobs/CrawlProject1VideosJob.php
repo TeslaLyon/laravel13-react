@@ -5,6 +5,7 @@ namespace App\Jobs;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class CrawlProject1VideosJob implements ShouldQueue
@@ -63,6 +64,14 @@ class CrawlProject1VideosJob implements ShouldQueue
         }
 
         Artisan::call('crawler:project1-videos', $params);
+
+        if ($this->channel && $this->page > 1) {
+            $cacheKey = "crawler:history:{$this->channel}:last_page";
+            $lastPage = (int) Cache::get($cacheKey, 0);
+            if ($this->page > $lastPage) {
+                Cache::forever($cacheKey, $this->page);
+            }
+        }
 
         $output = trim(Artisan::output());
         if (!empty($output)) {
