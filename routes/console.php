@@ -1,5 +1,7 @@
 <?php
 
+use App\Jobs\CrawlProject1VideosJob;
+use App\Jobs\TranslateVideoTitlesJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -10,19 +12,17 @@ Artisan::command('inspire', function () {
 
 /**
  * Project1 视频列表定时爬取任务
- * 默认每小时执行一次，避免任务重叠，后台静默运行
+ * 每天晚上 20:30 自动投递任务至 Horizon 队列，避免任务重叠
  */
-Schedule::command('crawler:project1-videos')
-    ->hourly()
-    ->withoutOverlapping()
-    ->runInBackground();
+Schedule::job(new CrawlProject1VideosJob())
+    ->dailyAt('20:30')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
 
 /**
  * 视频中文标题 AI 自动翻译定时任务
- * 每 10 分钟执行一批（默认处理 60 条），避免任务重叠，后台静默运行
+ * 每 10 分钟投递一批翻译任务至 Horizon 队列，避免任务重叠
  */
-Schedule::command('videos:translate-titles --limit=60')
+Schedule::job(new TranslateVideoTitlesJob(60))
     ->everyTenMinutes()
-    ->withoutOverlapping()
-    ->runInBackground();
-
+    ->withoutOverlapping();

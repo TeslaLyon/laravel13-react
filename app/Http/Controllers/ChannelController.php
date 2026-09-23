@@ -31,7 +31,7 @@ class ChannelController extends Controller
                 }
 
                 // 每页 12 条数据，withQueryString() 确保翻页时保留 category 参数
-                return $query->paginate(1)->withQueryString();
+                return $query->paginate(12)->withQueryString();
             })
         ]);
     }
