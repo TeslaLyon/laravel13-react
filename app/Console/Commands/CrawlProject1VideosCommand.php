@@ -15,6 +15,7 @@ class CrawlProject1VideosCommand extends Command
     protected $signature = 'crawler:project1-videos
                             {channel? : 片商 slug（可选，未指定时自动爬取所有 data_crawl_type=1 的片商）}
                             {--limit=24 : 限制拉取视频条数}
+                            {--page=1 : 指定抓取的分页页码（默认第 1 页，offset 自动根据 (page-1)*limit 计算）}
                             {--token= : 显式指定 API Token（留空则优先从 Redis/Cache 获取或自动抓取）}
                             {--refresh-token : 强制从片商官网抓取最新 Token 并更新缓存}';
 
@@ -31,13 +32,14 @@ class CrawlProject1VideosCommand extends Command
     public function handle(Project1VideoCrawlerService $crawlerService): int
     {
         $channel = $this->argument('channel');
-        $limit = (int) ($this->option('limit') ?: 24);
+        $limit = max(1, (int) ($this->option('limit') ?: 24));
+        $page = max(1, (int) ($this->option('page') ?: 1));
         $token = $this->option('token');
         $refreshToken = (bool) $this->option('refresh-token');
 
-        $this->info("🚀 开始执行 Project1 视频爬虫任务" . ($channel ? " [片商: {$channel}]" : " [全部片商]") . "...");
+        $this->info("🚀 开始执行 Project1 视频爬虫任务" . ($channel ? " [片商: {$channel}]" : " [全部片商]") . " [第 {$page} 页, 每页 {$limit} 条]...");
 
-        $result = $crawlerService->crawlVideos($channel, $limit, $token, $refreshToken);
+        $result = $crawlerService->crawlVideos($channel, $limit, $token, $refreshToken, $page);
 
         if (!$result['success']) {
             $this->error("❌ 任务终止: " . ($result['message'] ?? '未知错误'));
@@ -45,9 +47,12 @@ class CrawlProject1VideosCommand extends Command
         }
 
         if ($channel) {
-            $this->info("✅ 片商 [{$channel}] 爬取完成！");
+            $this->info("✅ 片商 [{$channel}] 第 {$page} 页爬取完成！");
+            if (isset($result['total']) && $result['total'] !== null) {
+                $this->line("📊 远端数据总量: {$result['total']} 条 | 总页数: {$result['total_pages']} 页 | 当前页: 第 {$page} 页");
+            }
             $this->table(
-                ['总条数', '成功入库', '失败', '跳过'],
+                ['当前页抓取条数', '成功入库', '失败', '跳过'],
                 [[
                     $result['total_items'] ?? 0,
                     $result['success_count'] ?? 0,

@@ -32,12 +32,18 @@ class CrawlProject1VideosJob implements ShouldQueue
     public int $limit;
 
     /**
+     * 指定抓取的页码
+     */
+    public int $page;
+
+    /**
      * Create a new job instance.
      */
-    public function __construct(?string $channel = null, int $limit = 24)
+    public function __construct(?string $channel = null, int $limit = 24, int $page = 1)
     {
         $this->channel = $channel;
         $this->limit = $limit;
+        $this->page = max(1, $page);
     }
 
     /**
@@ -45,10 +51,11 @@ class CrawlProject1VideosJob implements ShouldQueue
      */
     public function handle(): void
     {
-        Log::info("Horizon 队列开始执行爬虫任务 [CrawlProject1VideosJob]" . ($this->channel ? " [片商: {$this->channel}]" : " [全部片商]"));
+        Log::info("Horizon 队列开始执行爬虫任务 [CrawlProject1VideosJob]" . ($this->channel ? " [片商: {$this->channel}]" : " [全部片商]") . " [第 {$this->page} 页, 每页 {$this->limit} 条]");
 
         $params = [
             '--limit' => $this->limit,
+            '--page'  => $this->page,
         ];
 
         if ($this->channel) {

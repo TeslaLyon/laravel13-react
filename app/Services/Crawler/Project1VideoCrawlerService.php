@@ -25,9 +25,10 @@ class Project1VideoCrawlerService
      * @param int $limit 每次拉取视频条数
      * @param string|null $explicitToken 显式传入的 token，未传则从 Redis/Cache 读取或自动从官网抓取
      * @param bool $forceRefreshToken 是否强制刷新 Token
+     * @param int $page 指定抓取页码（从 1 开始）
      * @return array 任务结果统计
      */
-    public function crawlVideos(?string $channelSlug = null, int $limit = 24, ?string $explicitToken = null, bool $forceRefreshToken = false): array
+    public function crawlVideos(?string $channelSlug = null, int $limit = 24, ?string $explicitToken = null, bool $forceRefreshToken = false, int $page = 1): array
     {
         if (!empty($channelSlug)) {
             $channel = Channel::where('slug', $channelSlug)
@@ -40,7 +41,7 @@ class Project1VideoCrawlerService
                 return ['success' => false, 'message' => $msg, 'stats' => []];
             }
 
-            return $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken);
+            return $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken, $page);
         }
 
         // 未指定片商时，遍历所有配置为 data_crawl_type = 1 的片商
@@ -54,7 +55,7 @@ class Project1VideoCrawlerService
         ];
 
         foreach ($channels as $channel) {
-            $result = $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken);
+            $result = $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken, $page);
             $totalStats['channels_processed']++;
             $totalStats['success_count'] += $result['success_count'] ?? 0;
             $totalStats['failed_count']  += $result['failed_count'] ?? 0;
@@ -70,8 +71,9 @@ class Project1VideoCrawlerService
     /**
      * 爬取单个片商的数据
      */
-    public function crawlSingleChannel(Channel $channel, int $limit = 24, ?string $explicitToken = null, bool $forceRefreshToken = false): array
+    public function crawlSingleChannel(Channel $channel, int $limit = 24, ?string $explicitToken = null, bool $forceRefreshToken = false, int $page = 1): array
     {
+        $page = max(1, $page);
         $token = $explicitToken ?: $this->resolveChannelToken($channel, $forceRefreshToken);
 
         if (empty($token)) {
@@ -80,6 +82,7 @@ class Project1VideoCrawlerService
             return [
                 'success'       => false,
                 'channel'       => $channel->slug,
+                'page'          => $page,
                 'message'       => $msg,
                 'success_count' => 0,
                 'failed_count'  => 0,
@@ -87,16 +90,16 @@ class Project1VideoCrawlerService
             ];
         }
 
-        Log::info("开始爬取片商 [{$channel->slug}] 视频列表，Limit: {$limit}");
+        Log::info("开始爬取片商 [{$channel->slug}] 视频列表，第 {$page} 页，Limit: {$limit}");
 
-        $res = $this->requestApiReleases($channel, $token, $limit);
+        $res = $this->requestApiReleases($channel, $token, $limit, $page);
 
         // 如果未通过认证 (401 或 403) 且非显式指定的 Token，自动刷新一次 Token 并重试
         if (!$explicitToken && in_array($res['status'], [401, 403])) {
             Log::warning("片商 [{$channel->slug}] Token 失效或过期 (HTTP {$res['status']})，正在自动刷新并重试...");
             $token = $this->resolveChannelToken($channel, true);
             if (!empty($token)) {
-                $res = $this->requestApiReleases($channel, $token, $limit);
+                $res = $this->requestApiReleases($channel, $token, $limit, $page);
             }
         }
 
@@ -144,16 +147,26 @@ class Project1VideoCrawlerService
                     'item_id' => $item['id'] ?? null,
                     'exception' => $e,
                 ]);
+                $this->recordFailedItem($channel, $item, $e, $page);
                 $failedCount++;
             }
         }
 
-        Log::info("片商 [{$channel->slug}] 爬取完成！成功: {$successCount}, 失败: {$failedCount}, 跳过: {$skippedCount}");
+        $meta = $data['meta'] ?? [];
+        $total = isset($meta['total']) ? (int) $meta['total'] : null;
+        $totalPages = ($total !== null && $limit > 0) ? (int) ceil($total / $limit) : null;
+
+        Log::info("片商 [{$channel->slug}] 第 {$page} 页爬取完成！成功: {$successCount}, 失败: {$failedCount}, 跳过: {$skippedCount}" . ($total !== null ? " (总计 {$total} 条 / {$totalPages} 页)" : ""));
 
         return [
             'success'       => true,
             'channel'       => $channel->slug,
+            'page'          => $page,
+            'limit'         => $limit,
             'total_items'   => count($data['result']),
+            'total'         => $total,
+            'total_pages'   => $totalPages,
+            'meta'          => $meta,
             'success_count' => $successCount,
             'failed_count'  => $failedCount,
             'skipped_count' => $skippedCount,
@@ -167,15 +180,21 @@ class Project1VideoCrawlerService
     {
         $title = trim($item['title'] ?? '');
         $slug = Str::slug($title);
-        $sourceId = (string) $item['id'];
+        $sourceId = (string) ($item['id'] ?? '');
+        if ($sourceId === '') {
+            throw new \InvalidArgumentException("视频缺少有效 id 字段");
+        }
         $sourceUUID = $this->handleSourceUUID($sourceId, $slug);
         $releaseAt = $this->handleReleaseAt($item['dateReleased'] ?? null);
 
-        $actorsData = $item['actors'] ?? [];
+        $actorsData = is_array($item['actors'] ?? null) ? $item['actors'] : [];
         $isTransModel = false;
         $femaleActors = [];
 
         foreach ($actorsData as $actor) {
+            if (!is_array($actor)) {
+                continue;
+            }
             $gender = $actor['gender'] ?? '';
             if ($gender === 'trans') {
                 $isTransModel = true;
@@ -320,12 +339,15 @@ class Project1VideoCrawlerService
 
             // 4. 处理关联分类 / 标签
             $categoryIds = [];
-            $tags = $item['tags'] ?? [];
+            $tags = is_array($item['tags'] ?? null) ? $item['tags'] : [];
             foreach ($tags as $tag) {
-                if (empty($tag['name'])) {
+                if (!is_array($tag) || empty($tag['name'])) {
                     continue;
                 }
                 $catSlug = Str::slug($tag['name']);
+                if (empty($catSlug)) {
+                    continue;
+                }
                 $dbCategory = Category::firstOrCreate(
                     ['slug' => $catSlug],
                     [
@@ -347,10 +369,12 @@ class Project1VideoCrawlerService
     /**
      * 请求 Project1Service API 接口
      */
-    protected function requestApiReleases(Channel $channel, string $token, int $limit): array
+    protected function requestApiReleases(Channel $channel, string $token, int $limit, int $page = 1): array
     {
         try {
             $origin = $channel->official_website_url ?: 'https://www.project1service.com';
+            $page = max(1, $page);
+            $offset = ($page - 1) * $limit;
 
             $response = Http::withHeaders([
                 'user-agent'      => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -364,7 +388,7 @@ class Project1VideoCrawlerService
                 'orderBy' => '-dateReleased',
                 'type'    => 'scene',
                 'limit'   => $limit,
-                'offset'  => 0,
+                'offset'  => $offset,
             ]);
 
             return [
@@ -516,7 +540,11 @@ class Project1VideoCrawlerService
             return now()->toDateTimeString();
         }
 
-        return Carbon::parse($utc)->setTimezone('Asia/Shanghai')->toDateTimeString();
+        try {
+            return Carbon::parse($utc)->setTimezone('Asia/Shanghai')->toDateTimeString();
+        } catch (Throwable $e) {
+            return now()->toDateTimeString();
+        }
     }
 
     protected function handleGender(?string $gender): int
@@ -565,8 +593,15 @@ class Project1VideoCrawlerService
     /**
      * 计算并格式化文件相对与本地路径（去除 Query 参数并使用哈希存储）
      */
-    protected function handleFilesUrl(string $url, string $channel, string $sourceId): array
+    protected function handleFilesUrl(?string $url, string $channel, string $sourceId): array
     {
+        if (empty($url)) {
+            return [
+                'dbUrl'    => '',
+                'localUrl' => '',
+            ];
+        }
+
         $cleanUrl = explode('?', $url)[0];
         $fileName = sha1($cleanUrl);
         $fileExt = pathinfo(parse_url($url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION) ?: 'jpg';
@@ -764,5 +799,33 @@ class Project1VideoCrawlerService
         return $item['videos']['mediabook']['files']['720p']['urls']['view']
             ?? $item['videos']['mediabook']['files']['320p']['urls']['view']
             ?? '';
+    }
+
+    /**
+     * 持久化记录抓取或入库失败的视频原始 Payload 到独立文件
+     */
+    protected function recordFailedItem(Channel $channel, array $item, Throwable $exception, int $page): void
+    {
+        try {
+            $dir = storage_path('logs/crawler_failures');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0777, true);
+            }
+
+            $filePath = "{$dir}/{$channel->slug}.jsonl";
+            $record = [
+                'time'       => now()->toDateTimeString(),
+                'channel'    => $channel->slug,
+                'page'       => $page,
+                'item_id'    => $item['id'] ?? null,
+                'item_title' => $item['title'] ?? null,
+                'error'      => $exception->getMessage(),
+                'raw_item'   => $item,
+            ];
+
+            @file_put_contents($filePath, json_encode($record, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+        } catch (Throwable $e) {
+            // 忽略持久化失败本身，避免二次中断
+        }
     }
 }
