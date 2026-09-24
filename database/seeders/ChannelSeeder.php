@@ -22,8 +22,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 1,
                 'video_num'            => 0,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/brazzers.jpg',
-                'logo'                 => '/images/channels/brazzers.jpg',
+                'avatar'               => '/images/channels/brazzers.avif',
+                'logo'                 => '/images/channels/brazzers.avif',
                 'official_website_url' => 'https://brazzers.com/',
                 'created_at'           => '2024-09-06 10:58:11',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -50,8 +50,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 2,
                 'video_num'            => 667,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/blacked-avatar.jpg',
-                'logo'                 => '/images/channels/blacked-logo.jpg',
+                'avatar'               => '/images/channels/blacked-avatar.avif',
+                'logo'                 => '/images/channels/blacked-logo.avif',
                 'official_website_url' => 'https://www.blacked.com',
                 'created_at'           => '2024-09-11 20:26:22',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -64,8 +64,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 2,
                 'video_num'            => 578,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/tushy-avatar.jpg',
-                'logo'                 => '/images/channels/tushy-logo.jpg',
+                'avatar'               => '/images/channels/tushy-avatar.avif',
+                'logo'                 => '/images/channels/tushy-logo.avif',
                 'official_website_url' => 'https://www.tushy.com',
                 'created_at'           => '2024-09-11 20:54:20',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -78,8 +78,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 2,
                 'video_num'            => 367,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/deeper.webp',
-                'logo'                 => '/images/channels/deeper.webp',
+                'avatar'               => '/images/channels/deeper.avif',
+                'logo'                 => '/images/channels/deeper.avif',
                 'official_website_url' => 'https://www.deeper.com',
                 'created_at'           => '2024-09-11 21:14:02',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -92,8 +92,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 2,
                 'video_num'            => 72,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/milfy-avatar.jpg',
-                'logo'                 => '/images/channels/milfy-logo.jpg',
+                'avatar'               => '/images/channels/milfy-avatar.avif',
+                'logo'                 => '/images/channels/milfy-logo.avif',
                 'official_website_url' => 'https://www.milfy.com',
                 'created_at'           => '2024-09-11 21:16:53',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -106,8 +106,8 @@ class ChannelSeeder extends Seeder
                 'data_crawl_type'      => 2,
                 'video_num'            => 139,
                 'follow_num'           => 0,
-                'avatar'               => '/images/channels/slayed-avatar.jpg',
-                'logo'                 => '/images/channels/slayed-logo.jpg',
+                'avatar'               => '/images/channels/slayed-avatar.avif',
+                'logo'                 => '/images/channels/slayed-logo.avif',
                 'official_website_url' => 'https://www.slayed.com',
                 'created_at'           => '2024-09-11 21:18:02',
                 'updated_at'           => '2026-07-01 12:47:19',
@@ -138,11 +138,12 @@ class ChannelSeeder extends Seeder
             $existing = DB::table('channels')->where('slug', $channelData['slug'])->first();
 
             if ($existing) {
-                // 已存在时，更新属性，保留既有 id 与既有 love_reactant_id
-                if (!empty($existing->love_reactant_id)) {
-                    unset($channelData['love_reactant_id']);
-                }
-                DB::table('channels')->where('slug', $channelData['slug'])->update($channelData);
+                // 已存在时，仅精准同步更新 avatar 与 logo，其他所有线上数据与外键绝不受影响
+                DB::table('channels')->where('slug', $channelData['slug'])->update([
+                    'avatar'     => $channelData['avatar'] ?? $existing->avatar,
+                    'logo'       => $channelData['logo'] ?? $existing->logo,
+                    'updated_at' => now()->toDateTimeString(),
+                ]);
             } else {
                 // 不存在时纯自增插入（不携带 id 字段，由数据库序列自然递增生成）
                 DB::table('channels')->insert($channelData);
