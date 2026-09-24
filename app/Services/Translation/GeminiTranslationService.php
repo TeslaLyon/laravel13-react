@@ -114,12 +114,12 @@ PROMPT;
         // 构造候选模型队列：优先尝试用户配置的模型，失败时依次自动降级回退
         $modelsToTry = array_values(array_unique(array_filter([
             $this->model,
-            'gemini-3.5-flash-lite',
-            'gemini-3.1-flash-lite',
-            'gemini-3.8-flash',
-            'gemini-3.7-flash',
             'gemini-3.6-flash',
             'gemini-3.5-flash',
+            'gemini-3.5-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-3.7-flash',
+            'gemini-3.8-flash',
         ])));
 
         foreach ($modelsToTry as $model) {
