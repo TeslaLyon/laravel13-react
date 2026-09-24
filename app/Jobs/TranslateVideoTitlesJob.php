@@ -27,11 +27,34 @@ class TranslateVideoTitlesJob implements ShouldQueue
     public int $limit;
 
     /**
+     * 任务类型描述
+     */
+    public string $task_name = 'Gemini AI 视频标题自动翻译';
+
+    /**
+     * 派发时间
+     */
+    public string $dispatched_at;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(int $limit = 60)
     {
         $this->limit = $limit;
+        $this->dispatched_at = now()->toDateTimeString();
+    }
+
+    /**
+     * Horizon 面板专属标签
+     */
+    public function tags(): array
+    {
+        return [
+            'translator',
+            'gemini',
+            "limit:{$this->limit}",
+        ];
     }
 
     /**

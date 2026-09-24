@@ -114,12 +114,12 @@ PROMPT;
         // 构造候选模型队列：优先尝试用户配置的模型，失败时依次自动降级回退
         $modelsToTry = array_values(array_unique(array_filter([
             $this->model,
+            'gemini-3.5-flash-lite',
+            'gemini-3.1-flash-lite',
             'gemini-3.8-flash',
             'gemini-3.7-flash',
             'gemini-3.6-flash',
             'gemini-3.5-flash',
-            'gemini-flash-latest',
-            'gemini-3.5-flash-lite',
         ])));
 
         foreach ($modelsToTry as $model) {
@@ -153,7 +153,7 @@ PROMPT;
 
                         // 若成功使用的不是初始配置的模型，记录提示并更新实例模型
                         if ($model !== $this->model) {
-                            Log::info("[GeminiTranslationService] 原配置模型 [{$this->model}] 繁忙或不可用，已自动切换为可用模型 [{$model}]。");
+                            Log::info("[GeminiTranslationService] 原配置模型 [{$this->model}] 繁忙或配额耗尽，已自动切换为可用模型 [{$model}]。");
                             $this->model = $model;
                         }
 
@@ -189,15 +189,22 @@ PROMPT;
                         break; // 无需重试当前模型，直接尝试下一个候选模型
                     }
 
-                    // 4. HTTP 429 (频率限流)
+                    // 4. HTTP 429 (频率限流或每日配额超限)
                     if ($status === 429) {
+                        $body = $response->body();
+                        // 若是每日配额耗尽 (Quota exceeded / Resource has been exhausted)，重试无意义，立即尝试下一个备选模型
+                        if (str_contains($body, 'Quota exceeded') || str_contains($body, 'Resource has been exhausted')) {
+                            Log::warning("[GeminiTranslationService] 模型 [{$model}] 每日配额已用尽 (429 Quota Exceeded)，正在自动切换至下一个备选模型...");
+                            break;
+                        }
+
                         if ($attempt < $maxRetries) {
-                            Log::warning("[GeminiTranslationService] 触发 429 限流，等待 3 秒后重试...");
+                            Log::warning("[GeminiTranslationService] 模型 [{$model}] 触发瞬时 429 限流，等待 3 秒后重试...");
                             sleep(3);
                             continue;
                         } else {
-                            Log::warning('[GeminiTranslationService] Gemini API 持续触发限流 (429 Too Many Requests)，跳过当前批次');
-                            return [];
+                            Log::warning("[GeminiTranslationService] 模型 [{$model}] 持续触发 429 限流，自动切换尝试备选模型...");
+                            break;
                         }
                     }
 

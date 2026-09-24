@@ -38,6 +38,16 @@ class CrawlProject1VideosJob implements ShouldQueue
     public int $page;
 
     /**
+     * 任务类型描述（用于 Horizon 面板直观展示）
+     */
+    public string $task_name = 'Project1 视频列表抓取';
+
+    /**
+     * 派发时间
+     */
+    public string $dispatched_at;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(?string $channel = null, int $limit = 24, int $page = 1)
@@ -45,6 +55,20 @@ class CrawlProject1VideosJob implements ShouldQueue
         $this->channel = $channel;
         $this->limit = $limit;
         $this->page = max(1, $page);
+        $this->dispatched_at = now()->toDateTimeString();
+    }
+
+    /**
+     * Horizon 面板专属标签（会在面板列表及详情顶部高亮展示为彩色徽章，并支持在搜索栏按标签检索）
+     */
+    public function tags(): array
+    {
+        return array_filter([
+            'crawler',
+            $this->channel ?: 'all-channels',
+            "page:{$this->page}",
+            "limit:{$this->limit}",
+        ]);
     }
 
     /**
