@@ -188,6 +188,27 @@ services:
         limits:
           memory: 6144M
 
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: laravel_flaresolverr
+    restart: always
+    logging: *default-logging
+    environment:
+      - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Asia/Shanghai
+    networks:
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1536M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
 networks:
   gateway_net:
     external: true

@@ -46,9 +46,24 @@ class Channel extends Model implements ReactableInterface
 {
     use Reactable;
 
+    protected $fillable = [
+        'name',
+        'slug',
+        'data_crawl_type',
+        'video_num',
+        'follow_num',
+        'avatar',
+        'logo',
+        'official_website_url',
+    ];
 
     public function videos(): HasMany
     {
         return $this->hasMany(Video::class);
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(Photo::class);
     }
 }

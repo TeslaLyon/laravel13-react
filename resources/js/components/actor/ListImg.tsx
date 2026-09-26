@@ -1,4 +1,5 @@
 import React from 'react';
+import { cdnUrl } from '@/lib/utils';
 
 const ImageGallery = ({ list_img }: { list_img: any[] }) => {
     // 如果没有数据，返回 null 或空结构
@@ -11,10 +12,10 @@ const ImageGallery = ({ list_img }: { list_img: any[] }) => {
             {list_img.map((img, index) => {
                 // 构建 WebP 和 JPEG 的 srcSet 字符串
                 const webpSrcSet = img.webp
-                    ? `${img.webp.src} 1x, ${img.webp.highdpi?.double} 2x`
+                    ? `${cdnUrl(img.webp.src)} 1x, ${cdnUrl(img.webp.highdpi?.double)} 2x`
                     : '';
                 const jpegSrcSet = img.highdpi
-                    ? `${img.src} 1x, ${img.highdpi.double} 2x`
+                    ? `${cdnUrl(img.src)} 1x, ${cdnUrl(img.highdpi.double)} 2x`
                     : '';
 
                 return (
@@ -31,14 +32,14 @@ const ImageGallery = ({ list_img }: { list_img: any[] }) => {
 
                         {/* 2. 基础 <img> 标签（作为后备，也处理普通的 JPEG 及其高清版） */}
                         <img
-                            src={img.src}
+                            src={cdnUrl(img.src)}
                             srcSet={jpegSrcSet}
                             width={img.width}
                             height={img.height}
                             alt={`Gallery Image ${index + 1}`}
                             // 使用占位图作为背景，在真实图片加载完成前显示
                             style={{
-                                backgroundImage: `url(${img.placeholder})`,
+                                backgroundImage: img.placeholder ? `url(${cdnUrl(img.placeholder)})` : undefined,
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                                 backgroundColor: '#f0f0f0', // 添加一个底色以防占位图加载慢

@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\CrawlProject1VideosJob;
+use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -25,4 +26,14 @@ Schedule::job(new CrawlProject1VideosJob())
  */
 Schedule::job(new TranslateVideoTitlesJob(60))
     ->everyTenMinutes()
+    ->withoutOverlapping();
+
+/**
+ * Vixen 系列片商每日增量协同定时爬取任务
+ * 每天北京时间凌晨 02:00 自动投递任务至 Horizon 队列
+ * 执行流程：按片商依次执行——先抓取该片商所有演员数据，然后抓取该片商视频的第 1 页数据
+ */
+Schedule::job(new CrawlVixenDailyJob())
+    ->dailyAt('02:00')
+    ->timezone('Asia/Shanghai')
     ->withoutOverlapping();

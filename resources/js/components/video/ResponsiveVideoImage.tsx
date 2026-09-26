@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 // 引入 Shadcn UI 原生 Progress 组件
 import { Progress } from "@/components/ui/progress";
+import { cdnUrl } from '@/lib/utils';
 
 export interface ImageItem {
     src: string;
@@ -101,18 +102,22 @@ export function ResponsiveVideoImage({
         const jpgEntries: { url: string; width: number }[] = [];
 
         listImg.forEach((item) => {
-            const webp1x = isSource ? (item.webp?.src_source || item.webp?.src) : item.webp?.src;
-            const webp2x = isSource
+            const rawWebp1x = isSource ? (item.webp?.src_source || item.webp?.src) : item.webp?.src;
+            const webp1x = cdnUrl(rawWebp1x);
+            const rawWebp2x = isSource
                 ? (item.webp?.highdpi?.double_source || item.webp?.highdpi?.double)
                 : item.webp?.highdpi?.double;
+            const webp2x = cdnUrl(rawWebp2x);
 
             if (webp1x) webpEntries.push({ url: webp1x, width: item.width });
             if (webp2x) webpEntries.push({ url: webp2x, width: item.width * 2 });
 
-            const jpg1x = isSource ? (item.src_source || item.src) : item.src;
-            const jpg2x = isSource
+            const rawJpg1x = isSource ? (item.src_source || item.src) : item.src;
+            const jpg1x = cdnUrl(rawJpg1x);
+            const rawJpg2x = isSource
                 ? (item.highdpi?.double_source || item.highdpi?.double)
                 : item.highdpi?.double;
+            const jpg2x = cdnUrl(rawJpg2x);
 
             if (jpg1x) jpgEntries.push({ url: jpg1x, width: item.width });
             if (jpg2x) jpgEntries.push({ url: jpg2x, width: item.width * 2 });
@@ -129,14 +134,16 @@ export function ResponsiveVideoImage({
             .join(', ');
 
         const firstItem = listImg[0];
-        const placeholderUrl = isSource
+        const rawPlaceholder = isSource
             ? (firstItem.webp?.placeholder_source || firstItem.placeholder_source || firstItem.webp?.placeholder || firstItem.placeholder || '')
             : (firstItem.webp?.placeholder || firstItem.placeholder || '');
+        const placeholderUrl = cdnUrl(rawPlaceholder);
 
         const lastItem = listImg[listImg.length - 1];
-        const defaultSrc = isSource
+        const rawDefaultSrc = isSource
             ? (lastItem.highdpi?.double_source || lastItem.src_source || lastItem.src)
             : (lastItem.highdpi?.double || lastItem.src);
+        const defaultSrc = cdnUrl(rawDefaultSrc) || fallbackSrc;
 
         return { webpSrcSet, jpgSrcSet, placeholderUrl, defaultSrc };
     }, [listImg, isSource, fallbackSrc]);

@@ -148,7 +148,14 @@ export type VideoDetail = {
 // -----------------------------------------------------------------------------
 
 export type ScreenImageMeta = {
-    screen_img_full_url: string;
+    url?: string;
+    width?: number;
+    height?: number;
+    full_url?: string;
+    full_width?: number;
+    full_height?: number;
+    // 兼容历史老字段
+    screen_img_full_url?: string;
     screen_img_full_width?: number;
     screen_img_full_height?: number;
     screen_img_default_url?: string;
@@ -158,7 +165,7 @@ export type ScreenImageMeta = {
     screen_img_full_source_width?: number;
     screen_img_full_source_height?: number;
     screen_img_default_source_url?: string;
-    screen_img_def_url?: string; // 兼容老数据
+    screen_img_def_url?: string;
 };
 
 /**

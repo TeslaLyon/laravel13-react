@@ -128,3 +128,22 @@ export function formatChineseUnit(value: number | string | undefined | null): st
     const resultYi = fallbackExactFloor(num, 100000000, fractionDigits);
     return resultYi + ' 亿';
 }
+
+/**
+ * 将图片相对路径拼接为完整 CDN 访问地址
+ * @param path - 图片相对路径（如 images/actors/xxx.webp）或完整 URL
+ * @returns 完整的图片可访问地址
+ */
+export function cdnUrl(path?: string | null): string {
+    if (!path) return '';
+
+    // 兼容外链或已经是完整的 URL (http://, https://, //)
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
+        return path;
+    }
+
+    const cdnBase = (import.meta.env.VITE_CDN_URL || '').replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+
+    return cdnBase ? `${cdnBase}/${cleanPath}` : `/${cleanPath}`;
+}

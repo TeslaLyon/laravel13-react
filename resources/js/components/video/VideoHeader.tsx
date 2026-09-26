@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { cdnUrl } from '@/lib/utils';
 import {
     Play,
     Pause,
@@ -78,9 +79,7 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
 
     // 获取默认备用图片（列表最后一项，通常规格最高清）
     const lastItem = normalizedMetaList?.[normalizedMetaList.length - 1];
-    const initialDefaultImg = isSource
-        ? (lastItem?.src_source || lastItem?.src || '')
-        : (lastItem?.src || lastItem?.src_source || '');
+    const initialDefaultImg = cdnUrl(lastItem?.src || lastItem?.src_source || '');
 
     const [fallbackImg, setFallbackImg] = useState<string | null>(null);
 
@@ -193,9 +192,8 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                 <picture className="block absolute inset-0 w-full h-full z-10">
                     {/* WebP 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const webpSrc = isSource
-                            ? (item.webp?.src_source || item.webp?.src)
-                            : (item.webp?.src || item.webp?.src_source);
+                        const rawWebpSrc = item.webp?.src || item.src || item.webp?.src_source || item.src_source;
+                        const webpSrc = cdnUrl(rawWebpSrc);
                         return webpSrc ? (
                             <source
                                 key={`webp-${index}`}
@@ -207,9 +205,8 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                     })}
                     {/* JPG/PNG 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const imgSrc = isSource
-                            ? (item.src_source || item.src)
-                            : (item.src || item.src_source);
+                        const rawImgSrc = item.src || item.src_source;
+                        const imgSrc = cdnUrl(rawImgSrc);
                         return imgSrc ? (
                             <source
                                 key={`src-${index}`}

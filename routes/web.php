@@ -58,6 +58,7 @@ use Illuminate\Support\Facades\DB;
 // TODO: table 表格中的业务说明文字太多无法完全展示，考虑 hover 后显示全部
 // TODO: 考虑直接跳转到支付有风险，则采用卡密方式充值，兑换卡密时增加支付时间校验，防止撞库
 // TODO：检查返回到前端的字段是否安全
+// TODO:修改 brazzers 抓取数据时先检测有关于 img 的字段是否为空，为空时才会上传到 r2
 
 // Route::inertia('/', 'welcome')->name('home');
 

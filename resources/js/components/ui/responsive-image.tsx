@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils"; // shadcn 项目的标准工具类
+import { cn, cdnUrl } from "@/lib/utils"; // shadcn 项目的标准工具类与 CDN 地址转换函数
 import React, { ImgHTMLAttributes } from "react";
 
 // 1. 定义数据类型，确保 TypeScript 类型安全
@@ -49,7 +49,7 @@ export function ResponsiveImage({
                             <source
                                 type="image/webp"
                                 media={mediaQuery}
-                                srcSet={`${img.webp.src} 1x${img.webp.highdpi?.double ? `, ${img.webp.highdpi.double} 2x` : ""
+                                srcSet={`${cdnUrl(img.webp.src)} 1x${img.webp.highdpi?.double ? `, ${cdnUrl(img.webp.highdpi.double)} 2x` : ""
                                     }`}
                             />
                         )}
@@ -58,7 +58,7 @@ export function ResponsiveImage({
                         {!isLast && (
                             <source
                                 media={mediaQuery}
-                                srcSet={`${img.src} 1x${img.highdpi?.double ? `, ${img.highdpi.double} 2x` : ""
+                                srcSet={`${cdnUrl(img.src)} 1x${img.highdpi?.double ? `, ${cdnUrl(img.highdpi.double)} 2x` : ""
                                     }`}
                             />
                         )}
@@ -68,8 +68,8 @@ export function ResponsiveImage({
 
             {/* 4. 默认 <img> 标签：所有 source 都不匹配时，或浏览器不支持 picture 时的兜底 */}
             <img
-                src={fallbackImage.src}
-                srcSet={`${fallbackImage.src} 1x${fallbackImage.highdpi?.double ? `, ${fallbackImage.highdpi.double} 2x` : ""
+                src={cdnUrl(fallbackImage.src)}
+                srcSet={`${cdnUrl(fallbackImage.src)} 1x${fallbackImage.highdpi?.double ? `, ${cdnUrl(fallbackImage.highdpi.double)} 2x` : ""
                     }`}
                 width={fallbackImage.width}
                 height={fallbackImage.height}
@@ -82,7 +82,7 @@ export function ResponsiveImage({
                 style={{
                     // 将 placeholder 作为背景图，在原图加载出来之前提供模糊预览
                     backgroundImage: fallbackImage.placeholder
-                        ? `url(${fallbackImage.placeholder})`
+                        ? `url(${cdnUrl(fallbackImage.placeholder)})`
                         : "none",
                     backgroundSize: "cover",
                     backgroundPosition: "center",

@@ -5,6 +5,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { ScreenImageMeta } from '@/types/video';
+import { cdnUrl } from '@/lib/utils';
 
 export type PreviewImageItem = string | ScreenImageMeta;
 
@@ -40,53 +41,23 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
 
     // 获取缩略图 URL（当 dataCrawlType === 1 时优先使用免鉴权源站小图）
     const getThumbUrl = (item: PreviewImageItem): string => {
-        if (typeof item === 'string') return item;
-        if (isSource) {
-            return (
-                item.screen_img_default_source_url ||
-                item.screen_img_full_source_url ||
-                item.screen_img_default_url ||
-                item.screen_img_full_url ||
-                ''
-            );
-        }
-        return (
-            item.screen_img_default_url ||
-            item.screen_img_default_source_url ||
-            item.screen_img_full_url ||
-            item.screen_img_full_source_url ||
-            ''
-        );
+        if (typeof item === 'string') return cdnUrl(item);
+        const url = (item as any).url || item.screen_img_default_url || item.screen_img_default_source_url || (item as any).full_url || item.screen_img_full_url || item.screen_img_full_source_url || '';
+        return cdnUrl(url);
     };
 
     // 获取 Lightbox 弹窗大图 URL（当 dataCrawlType === 1 时优先使用免鉴权源站高清大图）
     const getFullUrl = (item: PreviewImageItem): string => {
-        if (typeof item === 'string') return item;
-        if (isSource) {
-            return (
-                item.screen_img_full_source_url ||
-                item.screen_img_default_source_url ||
-                item.screen_img_full_url ||
-                item.screen_img_default_url ||
-                ''
-            );
-        }
-        return (
-            item.screen_img_full_url ||
-            item.screen_img_full_source_url ||
-            item.screen_img_default_url ||
-            item.screen_img_default_source_url ||
-            ''
-        );
+        if (typeof item === 'string') return cdnUrl(item);
+        const url = (item as any).full_url || item.screen_img_full_url || item.screen_img_full_source_url || (item as any).url || item.screen_img_default_url || item.screen_img_default_source_url || '';
+        return cdnUrl(url);
     };
 
     // 获取网络回退 URL（若优先源站，则回退本地；若优先本地，则回退源站）
     const getFallbackUrl = (item: PreviewImageItem): string | undefined => {
         if (typeof item === 'string') return undefined;
-        if (isSource) {
-            return item.screen_img_default_url || item.screen_img_full_url;
-        }
-        return item.screen_img_default_source_url || item.screen_img_full_source_url;
+        const fallback = item.screen_img_default_source_url || item.screen_img_full_source_url || (item as any).url || item.screen_img_default_url || (item as any).full_url || item.screen_img_full_url;
+        return fallback ? cdnUrl(fallback) : undefined;
     };
 
     // 点击缩略图弹出高清大图 Lightbox

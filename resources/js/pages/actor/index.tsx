@@ -75,14 +75,14 @@ export default function ActorListPage({ actors, perPage = 12 }: ActorListPagePro
             <Deferred
                 data="actors"
                 fallback={
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-x-3 gap-y-8">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-x-3 gap-y-8">
                         {Array.from({ length: skeletonCount }).map((_, index) => (
                             <ActorCardSkeleton key={index} />
                         ))}
                     </div>
                 }
             >
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5 gap-x-3 gap-y-8">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-8">
                     {actors?.data.map((actor) => (
                         <Link href={show({ actor: actor.id, slug: actor.slug })} key={actor.id}>
                             <ActorCard actor={actor} />

@@ -39,6 +39,7 @@ FROM dunglas/frankenphp:1.12.4-php8.4 AS runner
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    webp \
     && rm -rf /var/lib/apt/lists/*
 
 ENV APP_ENV=production \

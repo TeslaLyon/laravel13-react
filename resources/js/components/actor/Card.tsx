@@ -210,7 +210,7 @@ export default function ActorCard({ actor }: { actor: Actor }) {
                     >
                         <Clapperboard className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
                         <span className="text-xs sm:text-sm font-semibold">
-                            {(actor as unknown as { videos_count?: number }).videos_count ?? 0}
+                            {(actor as unknown as { videos_count?: number }).videos_count ?? 9999}
                         </span>
                     </button>
 
@@ -222,7 +222,7 @@ export default function ActorCard({ actor }: { actor: Actor }) {
                     >
                         <ImageIcon className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
                         <span className="text-xs sm:text-sm font-semibold">
-                            {(actor as unknown as { images_count?: number }).images_count ?? 0}
+                            {(actor as unknown as { images_count?: number }).images_count ?? 9999}
                         </span>
                     </button>
 
@@ -234,7 +234,7 @@ export default function ActorCard({ actor }: { actor: Actor }) {
                     >
                         <Link2 className="w-4 h-4 group-hover/btn:scale-110 transition-transform" />
                         <span className="text-xs sm:text-sm font-semibold">
-                            {(actor as unknown as { links_count?: number }).links_count ?? 0}
+                            {(actor as unknown as { links_count?: number }).links_count ?? 9999}
                         </span>
                     </button>
                 </div>

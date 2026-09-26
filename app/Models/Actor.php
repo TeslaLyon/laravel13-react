@@ -41,4 +41,9 @@ class Actor extends Model implements ReactableInterface
     {
         return $this->belongsToMany(Product::class);
     }
+
+    public function photos(): BelongsToMany
+    {
+        return $this->belongsToMany(Photo::class, 'actor_photo');
+    }
 }
