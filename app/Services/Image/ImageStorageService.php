@@ -5,6 +5,7 @@ namespace App\Services\Image;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Redis;
 use Throwable;
 
 class ImageStorageService
@@ -82,16 +83,25 @@ class ImageStorageService
                 ];
             }
 
-            // 3. 远端下载图片（带浏览器 User-Agent、语言与代理支持）
+            // 3. 远端下载图片（优先复用 FlareSolverr 缓存的真实浏览器 User-Agent、语言与代理支持）
+            $imgUserAgent = config('services.crawler.user_agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
+            try {
+                $cachedUa = Redis::get('crawler:user_agent') ?: Redis::get('vixen_user_agent');
+                if (!empty($cachedUa)) {
+                    $imgUserAgent = $cachedUa;
+                }
+            } catch (Throwable) {
+            }
+
             $imgRequest = Http::timeout(30)
                 ->retry(3, 1000)
                 ->withHeaders([
-                    'user-agent'      => env('CRAWLER_USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'),
+                    'user-agent'      => $imgUserAgent,
                     'accept'          => 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
                     'accept-language' => 'en-US,en;q=0.9',
                 ]);
 
-            $proxy = env('CRAWLER_PROXY') ?: (env('HTTP_PROXY') ?: env('HTTPS_PROXY'));
+            $proxy = config('services.crawler.proxy');
             if (!empty($proxy)) {
                 $imgRequest = $imgRequest->withOptions(['proxy' => $proxy]);
             }

@@ -953,33 +953,45 @@ class VixenCrawlerService
     }
 
     /**
-     * 抓取网页 HTML 内容（增强版：真实 Chrome 伪装、Cookie/cf_clearance 注入与 FlareSolverr 自动绕过）
+     * 抓取网页 HTML 内容（增强版：多站点动态域名隔离、真实 Chrome 伪装、全套 Cookie/cf_clearance 注入与 FlareSolverr 自动绕过）
      */
     protected function fetchHtml(string $url, array $params = []): string
     {
-        $flaresolverrUrl = env('FLARESOLVERR_URL');
+        $flaresolverrUrl = config('services.flaresolverr.url', 'http://flaresolverr:8191/v1');
 
         try {
-            $proxy = env('CRAWLER_PROXY') ?: (env('HTTP_PROXY') ?: env('HTTPS_PROXY'));
-            $customUserAgent = env('CRAWLER_USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
+            $proxy = config('services.crawler.proxy');
+            $customUserAgent = config('services.crawler.user_agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
 
-            // 1. 获取 Cookie（支持直接配置 Cookie，或配置 cf_clearance，或读取 Redis 中 FlareSolverr 缓存的通行令牌）
-            $cookie = env('VIXEN_COOKIE');
-            if (empty($cookie)) {
-                $cfClearance = env('VIXEN_CF_CLEARANCE');
-                if (empty($cfClearance)) {
-                    try {
-                        $cfClearance = Redis::get('vixen_cf_clearance');
-                    } catch (Throwable) {
-                        $cfClearance = null;
-                    }
+            // 1. 获取目标主机名（按主域名实现 Cookie / cf_clearance 动态隔离，彻底支持 vixen, deeper, blacked, tushy 等全站点）
+            $host = parse_url($url, PHP_URL_HOST) ?: 'default';
+            $hostKey = strtolower(preg_replace('/^www\./i', '', $host)); // 如 vixen.com, deeper.com, blacked.com
+
+            // 2. 获取配套的真实 Chrome User-Agent（优先读取 FlareSolverr 缓存的最新浏览器 UA）
+            try {
+                $cachedUa = Redis::get('crawler:user_agent') ?: Redis::get('vixen_user_agent');
+                if (!empty($cachedUa)) {
+                    $customUserAgent = $cachedUa;
                 }
-                if (!empty($cfClearance)) {
-                    $cookie = 'cf_clearance=' . $cfClearance;
-                }
+            } catch (Throwable) {
             }
 
-            // 2. 伪装完整的现代 Chrome 浏览器协议指纹
+            // 3. 动态检索该域名专属的 Cookie / cf_clearance（由 FlareSolverr 自动解盾并全动态缓存在 Redis）
+            $cookie = null;
+            try {
+                $cachedCookieStr = Redis::get("crawler:cookie_str:{$hostKey}");
+                if (!empty($cachedCookieStr)) {
+                    $cookie = $cachedCookieStr;
+                } else {
+                    $cachedCfClearance = Redis::get("crawler:cf_clearance:{$hostKey}") ?: ($hostKey === 'vixen.com' ? Redis::get('vixen_cf_clearance') : null);
+                    if (!empty($cachedCfClearance)) {
+                        $cookie = 'cf_clearance=' . $cachedCfClearance;
+                    }
+                }
+            } catch (Throwable) {
+            }
+
+            // 4. 伪装完整的现代 Chrome 浏览器协议指纹
             $headers = [
                 'user-agent'                => $customUserAgent,
                 'accept'                    => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -998,7 +1010,14 @@ class VixenCrawlerService
                 $headers['cookie'] = $cookie;
             }
 
-            $request = Http::timeout(25)->retry(2, 1000)->withHeaders($headers);
+            $request = Http::timeout(25)
+                ->retry(2, 1000, function ($exception) {
+                    if ($exception instanceof \Illuminate\Http\Client\RequestException && $exception->response->status() === 403) {
+                        return false;
+                    }
+                    return true;
+                }, throw: false)
+                ->withHeaders($headers);
 
             if (!empty($proxy)) {
                 $request = $request->withOptions(['proxy' => $proxy]);
@@ -1006,7 +1025,7 @@ class VixenCrawlerService
 
             $response = $request->get($url, $params);
 
-            // 3. 检查是否被 Cloudflare 拦截（403 或页面内容包含 Just a moment... 挑战）
+            // 5. 检查是否被 Cloudflare 拦截（403 或页面内容包含 Just a moment... 挑战）
             if ($response->status() === 403 || str_contains($response->body(), 'Just a moment...')) {
                 Log::warning("目标页面命中 Cloudflare 5秒盾阻断 [{$url}]");
 
@@ -1031,7 +1050,7 @@ class VixenCrawlerService
     }
 
     /**
-     * 通过 FlareSolverr 自动执行 JS/Turnstile 穿透 Cloudflare 验证
+     * 通过 FlareSolverr 自动执行 JS/Turnstile 穿透 Cloudflare 验证（多站点动态域名解盾与隔离缓存）
      */
     protected function fetchViaFlareSolverr(string $flaresolverrUrl, string $url, array $params = []): string
     {
@@ -1040,7 +1059,10 @@ class VixenCrawlerService
                 $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($params);
             }
 
-            Log::info("正在通过 FlareSolverr 自动过盾: {$url}");
+            $host = parse_url($url, PHP_URL_HOST) ?: 'default';
+            $hostKey = strtolower(preg_replace('/^www\./i', '', $host)); // 如 vixen.com, deeper.com, blacked.com
+
+            Log::info("正在通过 FlareSolverr 自动解盾 [{$hostKey}]: {$url}");
 
             $postData = [
                 'cmd'        => 'request.get',
@@ -1048,7 +1070,7 @@ class VixenCrawlerService
                 'maxTimeout' => 60000,
             ];
 
-            $proxy = env('CRAWLER_PROXY') ?: (env('HTTP_PROXY') ?: env('HTTPS_PROXY'));
+            $proxy = config('services.crawler.proxy');
             if (!empty($proxy)) {
                 $postData['proxy'] = ['url' => $proxy];
             }
@@ -1061,16 +1083,39 @@ class VixenCrawlerService
             if ($response->successful()) {
                 $data = $response->json();
                 if (($data['status'] ?? '') === 'ok' && !empty($data['solution']['response'])) {
-                    Log::info("FlareSolverr 成功突破 Cloudflare 并获取网页！");
+                    Log::info("FlareSolverr 成功突破 [{$hostKey}] Cloudflare 验证并获取网页！");
 
-                    // 提取并自动缓存 cf_clearance Cookie 供后续直接请求复用（有效期2小时）
+                    // 1. 提取并全局缓存配套的真实浏览器 User-Agent（有效期 24 小时）
+                    if (!empty($data['solution']['userAgent'])) {
+                        try {
+                            Redis::setex('crawler:user_agent', 86400, $data['solution']['userAgent']);
+                            Redis::setex('vixen_user_agent', 86400, $data['solution']['userAgent']); // 向后兼容
+                        } catch (Throwable) {
+                        }
+                    }
+
+                    // 2. 提取并隔离缓存该域名专属的 Cookies 与 cf_clearance（有效期 2 小时）
                     if (!empty($data['solution']['cookies'])) {
+                        $cookiePairs = [];
                         foreach ($data['solution']['cookies'] as $c) {
-                            if (($c['name'] ?? '') === 'cf_clearance' && !empty($c['value'])) {
-                                try {
-                                    Redis::setex('vixen_cf_clearance', 7200, $c['value']);
-                                } catch (Throwable) {
+                            if (!empty($c['name']) && isset($c['value'])) {
+                                $cookiePairs[] = "{$c['name']}={$c['value']}";
+                                if ($c['name'] === 'cf_clearance') {
+                                    try {
+                                        Redis::setex("crawler:cf_clearance:{$hostKey}", 7200, $c['value']);
+                                        if ($hostKey === 'vixen.com') {
+                                            Redis::setex('vixen_cf_clearance', 7200, $c['value']); // 向后兼容
+                                        }
+                                    } catch (Throwable) {
+                                    }
                                 }
+                            }
+                        }
+
+                        if (!empty($cookiePairs)) {
+                            try {
+                                Redis::setex("crawler:cookie_str:{$hostKey}", 7200, implode('; ', $cookiePairs));
+                            } catch (Throwable) {
                             }
                         }
                     }
@@ -1079,7 +1124,7 @@ class VixenCrawlerService
                 }
             }
 
-            Log::error("FlareSolverr 求解失败: " . $response->body());
+            Log::error("FlareSolverr 求解失败 [{$hostKey}]: " . $response->body());
             return '';
         } catch (Throwable $e) {
             Log::error("调用 FlareSolverr 发生异常: " . $e->getMessage());

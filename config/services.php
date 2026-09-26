@@ -71,4 +71,23 @@ return [
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | FlareSolverr 验证码/5秒盾穿透服务
+    |--------------------------------------------------------------------------
+    */
+    'flaresolverr' => [
+        'url' => env('FLARESOLVERR_URL', 'http://flaresolverr:8191/v1'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | 爬虫全局基础配置（各站点 Cloudflare Cookies 由 FlareSolverr 自动解盾并动态存储于 Redis）
+    |--------------------------------------------------------------------------
+    */
+    'crawler' => [
+        'proxy' => env('CRAWLER_PROXY') ?: (env('HTTP_PROXY') ?: env('HTTPS_PROXY')),
+        'user_agent' => env('CRAWLER_USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'),
+    ],
+
 ];

@@ -27,6 +27,7 @@ services:
       - CACHE_STORE=redis
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
     volumes:
       - ./.env:/app/.env
       - ./storage/logs:/app/storage/logs
@@ -61,6 +62,7 @@ services:
       - CACHE_STORE=redis
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
     volumes:
       - ./.env:/app/.env
       - ./storage/logs:/app/storage/logs
@@ -110,6 +112,7 @@ services:
       - CACHE_STORE=redis
       - SESSION_DRIVER=redis
       - QUEUE_CONNECTION=redis
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
     volumes:
       - ./.env:/app/.env
       - ./storage/logs:/app/storage/logs
@@ -193,6 +196,9 @@ services:
     container_name: laravel_flaresolverr
     restart: always
     logging: *default-logging
+    dns:
+      - 8.8.8.8
+      - 114.114.114.114
     environment:
       - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
       - LOG_HTML=false
