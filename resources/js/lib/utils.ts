@@ -142,7 +142,15 @@ export function cdnUrl(path?: string | null): string {
         return path;
     }
 
-    const cdnBase = (import.meta.env.VITE_CDN_URL || '').replace(/\/$/, '');
+    // 优先级 1: 运行时注入 window.CDN_URL (由 Blade 模版注入，实时响应 .env 配置无需重新打包)
+    // 优先级 2: 构建期环境变量 import.meta.env.VITE_CDN_URL
+    // 优先级 3: 默认兜底 CDN 域名
+    const rawCdn =
+        (typeof window !== 'undefined' && (window as any).CDN_URL) ||
+        import.meta.env.VITE_CDN_URL ||
+        '';
+
+    const cdnBase = String(rawCdn).trim().replace(/\/$/, '');
     const cleanPath = path.replace(/^\//, '');
 
     return cdnBase ? `${cdnBase}/${cleanPath}` : `/${cleanPath}`;

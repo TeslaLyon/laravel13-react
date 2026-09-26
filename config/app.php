@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'cdn_url' => env('CDN_URL', env('R2_URL')),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

@@ -59,6 +59,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => $request->cookie('sidebar_state') === 'true',
             'turnstileSiteKey' => config('services.turnstile.site_key'),
+            'cdnUrl' => config('app.cdn_url'),
         ];
     }
 }

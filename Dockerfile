@@ -29,6 +29,9 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # 复制源码并编译前端产物 (wayfinder 此时能正常调用上文就绪的 php 与 vendor)
 COPY . .
+# 传入前端 CDN URL，确保 Vite 构建阶段生成带 CDN 前缀的资源地址 fallback
+ARG VITE_CDN_URL
+ENV VITE_CDN_URL=$VITE_CDN_URL
 RUN npm run build
 
 

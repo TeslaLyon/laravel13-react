@@ -36,6 +36,8 @@
 
         @fonts
 
+        <script>window.CDN_URL = @json(config('app.cdn_url'));</script>
+
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>

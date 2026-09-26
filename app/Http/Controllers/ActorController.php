@@ -120,22 +120,22 @@ class ActorController extends Controller
             'latestVideos' => Inertia::defer(
                 fn() => $actor->videos()
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
-                    ->latest()
+                    ->latest('videos.created_at')
                     ->take(3)
                     ->select([
-                        'id',
-                        'name',
-                        'slug',
-                        'channel_id',
-                        'list_img',
-                        'preview',
-                        'release_at',
-                        'is_4k',
-                        'is_vr',
-                        'likes_count',
-                        'favorites_count',
-                        'created_at',
-                        'country'
+                        'videos.id',
+                        'videos.name',
+                        'videos.slug',
+                        'videos.channel_id',
+                        'videos.list_img',
+                        'videos.preview',
+                        'videos.release_at',
+                        'videos.is_4k',
+                        'videos.is_vr',
+                        'videos.likes_count',
+                        'videos.favorites_count',
+                        'videos.created_at',
+                        'videos.country'
                     ])
                     ->get()
             ),
@@ -146,21 +146,21 @@ class ActorController extends Controller
             'paginatedVideos' => Inertia::defer(
                 fn() => $actor->videos()
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
-                    ->latest()
+                    ->latest('videos.created_at')
                     ->select([
-                        'id',
-                        'name',
-                        'slug',
-                        'channel_id',
-                        'list_img',
-                        'preview',
-                        'release_at',
-                        'is_4k',
-                        'is_vr',
-                        'likes_count',
-                        'favorites_count',
-                        'created_at',
-                        'country'
+                        'videos.id',
+                        'videos.name',
+                        'videos.slug',
+                        'videos.channel_id',
+                        'videos.list_img',
+                        'videos.preview',
+                        'videos.release_at',
+                        'videos.is_4k',
+                        'videos.is_vr',
+                        'videos.likes_count',
+                        'videos.favorites_count',
+                        'videos.created_at',
+                        'videos.country'
                     ])
                     ->paginate(12)
                     ->withQueryString()
