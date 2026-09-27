@@ -114,6 +114,30 @@ class ChannelSeeder extends Seeder
                 'deleted_at'           => null,
                 'love_reactant_id'     => 7,
             ],
+            [
+                'name'                 => 'BLACKEDRAW',
+                'slug'                 => 'blackedraw',
+                'data_crawl_type'      => 2,
+                'avatar'               => '/images/channels/blackedraw.avif',
+                'logo'                 => '/images/channels/blackedraw.avif',
+                'official_website_url' => 'https://www.blackedraw.com',
+            ],
+            [
+                'name'                 => 'TUSHYRAW',
+                'slug'                 => 'tushyraw',
+                'data_crawl_type'      => 2,
+                'avatar'               => '/images/channels/TUSHYRAW.avif',
+                'logo'                 => '/images/channels/TUSHYRAW.avif',
+                'official_website_url' => 'https://www.tushyraw.com',
+            ],
+            [
+                'name'                 => 'Wifey',
+                'slug'                 => 'wifey',
+                'data_crawl_type'      => 2,
+                'avatar'               => '/images/channels/wifey.avif',
+                'logo'                 => '/images/channels/wifey-logo.jpg',
+                'official_website_url' => 'https://www.wifey.com',
+            ],
         ];
 
         // 1. 若存在 love_reactants 表，预先保障 reactant 外键存在
@@ -146,6 +170,8 @@ class ChannelSeeder extends Seeder
                 ]);
             } else {
                 // 不存在时纯自增插入（不携带 id 字段，由数据库序列自然递增生成）
+                $channelData['created_at'] = $channelData['created_at'] ?? now()->toDateTimeString();
+                $channelData['updated_at'] = $channelData['updated_at'] ?? now()->toDateTimeString();
                 DB::table('channels')->insert($channelData);
             }
         }
