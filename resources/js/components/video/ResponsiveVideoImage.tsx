@@ -83,11 +83,14 @@ export function ResponsiveVideoImage({
                 imageUrls = contentStr.split(',').map(s => s.trim()).filter(Boolean);
             }
             if (imageUrls.length === 0) return null;
+
+            // 🎯 补全 CDN 前缀：将轮播图切片路径转换为 CDN 访问地址
+            imageUrls = imageUrls.map(u => cdnUrl(u));
         }
 
         return {
             type, // 1: 视频, 2: GIF, 3: 多图
-            url: contentStr,
+            url: cdnUrl(contentStr),
             imageUrls
         };
     }, [preview]);
