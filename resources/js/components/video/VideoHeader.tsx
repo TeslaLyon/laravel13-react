@@ -79,7 +79,13 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
 
     // 获取默认备用图片（列表最后一项，通常规格最高清）
     const lastItem = normalizedMetaList?.[normalizedMetaList.length - 1];
-    const initialDefaultImg = cdnUrl(lastItem?.src || lastItem?.src_source || '');
+    const initialDefaultImg = useMemo(() => {
+        if (!lastItem) return '';
+        const raw = isSource
+            ? (lastItem.webp?.src_source || lastItem.src_source || lastItem.webp?.src || lastItem.src)
+            : (lastItem.webp?.src || lastItem.src || lastItem.webp?.src_source || lastItem.src_source);
+        return cdnUrl(raw || '');
+    }, [lastItem, isSource]);
 
     const [fallbackImg, setFallbackImg] = useState<string | null>(null);
 
@@ -91,9 +97,12 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
 
     const handleImgError = () => {
         if (!lastItem) return;
-        const fallback = isSource ? lastItem.src : lastItem.src_source;
-        if (fallback && fallback !== defaultImg) {
-            setFallbackImg(fallback);
+        const fallback = isSource
+            ? (lastItem.webp?.src || lastItem.src)
+            : (lastItem.webp?.src_source || lastItem.src_source);
+        const resolvedFallback = fallback ? cdnUrl(fallback) : null;
+        if (resolvedFallback && resolvedFallback !== defaultImg) {
+            setFallbackImg(resolvedFallback);
         }
     };
 
@@ -192,7 +201,9 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                 <picture className="block absolute inset-0 w-full h-full z-10">
                     {/* WebP 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const rawWebpSrc = item.webp?.src || item.src || item.webp?.src_source || item.src_source;
+                        const rawWebpSrc = isSource
+                            ? (item.webp?.src_source || item.src_source || item.webp?.src || item.src)
+                            : (item.webp?.src || item.src || item.webp?.src_source || item.src_source);
                         const webpSrc = cdnUrl(rawWebpSrc);
                         return webpSrc ? (
                             <source
@@ -205,7 +216,9 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                     })}
                     {/* JPG/PNG 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const rawImgSrc = item.src || item.src_source;
+                        const rawImgSrc = isSource
+                            ? (item.src_source || item.src)
+                            : (item.src || item.src_source);
                         const imgSrc = cdnUrl(rawImgSrc);
                         return imgSrc ? (
                             <source
