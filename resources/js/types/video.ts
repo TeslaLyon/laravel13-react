@@ -148,13 +148,29 @@ export type VideoDetail = {
 // -----------------------------------------------------------------------------
 
 export type ScreenImageMeta = {
+    /** 本地/CDN 缩略图相对路径 (Vixen 等本地存储片商) */
     url?: string;
+    /** 源站免防盗链缩略图直链 (Project1 等源站片商) */
+    source_url?: string;
+    /** 缩略图宽度 */
     width?: number;
+    /** 缩略图高度 */
     height?: number;
+
+    /** 本地/CDN 高清大图相对路径 (若留空则表示无大图) */
     full_url?: string;
+    /** 源站免防盗链高清大图直链 (Project1 等源站片商) */
+    full_source_url?: string;
+    /** 大图宽度 */
     full_width?: number;
+    /** 大图高度 */
     full_height?: number;
-    // 兼容历史老字段
+
+    // 兼容历史过渡与老字段
+    default_url?: string;
+    default_source_url?: string;
+    default_width?: number;
+    default_height?: number;
     screen_img_full_url?: string;
     screen_img_full_width?: number;
     screen_img_full_height?: number;
@@ -166,6 +182,8 @@ export type ScreenImageMeta = {
     screen_img_full_source_height?: number;
     screen_img_default_source_url?: string;
     screen_img_def_url?: string;
+    sm?: string;
+    xx?: string;
 };
 
 /**

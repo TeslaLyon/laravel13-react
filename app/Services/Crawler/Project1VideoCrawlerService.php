@@ -750,20 +750,14 @@ class Project1VideoCrawlerService
         $screenImgArr = [];
         for ($i = 0; $i <= 5; $i++) {
             if (isset($posters[$i]['sm']['urls']['webp'], $posters[$i]['xx']['urls']['webp'])) {
-                $smSrc = $this->handleFilesUrl($posters[$i]['sm']['urls']['webp'], $channel, $sourceId);
-                $xxSrc = $this->handleFilesUrl($posters[$i]['xx']['urls']['webp'], $channel, $sourceId);
-
+                // 🎯 project1Video 源站直链免防盗链，不存储本地/云盘，仅保留 source 字段与宽高，彻底移除冗余 screen_img_ 前缀与空本地字段
                 $screenImgArr[] = [
-                    'screen_img_default_url'        => $smSrc['dbUrl'],
-                    'screen_img_default_source_url' => $posters[$i]['sm']['urls']['webp'],
-                    'screen_img_default_width'      => $posters[$i]['sm']['width'] ?? 0,
-                    'screen_img_default_height'     => $posters[$i]['sm']['height'] ?? 0,
-                    'screen_img_full_url'           => $xxSrc['dbUrl'],
-                    'screen_img_full_width'         => $posters[$i]['xx']['width'] ?? 0,
-                    'screen_img_full_height'        => $posters[$i]['xx']['height'] ?? 0,
-                    'screen_img_full_source_url'    => $posters[$i]['xx']['urls']['webp'],
-                    'screen_img_full_source_width'  => $posters[$i]['xx']['width'] ?? 0,
-                    'screen_img_full_source_height' => $posters[$i]['xx']['height'] ?? 0,
+                    'source_url'      => $posters[$i]['sm']['urls']['webp'],
+                    'width'           => $posters[$i]['sm']['width'] ?? 0,
+                    'height'          => $posters[$i]['sm']['height'] ?? 0,
+                    'full_source_url' => $posters[$i]['xx']['urls']['webp'],
+                    'full_width'      => $posters[$i]['xx']['width'] ?? 0,
+                    'full_height'     => $posters[$i]['xx']['height'] ?? 0,
                 ];
             }
         }

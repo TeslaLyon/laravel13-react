@@ -745,13 +745,13 @@ class VixenCrawlerService
     /**
      * 处理详情页片段轮播截图 screen_img
      * 🎯 键名精简化（缩短 key）：
-     *    screen_img_default_url    -> url
-     *    screen_img_default_width  -> width
-     *    screen_img_default_height -> height
-     *    screen_img_full_url       -> full_url
-     *    screen_img_full_width     -> full_width
-     *    screen_img_full_height    -> full_height
-     * 🎯 移除所有 _source 字段
+     *    url         -> 缩略图地址 (保留 sm 缩略图)
+     *    width       -> 缩略图宽度
+     *    height      -> 缩略图高度
+     *    full_url    -> 大图地址 (由于储存空间吃紧，xx 大尺寸图片留空)
+     *    full_width  -> 0
+     *    full_height -> 0
+     * 🎯 移除所有 _source 字段，不下载 xx 大图以节约云盘储存空间与爬取耗时
      */
     protected function processScreenImg(string $channelSlug, string $videoId, array $detailData, bool $downloadImages): array
     {
@@ -762,34 +762,21 @@ class VixenCrawlerService
 
         $screenImgs = [];
         foreach ($carousel as $idx => $item) {
-            // 🎯 优先抓取 webp 格式截图
+            // 🎯 仅抓取 sm 尺寸截图（缩略图），大图 xx 留空以节约储存空间
             $smRaw = $item['listing'][0]['webp']['src'] ?? ($item['listing'][0]['src'] ?? '');
-            $xxRaw = $item['main'][0]['webp']['src'] ?? ($item['main'][0]['src'] ?? '');
 
-            if (empty($smRaw) && empty($xxRaw)) {
+            if (empty($smRaw)) {
                 continue;
             }
 
             $smUrl = $smRaw;
-            $xxUrl = $xxRaw;
 
             if ($downloadImages) {
-                if (!empty($smRaw)) {
-                    $smHash = sha1(explode('?', $smRaw)[0]);
-                    $smTarget = "images/{$channelSlug}/videos/{$videoId}/screen_sm_{$idx}_{$smHash}.webp";
-                    $storedSm = $this->imageStorage->downloadOptimizeAndStore($smRaw, $smTarget, true);
-                    if ($storedSm) {
-                        $smUrl = $storedSm['path'];
-                    }
-                }
-
-                if (!empty($xxRaw)) {
-                    $xxHash = sha1(explode('?', $xxRaw)[0]);
-                    $xxTarget = "images/{$channelSlug}/videos/{$videoId}/screen_xx_{$idx}_{$xxHash}.webp";
-                    $storedXx = $this->imageStorage->downloadOptimizeAndStore($xxRaw, $xxTarget, true);
-                    if ($storedXx) {
-                        $xxUrl = $storedXx['path'];
-                    }
+                $smHash = sha1(explode('?', $smRaw)[0]);
+                $smTarget = "images/{$channelSlug}/videos/{$videoId}/screen_sm_{$idx}_{$smHash}.webp";
+                $storedSm = $this->imageStorage->downloadOptimizeAndStore($smRaw, $smTarget, true);
+                if ($storedSm) {
+                    $smUrl = $storedSm['path'];
                 }
             }
 
@@ -797,9 +784,9 @@ class VixenCrawlerService
                 'url'         => $smUrl,
                 'width'       => $item['listing'][0]['width'] ?? 0,
                 'height'      => $item['listing'][0]['height'] ?? 0,
-                'full_url'    => $xxUrl,
-                'full_width'  => $item['main'][0]['width'] ?? 0,
-                'full_height' => $item['main'][0]['height'] ?? 0,
+                'full_url'    => '',
+                'full_width'  => 0,
+                'full_height' => 0,
             ];
         }
 
@@ -813,9 +800,9 @@ class VixenCrawlerService
     {
         $previewUrls = [];
 
-        // 优先使用轮播图截图（screen_img 缩略图，体积小加载快）
+        // 优先使用轮播图截图（优先使用 url/source_url，向下兼容旧字段）
         foreach ($screenImg as $item) {
-            $url = $item['url'] ?? $item['screen_img_default_url'] ?? '';
+            $url = $item['url'] ?? $item['source_url'] ?? $item['default_url'] ?? $item['screen_img_default_url'] ?? '';
             if (!empty($url)) {
                 $previewUrls[] = $url;
             }

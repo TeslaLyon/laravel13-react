@@ -39,28 +39,49 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
 
     if (!normalizedImages || normalizedImages.length === 0) return null;
 
-    // 获取缩略图 URL（当 dataCrawlType === 1 时优先使用免鉴权源站小图）
+    // 获取缩略图 URL（dataCrawlType === 1 时优先使用免防盗链源站直链）
     const getThumbUrl = (item: PreviewImageItem): string => {
-        if (typeof item === 'string') return cdnUrl(item);
-        const url = (item as any).url || item.screen_img_default_url || item.screen_img_default_source_url || (item as any).full_url || item.screen_img_full_url || item.screen_img_full_source_url || '';
-        return cdnUrl(url);
+        if (typeof item === 'string') {
+            return isSource || item.startsWith('http://') || item.startsWith('https://') ? item : cdnUrl(item);
+        }
+
+        const raw = isSource
+            ? (item.source_url || item.default_source_url || item.screen_img_default_source_url || item.url || item.default_url || item.sm || '')
+            : (item.url || item.default_url || item.source_url || item.sm || item.screen_img_default_url || item.screen_img_default_source_url || '');
+
+        if (!raw) return '';
+        return isSource || raw.startsWith('http://') || raw.startsWith('https://') ? raw : cdnUrl(raw);
     };
 
-    // 获取 Lightbox 弹窗大图 URL（当 dataCrawlType === 1 时优先使用免鉴权源站高清大图）
-    const getFullUrl = (item: PreviewImageItem): string => {
-        if (typeof item === 'string') return cdnUrl(item);
-        const url = (item as any).full_url || item.screen_img_full_url || item.screen_img_full_source_url || (item as any).url || item.screen_img_default_url || item.screen_img_default_source_url || '';
-        return cdnUrl(url);
+    // 获取 Lightbox 弹窗大图 URL（dataCrawlType === 1 时优先使用源站大图；本地大图仅当非空时返回）
+    const getFullUrl = (item: PreviewImageItem): string | null => {
+        if (!item || typeof item === 'string') return null;
+
+        const raw = isSource
+            ? (item.full_source_url || item.screen_img_full_source_url || item.full_url || item.xx || '')
+            : (item.full_url || item.xx || item.screen_img_full_url || '');
+
+        if (!raw || typeof raw !== 'string' || !raw.trim()) {
+            return null;
+        }
+
+        const trimmed = raw.trim();
+        return isSource || trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : cdnUrl(trimmed);
     };
 
     // 获取网络回退 URL（若优先源站，则回退本地；若优先本地，则回退源站）
     const getFallbackUrl = (item: PreviewImageItem): string | undefined => {
         if (typeof item === 'string') return undefined;
-        const fallback = item.screen_img_default_source_url || item.screen_img_full_source_url || (item as any).url || item.screen_img_default_url || (item as any).full_url || item.screen_img_full_url;
-        return fallback ? cdnUrl(fallback) : undefined;
+
+        const fallback = isSource
+            ? (item.url || item.default_url || item.screen_img_default_url)
+            : (item.source_url || item.full_source_url || item.screen_img_default_source_url || item.screen_img_full_source_url);
+
+        if (!fallback) return undefined;
+        return fallback.startsWith('http://') || fallback.startsWith('https://') ? fallback : cdnUrl(fallback);
     };
 
-    // 点击缩略图弹出高清大图 Lightbox
+    // 点击缩略图弹出高清大图 Lightbox（仅在大尺寸图片存在时激活）
     const handleImageClick = (item: PreviewImageItem) => {
         const full = getFullUrl(item);
         if (full) {
@@ -78,12 +99,22 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
                 {normalizedImages.map((item, index) => {
                     const thumbUrl = getThumbUrl(item);
                     const fallbackUrl = getFallbackUrl(item);
+                    const fullUrl = getFullUrl(item);
+                    const hasFullImage = Boolean(fullUrl);
 
                     return (
                         <div
                             key={index}
-                            onClick={() => handleImageClick(item)}
-                            className="relative w-full aspect-video overflow-hidden rounded-xl bg-muted cursor-pointer group border border-transparent hover:border-border/50"
+                            onClick={() => {
+                                if (hasFullImage) {
+                                    handleImageClick(item);
+                                }
+                            }}
+                            className={`relative w-full aspect-video overflow-hidden rounded-xl bg-muted border border-transparent transition-all duration-300 ${
+                                hasFullImage
+                                    ? 'cursor-pointer hover:border-border/50 group'
+                                    : 'cursor-default'
+                            }`}
                         >
                             <img
                                 src={thumbUrl}
@@ -94,10 +125,14 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
                                         e.currentTarget.src = fallbackUrl;
                                     }
                                 }}
-                                className="object-cover w-full h-full group-hover:scale-105 group-hover:opacity-90 transition-all duration-300"
+                                className={`object-cover w-full h-full transition-all duration-300 ${
+                                    hasFullImage ? 'group-hover:scale-105 group-hover:opacity-90' : ''
+                                }`}
                             />
-                            {/* 悬浮时遮罩提示 */}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                            {/* 悬浮时遮罩提示（仅在大图可用时展示） */}
+                            {hasFullImage && (
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                            )}
                         </div>
                     );
                 })}
