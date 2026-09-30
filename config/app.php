@@ -120,6 +120,8 @@ return [
     |
     */
 
+    'admin_emails' => env('ADMIN_EMAILS', ''),
+
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
