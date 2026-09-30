@@ -48,7 +48,6 @@ class CrawlVixenVideosCommand extends Command
 
         $downloadImages = !$this->option('no-images');
         $forceImages = (bool) $this->option('force-images');
-        $useQueue = (bool) $this->option('queue');
         $delay = max(0, (int) ($this->option('delay') ?: 2));
 
         // 关键防爆核心：关闭数据库查询日志，防止大规模写入撑爆内存
@@ -76,24 +75,6 @@ class CrawlVixenVideosCommand extends Command
                 $this->error("❌ 数据库中未找到任何符合条件的 data_crawl_type 为 2 的片商！");
                 return self::FAILURE;
             }
-        }
-
-        if ($useQueue) {
-            $this->info("🚀 正在将任务投递至 Horizon 队列...");
-            foreach ($channels as $channel) {
-                \App\Jobs\CrawlVixenVideosJob::dispatch(
-                    $channel->slug,
-                    $startPage,
-                    $downloadImages,
-                    $forceImages,
-                    $all
-                );
-                $this->info("✅ 已派发片商 [{$channel->slug}] 抓取任务至 Horizon 队列 (起始页: 第 {$startPage} 页" . ($all ? "，自动链式向后抓取" : "") . ")");
-            }
-            $this->newLine();
-            $this->info("🎉 队列投递完成！Horizon 容器将在后台独立处理，无惧服务器部署或终端断开。");
-            $this->line("👉 可随时在 Horizon 面板监控实时进度: /horizon");
-            return self::SUCCESS;
         }
 
         $totalChannels = $channels->count();
