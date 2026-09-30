@@ -200,7 +200,7 @@ class VixenCrawlerService
      * @param bool $downloadImages 是否下载并优化图片至 R2
      * @return array 统计与结果
      */
-    public function crawlVideos(?string $channelSlug = null, int $page = 1, string $type = 'single', bool $downloadImages = true): array
+    public function crawlVideos(?string $channelSlug = null, int $page = 1, string $type = 'single', bool $downloadImages = true, bool $forceImages = false): array
     {
         if (!empty($channelSlug)) {
             $channel = Channel::where('slug', $channelSlug)
@@ -211,7 +211,7 @@ class VixenCrawlerService
                 return ['success' => false, 'message' => "未找到片商 [{$channelSlug}] 或其 data_crawl_type 不为 2", 'stats' => []];
             }
 
-            return $this->crawlSingleChannelVideos($channel, $page, $downloadImages);
+            return $this->crawlSingleChannelVideos($channel, $page, $downloadImages, $forceImages);
         }
 
         $channels = Channel::where('data_crawl_type', 2)->get();
@@ -224,7 +224,7 @@ class VixenCrawlerService
         ];
 
         foreach ($channels as $channel) {
-            $result = $this->crawlSingleChannelVideos($channel, $page, $downloadImages);
+            $result = $this->crawlSingleChannelVideos($channel, $page, $downloadImages, $forceImages);
             $totalStats['channels_processed']++;
             $totalStats['success_count'] += $result['success_count'] ?? 0;
             $totalStats['failed_count']  += $result['failed_count'] ?? 0;
@@ -240,7 +240,7 @@ class VixenCrawlerService
     /**
      * 爬取单个片商某一页的视频数据
      */
-    public function crawlSingleChannelVideos(Channel $channel, int $page = 1, bool $downloadImages = true): array
+    public function crawlSingleChannelVideos(Channel $channel, int $page = 1, bool $downloadImages = true, bool $forceImages = false): array
     {
         $page = max(1, $page);
         $url = rtrim($channel->official_website_url, '/') . '/videos';
@@ -276,7 +276,7 @@ class VixenCrawlerService
                     continue;
                 }
 
-                $res = $this->processSingleVideo($channel, $videoNode, $downloadImages);
+                $res = $this->processSingleVideo($channel, $videoNode, $downloadImages, $forceImages);
                 if ($res['status'] === 'success') {
                     $successCount++;
                 } elseif ($res['status'] === 'skipped') {
@@ -309,7 +309,7 @@ class VixenCrawlerService
     /**
      * 处理单部视频的解析、图片上传与入库
      */
-    protected function processSingleVideo(Channel $channel, array $videoNode, bool $downloadImages): array
+    protected function processSingleVideo(Channel $channel, array $videoNode, bool $downloadImages, bool $forceImages = false): array
     {
         $slug = $videoNode['slug'] ?? '';
         $videoId = $videoNode['videoId'] ?? '';
@@ -324,14 +324,14 @@ class VixenCrawlerService
             return ['status' => 'skipped', 'reason' => "命中重复演员判定，已记录至 delayed_processing_repeat_actors: {$sourceUUID}"];
         }
 
-        // 2. 幂等性预检：如果视频已完整入库（包括大图元数据和片段截图），则跳过
+        // 2. 幂等性预检：如果视频已完整入库（包括封面、预览和片段轮播截图）且未开启 forceImages，则跳过
         $existingVideo = Video::with('videoDetail')->where('source_uuid', $sourceUUID)->first();
         if (
-            $existingVideo
+            !$forceImages
+            && $existingVideo
             && !empty($existingVideo->list_img)
             && !empty($existingVideo->preview)
             && !empty($existingVideo->videoDetail?->screen_img)
-            && !empty($existingVideo->videoDetail?->list_img_large_meta)
         ) {
             return ['status' => 'skipped', 'reason' => '视频已存在且数据完整'];
         }
@@ -359,9 +359,8 @@ class VixenCrawlerService
         $femaleActors = $detailData['modelsSlugged'] ?? ($videoNode['modelsSlugged'] ?? []);
         $videoCode = $this->generateVideoCode($channel->slug, $releaseAt, $femaleActors, $slug);
 
-        // 6. 处理图片资源（list_img, list_img_large_meta, screen_img）
+        // 6. 处理图片资源（list_img, screen_img；详情头图直接复用 list_img 最大图，不再写入 list_img_large_meta）
         $listImg = $this->processListImg($channel->slug, $videoId, $videoNode, $downloadImages);
-        $listImgLargeMeta = $this->processListImgLargeMeta($channel->slug, $videoId, $detailData, $downloadImages);
         $screenImg = $this->processScreenImg($channel->slug, $videoId, $detailData, $downloadImages);
 
         // 7. 处理多图轮播预览（preview 字段格式：3<url1,url2...，摒弃 1< 视频存储）
@@ -384,7 +383,6 @@ class VixenCrawlerService
                 $sexualOrientation,
                 $previewUrl,
                 $listImg,
-                $listImgLargeMeta,
                 $screenImg,
                 $movieLength,
                 $description,
@@ -412,7 +410,7 @@ class VixenCrawlerService
                     ['video_id' => $video->id],
                     [
                         'screen_img'          => $screenImg,
-                        'list_img_large_meta' => $listImgLargeMeta,
+                        'list_img_large_meta' => null,
                         'movie_length'        => $movieLength,
                         'description'         => $description,
                     ]
@@ -700,49 +698,6 @@ class VixenCrawlerService
         return $listImgData;
     }
 
-    /**
-     * 处理详情页头图 list_img_large_meta
-     * 🎯 移除 _source 字段及嵌套 webp 数据，仅保留上一级 src, placeholder, width, height, breakpoint, media
-     */
-    protected function processListImgLargeMeta(string $channelSlug, string $videoId, array $detailData, bool $downloadImages): array
-    {
-        $sources = $detailData['videoImage']['sources'] ?? [];
-        if (empty($sources)) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($sources as $source) {
-            $rawWebpSrc = $source['webp']['src'] ?? '';
-            $rawWebpPlaceholder = $source['webp']['placeholderSrcSet'] ?? '';
-            // 🎯 优先使用 webp 格式资源下载并优化
-            $rawSrc = !empty($rawWebpSrc) ? $rawWebpSrc : ($source['src'] ?? '');
-            $rawPlaceholder = !empty($rawWebpPlaceholder) ? $rawWebpPlaceholder : ($source['placeholderSrcSet'] ?? '');
-
-            $srcUrl = $rawSrc;
-            $placeholderUrl = $rawPlaceholder;
-
-            if ($downloadImages && !empty($rawSrc)) {
-                $hash = sha1(explode('?', $rawSrc)[0]);
-                $target = "images/{$channelSlug}/videos/{$videoId}/large_{$hash}.webp";
-                $stored = $this->imageStorage->downloadOptimizeAndStore($rawSrc, $target, true);
-                if ($stored) {
-                    $srcUrl = $stored['path'];
-                }
-            }
-
-            $result[] = [
-                'src'         => $srcUrl,
-                'placeholder' => $placeholderUrl,
-                'width'       => $source['width'] ?? 0,
-                'height'      => $source['height'] ?? 0,
-                'breakpoint'  => $source['breakpoint'] ?? 0,
-                'media'       => $source['media'] ?? '',
-            ];
-        }
-
-        return $result;
-    }
 
     /**
      * 处理详情页片段轮播截图 screen_img

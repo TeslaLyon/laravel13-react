@@ -19,6 +19,7 @@ class CrawlVixenVideosCommand extends Command
                             {--page= : 指定抓取的分页页码（不传则默认从第 1 页自动循环爬取至最后一页）}
                             {--all : 配合 --page 使用，从指定页开始向后自动循环抓取至最后一页}
                             {--no-images : 跳过图片下载与 R2 上传，仅同步视频元数据（极速同步推荐）}
+                            {--force-images : 强制重新抓取并更新图片，忽略现有已入库图片缓存}
                             {--delay=2 : 批量循环时每页间隔休眠秒数}';
 
     /**
@@ -45,6 +46,7 @@ class CrawlVixenVideosCommand extends Command
         }
 
         $downloadImages = !$this->option('no-images');
+        $forceImages = (bool) $this->option('force-images');
         $delay = max(0, (int) ($this->option('delay') ?: 2));
 
         // 关键防爆核心：关闭数据库查询日志，防止大规模写入撑爆内存
@@ -92,7 +94,7 @@ class CrawlVixenVideosCommand extends Command
 
             do {
                 $this->line("⏳ 正在抓取片商 [{$channel->slug}] 第 {$currentPage} 页视频数据...");
-                $result = $crawlerService->crawlSingleChannelVideos($channel, $currentPage, $downloadImages);
+                $result = $crawlerService->crawlSingleChannelVideos($channel, $currentPage, $downloadImages, $forceImages);
 
                 if (!$result['success']) {
                     $this->error("⚠️ 片商 [{$channel->slug}] 第 {$currentPage} 页抓取失败: " . ($result['message'] ?? '未知错误'));

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     CheckCircle2,
     ChevronDown,
@@ -33,6 +33,9 @@ import { Category } from '@/types/video';
 import { Tag } from '@/types/video';
 import { SubtitleDialog } from '@/components/video/SubtitleDialog';
 import { VideoHeader } from '@/components/video/VideoHeader';
+import {show as channelShow} from '@/actions/App/Http/Controllers/ChannelController';
+
+// /channels/${video?.channel.id}
 
 interface VideoDetailPageProps {
     video: Video;
@@ -165,6 +168,27 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
         });
     };
 
+    // 详情页头图优先使用 videos 的 list_img 中尺寸最大的图片，降级使用 video_detail.list_img_large_meta
+    const headerImgMeta = useMemo(() => {
+        const listImg = video?.list_img;
+        if (Array.isArray(listImg) && listImg.length > 0) {
+            let largest = listImg[0];
+            let maxPixels = (Number(largest.width) || 0) * (Number(largest.height) || 0);
+
+            for (let i = 1; i < listImg.length; i++) {
+                const item = listImg[i];
+                const pixels = (Number(item.width) || 0) * (Number(item.height) || 0);
+                if (pixels > maxPixels) {
+                    maxPixels = pixels;
+                    largest = item;
+                }
+            }
+
+            return [largest];
+        }
+
+        return video?.video_detail?.list_img_large_meta || [];
+    }, [video?.list_img, video?.video_detail?.list_img_large_meta]);
 
     return (
         <div className="w-full mx-auto pb-8 sm:py-6 xl:py-8 bg-background min-h-screen">
@@ -183,7 +207,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                     >
                         {/* 2. 数据加载就绪后渲染组件 */}
                         <VideoHeader
-                            imgMetaList={video?.video_detail?.list_img_large_meta}
+                            imgMetaList={headerImgMeta}
                             videoUrl={video?.video_detail?.video_urls}
                             title={video?.name}
                             dataCrawlType={video?.channel?.data_crawl_type}
@@ -268,7 +292,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                         </div>
                                     </>
                                 }>
-                                    <Link href={`/channels/${video?.channel.id}`} className="shrink-0">
+                                    <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="shrink-0">
                                         <Avatar className="w-10 h-10 cursor-pointer">
                                             <AvatarImage src={video?.channel.avatar} alt={video?.channel.name} />
                                             <AvatarFallback>{video?.channel.name}</AvatarFallback>
@@ -276,7 +300,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                     </Link>
 
                                     <div className="flex flex-col mr-2">
-                                        <Link href={`/channels/${video?.channel.id}`} className="flex items-center gap-1 cursor-pointer group">
+                                        <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="flex items-center gap-1 cursor-pointer group">
                                             <span className="font-semibold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors">{video?.channel.name}</span>
                                             <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
                                         </Link>

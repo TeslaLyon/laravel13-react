@@ -116,7 +116,7 @@ class CrawlVixenDailyCommand extends Command
             // 阶段 2：抓取该片商视频列表第 1 页数据（增量最新视频）
             // ==========================================
             $this->line("📹 [阶段 2/2] 开始抓取片商 [{$channel->slug}] 的视频第 1 页最新数据...");
-            $videoResult = $crawlerService->crawlSingleChannelVideos($channel, 1, $downloadImages);
+            $videoResult = $crawlerService->crawlSingleChannelVideos($channel, 1, $downloadImages, $forceImages);
             $videoStats = ['success' => 0, 'failed' => 0, 'skipped' => 0];
 
             if (!$videoResult['success']) {
