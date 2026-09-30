@@ -649,22 +649,15 @@ class VixenCrawlerService
             }
 
             // 🎯 核心逻辑：优先提取 webp 资源地址进行存储和展示
-            $rawSrc = $img['webp']['src'] ?? ($img['src'] ?? '');
+            // 🎯 节约存储与爬取耗时：前端通常使用 highdpi.double，data_crawl_type=2 不再下载和上传 1x src 到 R2（src 设为 null）
             $rawPlaceholder = $img['webp']['placeholder'] ?? ($img['placeholder'] ?? '');
             $rawDouble = $img['webp']['highdpi']['double'] ?? ($img['highdpi']['double'] ?? '');
 
-            $srcUrl = $rawSrc;
+            $srcUrl = null;
             $placeholderUrl = $rawPlaceholder;
             $doubleUrl = $rawDouble;
 
-            if ($downloadImages && !empty($rawSrc)) {
-                $hash = sha1(explode('?', $rawSrc)[0]);
-                $target = "images/{$channelSlug}/videos/{$videoId}/{$hash}.webp";
-                $stored = $this->imageStorage->downloadOptimizeAndStore($rawSrc, $target, true);
-                if ($stored) {
-                    $srcUrl = $stored['path'];
-                }
-
+            if ($downloadImages) {
                 if (!empty($rawPlaceholder)) {
                     $phHash = sha1(explode('?', $rawPlaceholder)[0]);
                     $phTarget = "images/{$channelSlug}/videos/{$videoId}/{$phHash}_ph.webp";
@@ -765,10 +758,10 @@ class VixenCrawlerService
             }
         }
 
-        // 若无截图，降级复用列表封面 WebP 图
+        // 若无截图，降级复用列表封面 WebP 图（优先取 highdpi.double）
         if (empty($previewUrls)) {
             foreach ($listImg as $item) {
-                $url = $item['src'] ?? '';
+                $url = $item['highdpi']['double'] ?? ($item['src'] ?? '');
                 if (!empty($url)) {
                     $previewUrls[] = $url;
                 }

@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { cdnUrl } from '@/lib/utils';
 
 export interface ImageItem {
-    src: string;
+    src?: string | null;
     src_source?: string;
     width: number;
     height: number;
@@ -16,7 +16,7 @@ export interface ImageItem {
         double_source?: string;
     };
     webp?: {
-        src: string;
+        src?: string;
         src_source?: string;
         placeholder?: string;
         placeholder_source?: string;
@@ -101,30 +101,49 @@ export function ResponsiveVideoImage({
             return { webpSrcSet: '', jpgSrcSet: '', placeholderUrl: '', defaultSrc: fallbackSrc };
         }
 
+        const isVixen = dataCrawlType === 2;
         const webpEntries: { url: string; width: number }[] = [];
         const jpgEntries: { url: string; width: number }[] = [];
 
-        listImg.forEach((item) => {
-            const rawWebp1x = isSource ? (item.webp?.src_source || item.webp?.src) : item.webp?.src;
-            const webp1x = cdnUrl(rawWebp1x);
-            const rawWebp2x = isSource
-                ? (item.webp?.highdpi?.double_source || item.webp?.highdpi?.double)
-                : item.webp?.highdpi?.double;
-            const webp2x = cdnUrl(rawWebp2x);
+        if (isVixen) {
+            // Vixen 系列 (data_crawl_type = 2): 采用 WebP 格式，主图使用 highdpi.double，不再依赖 1x src
+            listImg.forEach((item) => {
+                const doubleUrl = cdnUrl(item.highdpi?.double || item.src);
+                const srcUrl = item.src ? cdnUrl(item.src) : null;
+                const baseWidth = item.width || 628;
 
-            if (webp1x) webpEntries.push({ url: webp1x, width: item.width });
-            if (webp2x) webpEntries.push({ url: webp2x, width: item.width * 2 });
+                if (doubleUrl) {
+                    webpEntries.push({ url: doubleUrl, width: baseWidth * 2 });
+                    jpgEntries.push({ url: doubleUrl, width: baseWidth * 2 });
+                }
+                if (srcUrl && srcUrl !== doubleUrl) {
+                    webpEntries.push({ url: srcUrl, width: baseWidth });
+                    jpgEntries.push({ url: srcUrl, width: baseWidth });
+                }
+            });
+        } else {
+            listImg.forEach((item) => {
+                const rawWebp1x = isSource ? (item.webp?.src_source || item.webp?.src) : item.webp?.src;
+                const webp1x = cdnUrl(rawWebp1x);
+                const rawWebp2x = isSource
+                    ? (item.webp?.highdpi?.double_source || item.webp?.highdpi?.double)
+                    : item.webp?.highdpi?.double;
+                const webp2x = cdnUrl(rawWebp2x);
 
-            const rawJpg1x = isSource ? (item.src_source || item.src) : item.src;
-            const jpg1x = cdnUrl(rawJpg1x);
-            const rawJpg2x = isSource
-                ? (item.highdpi?.double_source || item.highdpi?.double)
-                : item.highdpi?.double;
-            const jpg2x = cdnUrl(rawJpg2x);
+                if (webp1x) webpEntries.push({ url: webp1x, width: item.width });
+                if (webp2x) webpEntries.push({ url: webp2x, width: item.width * 2 });
 
-            if (jpg1x) jpgEntries.push({ url: jpg1x, width: item.width });
-            if (jpg2x) jpgEntries.push({ url: jpg2x, width: item.width * 2 });
-        });
+                const rawJpg1x = isSource ? (item.src_source || item.src) : item.src;
+                const jpg1x = cdnUrl(rawJpg1x);
+                const rawJpg2x = isSource
+                    ? (item.highdpi?.double_source || item.highdpi?.double)
+                    : item.highdpi?.double;
+                const jpg2x = cdnUrl(rawJpg2x);
+
+                if (jpg1x) jpgEntries.push({ url: jpg1x, width: item.width });
+                if (jpg2x) jpgEntries.push({ url: jpg2x, width: item.width * 2 });
+            });
+        }
 
         const webpSrcSet = webpEntries
             .sort((a, b) => a.width - b.width)
@@ -149,7 +168,7 @@ export function ResponsiveVideoImage({
         const defaultSrc = cdnUrl(rawDefaultSrc) || fallbackSrc;
 
         return { webpSrcSet, jpgSrcSet, placeholderUrl, defaultSrc };
-    }, [listImg, isSource, fallbackSrc]);
+    }, [listImg, isSource, dataCrawlType, fallbackSrc]);
 
     // 多图预加载
     const preloadImage = (url: string) => {

@@ -85,7 +85,7 @@ export type Video = {
 };
 
 export type ImageItem = {
-    src: string;
+    src?: string | null;
     src_source?: string;
     width: number;
     height: number;
@@ -96,7 +96,7 @@ export type ImageItem = {
         double_source?: string;
     };
     webp?: {
-        src: string;
+        src?: string;
         src_source?: string;
         placeholder?: string;
         placeholder_source?: string;

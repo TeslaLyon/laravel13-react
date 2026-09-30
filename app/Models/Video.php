@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
 use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
@@ -71,6 +72,45 @@ class Video extends Model implements ReactableInterface
         return [
             'list_img' => 'array',
         ];
+    }
+
+    /**
+     * 针对 list_img 的访问器
+     * 当 channel.data_crawl_type 为 2 (Vixen 系列) 时，若 src 为空，则自动回退至 highdpi.double
+     */
+    protected function listImg(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (is_null($value)) {
+                    return null;
+                }
+
+                $data = is_string($value) ? json_decode($value, true) : $value;
+                if (!is_array($data)) {
+                    return $data;
+                }
+
+                // 判断是否为 Vixen 系列 (data_crawl_type === 2)
+                $isVixen = false;
+                if ($this->relationLoaded('channel') && $this->channel) {
+                    $isVixen = ((int) $this->channel->data_crawl_type === 2);
+                } elseif (isset($data[0]['highdpi']['double']) && empty($data[0]['src'])) {
+                    $isVixen = true;
+                }
+
+                if ($isVixen) {
+                    foreach ($data as &$img) {
+                        if (empty($img['src']) && !empty($img['highdpi']['double'])) {
+                            $img['src'] = $img['highdpi']['double'];
+                        }
+                    }
+                    unset($img);
+                }
+
+                return $data;
+            }
+        );
     }
 
     public function channel(): BelongsTo

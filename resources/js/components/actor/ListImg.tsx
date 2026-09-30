@@ -10,20 +10,21 @@ const ImageGallery = ({ list_img }: { list_img: any[] }) => {
     return (
         <div className="image-gallery" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
             {list_img.map((img, index) => {
+                const primarySrc = img.highdpi?.double || img.src;
                 // 构建 WebP 和 JPEG 的 srcSet 字符串
                 const webpSrcSet = img.webp
                     ? `${cdnUrl(img.webp.src)} 1x, ${cdnUrl(img.webp.highdpi?.double)} 2x`
-                    : '';
-                const jpegSrcSet = img.highdpi
-                    ? `${cdnUrl(img.src)} 1x, ${cdnUrl(img.highdpi.double)} 2x`
-                    : '';
+                    : (img.highdpi?.double ? `${cdnUrl(img.highdpi.double)} 2x` : '');
+                const jpegSrcSet = img.highdpi?.double
+                    ? (img.src ? `${cdnUrl(img.src)} 1x, ${cdnUrl(img.highdpi.double)} 2x` : `${cdnUrl(img.highdpi.double)} 2x`)
+                    : (img.src ? `${cdnUrl(img.src)} 1x` : '');
 
                 return (
                     // 使用 index 作为 key（如果数据中有唯一的 id 最好使用 id）
                     <picture key={index} style={{ position: 'relative', display: 'block' }}>
 
                         {/* 1. 优先尝试加载 WebP 格式 */}
-                        {img.webp && (
+                        {webpSrcSet && (
                             <source
                                 type="image/webp"
                                 srcSet={webpSrcSet}
@@ -32,7 +33,7 @@ const ImageGallery = ({ list_img }: { list_img: any[] }) => {
 
                         {/* 2. 基础 <img> 标签（作为后备，也处理普通的 JPEG 及其高清版） */}
                         <img
-                            src={cdnUrl(img.src)}
+                            src={cdnUrl(primarySrc)}
                             srcSet={jpegSrcSet}
                             width={img.width}
                             height={img.height}

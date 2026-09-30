@@ -114,6 +114,7 @@ class CategoryController extends Controller
             'latestVideos' => Inertia::defer(function () use ($category) {
                 return $category->videos()
                     ->when(method_exists($category->videos(), 'scopePublished'), fn($q) => $q->published())
+                    ->with('channel:id,name,slug,avatar,data_crawl_type')
                     ->latest()
                     ->take(6)
                     ->get();
@@ -132,6 +133,7 @@ class CategoryController extends Controller
             'paginatedVideos' => Inertia::defer(function () use ($category, $searchKeyword) {
                 return $category->videos()
                     ->when(method_exists($category->videos(), 'scopePublished'), fn($q) => $q->published())
+                    ->with('channel:id,name,slug,avatar,data_crawl_type')
                     ->when($searchKeyword, fn($q) => $q->where('title', 'like', "%{$searchKeyword}%"))
                     ->latest()
                     ->paginate(12)
