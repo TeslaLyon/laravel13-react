@@ -25,7 +25,7 @@ class ManagePanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('manage')
-            ->path(env('FILAMENT_PATH', 'manage'))
+            ->path(config('app.filament_path', env('FILAMENT_PATH', 'manage')))
             ->login()
             ->brandName('SMZDK 控制台')
             ->colors([

@@ -122,6 +122,8 @@ return [
 
     'admin_emails' => env('ADMIN_EMAILS', ''),
 
+    'filament_path' => env('FILAMENT_PATH', 'manage'),
+
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),

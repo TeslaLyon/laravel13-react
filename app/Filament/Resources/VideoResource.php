@@ -113,8 +113,12 @@ class VideoResource extends Resource
                     ->dateTime('Y-m-d H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->label('更新时间')
+                    ->dateTime('Y-m-d H:i')
+                    ->sortable(),
             ])
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('updated_at', 'desc')
             ->filters([
                 Tables\Filters\SelectFilter::make('channel_id')
                     ->label('片商')

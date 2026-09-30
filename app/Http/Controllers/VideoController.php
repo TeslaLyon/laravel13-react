@@ -72,7 +72,7 @@ class VideoController extends Controller
             }
         }
 
-        $videos = $query->orderByDesc('created_at')
+        $videos = $query->orderByDesc('updated_at')
             ->paginate(12)
             ->withQueryString();
 

@@ -419,9 +419,10 @@ class User extends Authenticatable implements FilamentUser, PasskeyUser, MustVer
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        $adminEmails = array_filter(array_map('trim', explode(',', (string) env('ADMIN_EMAILS', ''))));
+        $adminEmailsConfig = config('app.admin_emails') ?: env('ADMIN_EMAILS', '');
+        $adminEmails = array_filter(array_map('trim', explode(',', (string) $adminEmailsConfig)));
         if (!empty($adminEmails)) {
-            return in_array($this->email, $adminEmails, true);
+            return in_array(strtolower($this->email), array_map('strtolower', $adminEmails), true);
         }
 
         return true;
