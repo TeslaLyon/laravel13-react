@@ -72,9 +72,26 @@ class ChannelResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('avatar')
-                    ->label('头像')
-                    ->circular(),
+                Tables\Columns\ImageColumn::make('logo')
+                    ->label('Logo')
+                    ->height(36)
+                    ->checkFileExistence(false)
+                    ->state(function (Channel $record): ?string {
+                        $img = $record->logo ?: $record->avatar;
+                        if (empty($img)) {
+                            return null;
+                        }
+
+                        if (str_starts_with($img, 'http://') || str_starts_with($img, 'https://')) {
+                            return $img;
+                        }
+
+                        $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
+                        $cleanPath = ltrim($img, '/');
+
+                        return $cdnUrl ? "{$cdnUrl}/{$cleanPath}" : asset($cleanPath);
+                    })
+                    ->defaultImageUrl(fn (Channel $record) => "https://api.dicebear.com/7.x/identicon/svg?seed={$record->slug}"),
                 Tables\Columns\TextColumn::make('name')
                     ->label('片商名称')
                     ->searchable()

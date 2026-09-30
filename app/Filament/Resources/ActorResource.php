@@ -63,7 +63,23 @@ class ActorResource extends Resource
             ->columns([
                 Tables\Columns\ImageColumn::make('avatar')
                     ->label('头像')
-                    ->circular(),
+                    ->circular()
+                    ->checkFileExistence(false)
+                    ->state(function (\App\Models\Actor $record): ?string {
+                        if (empty($record->avatar)) {
+                            return null;
+                        }
+
+                        if (str_starts_with($record->avatar, 'http://') || str_starts_with($record->avatar, 'https://')) {
+                            return $record->avatar;
+                        }
+
+                        $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
+                        $cleanPath = ltrim($record->avatar, '/');
+
+                        return $cdnUrl ? "{$cdnUrl}/{$cleanPath}" : asset($cleanPath);
+                    })
+                    ->defaultImageUrl(fn (\App\Models\Actor $record) => "https://api.dicebear.com/7.x/identicon/svg?seed={$record->slug}"),
                 Tables\Columns\TextColumn::make('name')
                     ->label('姓名')
                     ->searchable()
