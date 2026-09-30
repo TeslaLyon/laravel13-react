@@ -168,7 +168,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
         });
     };
 
-    // 详情页头图优先使用 videos 的 list_img 中尺寸最大的图片，降级使用 video_detail.list_img_large_meta
+    // 详情页头图优先使用 videos 的 list_img 中尺寸最大的图片（优先取 highdpi.double 2倍高清图）
     const headerImgMeta = useMemo(() => {
         const listImg = video?.list_img;
         if (Array.isArray(listImg) && listImg.length > 0) {
@@ -184,7 +184,16 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                 }
             }
 
-            return [largest];
+            // 🎯 优先使用 highdpi.double 高清大图链接
+            const highDpiSrc = largest?.highdpi?.double || largest?.src;
+
+            return [{
+                ...largest,
+                src: highDpiSrc,
+                webp: {
+                    src: highDpiSrc,
+                }
+            }];
         }
 
         return video?.video_detail?.list_img_large_meta || [];
