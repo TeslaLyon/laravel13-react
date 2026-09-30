@@ -22,6 +22,7 @@ use Throwable;
 class VixenCrawlerService
 {
     protected ImageStorageService $imageStorage;
+    protected array $readyFlareSolverrSessions = [];
 
     public function __construct(?ImageStorageService $imageStorage = null)
     {
@@ -975,8 +976,7 @@ class VixenCrawlerService
      */
     protected function ensureFlareSolverrSession(string $endpoint, string $sessionId): void
     {
-        static $readySessions = [];
-        if (isset($readySessions[$sessionId])) {
+        if (isset($this->readyFlareSolverrSessions[$sessionId])) {
             return;
         }
 
@@ -995,7 +995,7 @@ class VixenCrawlerService
             if ($response->successful()) {
                 $data = $response->json();
                 if (($data['status'] ?? '') === 'ok' || str_contains($data['message'] ?? '', 'already exists')) {
-                    $readySessions[$sessionId] = true;
+                    $this->readyFlareSolverrSessions[$sessionId] = true;
                 }
             }
         } catch (Throwable $e) {
@@ -1008,6 +1008,8 @@ class VixenCrawlerService
      */
     protected function destroyFlareSolverrSession(string $endpoint, string $sessionId): void
     {
+        unset($this->readyFlareSolverrSessions[$sessionId]);
+
         try {
             Http::timeout(10)->post($endpoint, [
                 'cmd'     => 'sessions.destroy',
@@ -1162,9 +1164,17 @@ class VixenCrawlerService
             if ($response->successful()) {
                 $data = $response->json();
 
-                // 容错处理：若 session 在后端重启时失效，清理后重试一次
-                if (($data['status'] ?? '') === 'error' && str_contains(strtolower($data['message'] ?? ''), 'session')) {
-                    Log::warning("FlareSolverr 会话 [{$sessionId}] 失效，正在销毁并重建...");
+                // 容错处理：若 session 失效、浏览器标签页崩溃(tab crashed)或 chromedriver 异常，清理后尝试重建并重试
+                $status = $data['status'] ?? '';
+                $errMsg = strtolower($data['message'] ?? '');
+                $needsRecreate = $status === 'error' && (
+                    str_contains($errMsg, 'session') ||
+                    str_contains($errMsg, 'tab crashed') ||
+                    str_contains($errMsg, 'chromedriver')
+                );
+
+                if ($needsRecreate) {
+                    Log::warning("FlareSolverr 会话 [{$sessionId}] 异常/失效 (" . ($data['message'] ?? 'unknown') . ")，正在销毁并重建...");
                     $this->destroyFlareSolverrSession($endpoint, $sessionId);
                     $this->ensureFlareSolverrSession($endpoint, $sessionId);
 

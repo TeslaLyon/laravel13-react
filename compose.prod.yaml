@@ -195,6 +195,7 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: laravel_flaresolverr
     restart: always
+    shm_size: 2g
     logging: *default-logging
     dns:
       - 8.8.8.8
@@ -210,7 +211,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 1536M
+          memory: 2048M
         reservations:
           cpus: '0.1'
           memory: 256M
