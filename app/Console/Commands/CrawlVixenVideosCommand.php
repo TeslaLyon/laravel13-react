@@ -21,7 +21,6 @@ class CrawlVixenVideosCommand extends Command
                             {--all : 配合 --page 使用，从指定页开始向后自动循环抓取至最后一页}
                             {--no-images : 跳过图片下载与 R2 上传，仅同步视频元数据（极速同步推荐）}
                             {--force-images : 强制重新抓取并更新图片，忽略现有已入库图片缓存}
-                            {--queue : 以队列形式投递至 Horizon 异步执行，不受容器重启或终端断开影响}
                             {--delay=2 : 批量循环时每页间隔休眠秒数}';
 
     /**
