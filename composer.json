@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "cybercog/laravel-love": "^10.2",
+        "filament/filament": "^3.2",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel-lang/common": "^6.8",
         "laravel/chisel": "^0.1.0",

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Laravel\Fortify\Contracts\PasskeyUser;
@@ -410,5 +412,19 @@ class User extends Authenticatable implements PasskeyUser, MustVerifyEmail, Reac
         return $this->privacySetting?->getSetting($key, $default) ?? $default;
     }
 
+
+
+    /**
+     * 允许访问 Filament 后台的权限控制
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        $adminEmails = array_filter(array_map('trim', explode(',', (string) env('ADMIN_EMAILS', ''))));
+        if (!empty($adminEmails)) {
+            return in_array($this->email, $adminEmails, true);
+        }
+
+        return true;
+    }
 
 }

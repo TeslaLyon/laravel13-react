@@ -23,6 +23,7 @@ class VixenCrawlerService
 {
     protected ImageStorageService $imageStorage;
     protected array $readyFlareSolverrSessions = [];
+    protected array $sessionRequestCounts = [];
 
     public function __construct(?ImageStorageService $imageStorage = null)
     {
@@ -1009,6 +1010,7 @@ class VixenCrawlerService
     protected function destroyFlareSolverrSession(string $endpoint, string $sessionId): void
     {
         unset($this->readyFlareSolverrSessions[$sessionId]);
+        $this->sessionRequestCounts[$sessionId] = 0;
 
         try {
             Http::timeout(10)->post($endpoint, [
@@ -1144,6 +1146,15 @@ class VixenCrawlerService
             // 确保该片商的专属 Chromium 会话处于运行状态
             $this->ensureFlareSolverrSession($endpoint, $sessionId);
 
+            // 💡 防内存泄漏与防止 Chrome 标签页崩溃：单 Session 连续请求超过 15 次时，主动重建会话以释放浏览器内存
+            $this->sessionRequestCounts[$sessionId] = ($this->sessionRequestCounts[$sessionId] ?? 0) + 1;
+            if ($this->sessionRequestCounts[$sessionId] > 15) {
+                Log::info("FlareSolverr 会话 [{$sessionId}] 连续请求达 {$this->sessionRequestCounts[$sessionId]} 次，主动重置会话释放 Chromium 内存...");
+                $this->destroyFlareSolverrSession($endpoint, $sessionId);
+                $this->ensureFlareSolverrSession($endpoint, $sessionId);
+                $this->sessionRequestCounts[$sessionId] = 1;
+            }
+
             $startTime = microtime(true);
             Log::info("FlareSolverr 发起请求 [会话: {$sessionId}]: {$url}");
 
@@ -1160,29 +1171,27 @@ class VixenCrawlerService
             }
 
             $response = Http::timeout(65)->post($endpoint, $postData);
+            $data = $response->json() ?? [];
 
-            if ($response->successful()) {
-                $data = $response->json();
+            // 容错处理：若 session 失效、浏览器标签页崩溃(tab crashed)或 chromedriver 异常（FlareSolverr 返回 HTTP 500），清理后尝试重建并重试
+            $status = $data['status'] ?? '';
+            $errMsg = strtolower($data['message'] ?? '');
+            $needsRecreate = ($status === 'error' || $response->serverError()) && (
+                str_contains($errMsg, 'session') ||
+                str_contains($errMsg, 'tab crashed') ||
+                str_contains($errMsg, 'chromedriver')
+            );
 
-                // 容错处理：若 session 失效、浏览器标签页崩溃(tab crashed)或 chromedriver 异常，清理后尝试重建并重试
-                $status = $data['status'] ?? '';
-                $errMsg = strtolower($data['message'] ?? '');
-                $needsRecreate = $status === 'error' && (
-                    str_contains($errMsg, 'session') ||
-                    str_contains($errMsg, 'tab crashed') ||
-                    str_contains($errMsg, 'chromedriver')
-                );
+            if ($needsRecreate) {
+                Log::warning("FlareSolverr 会话 [{$sessionId}] 异常/失效 (" . ($data['message'] ?? $response->body()) . ")，正在销毁并重建...");
+                $this->destroyFlareSolverrSession($endpoint, $sessionId);
+                $this->ensureFlareSolverrSession($endpoint, $sessionId);
 
-                if ($needsRecreate) {
-                    Log::warning("FlareSolverr 会话 [{$sessionId}] 异常/失效 (" . ($data['message'] ?? 'unknown') . ")，正在销毁并重建...");
-                    $this->destroyFlareSolverrSession($endpoint, $sessionId);
-                    $this->ensureFlareSolverrSession($endpoint, $sessionId);
+                $response = Http::timeout(65)->post($endpoint, $postData);
+                $data = $response->json() ?? [];
+            }
 
-                    $response = Http::timeout(65)->post($endpoint, $postData);
-                    $data = $response->json();
-                }
-
-                if (($data['status'] ?? '') === 'ok' && !empty($data['solution']['response'])) {
+            if (($data['status'] ?? '') === 'ok' && !empty($data['solution']['response'])) {
                     $elapsed = round(microtime(true) - $startTime, 2);
                     Log::info("FlareSolverr 成功获取网页 [{$hostKey} | 耗时 {$elapsed}s]！");
 
@@ -1225,7 +1234,6 @@ class VixenCrawlerService
                     }
 
                     return $data['solution']['response'];
-                }
             }
 
             Log::error("FlareSolverr 求解失败 [{$hostKey}]: " . $response->body());
