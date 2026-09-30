@@ -292,27 +292,31 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                         </div>
                                     </>
                                 }>
-                                    <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="shrink-0">
-                                        <Avatar className="w-10 h-10 cursor-pointer">
-                                            <AvatarImage src={video?.channel.avatar} alt={video?.channel.name} />
-                                            <AvatarFallback>{video?.channel.name}</AvatarFallback>
-                                        </Avatar>
-                                    </Link>
+                                    {video?.channel && (
+                                        <>
+                                            <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="shrink-0">
+                                                <Avatar className="w-10 h-10 cursor-pointer">
+                                                    <AvatarImage src={video.channel.avatar} alt={video.channel.name} />
+                                                    <AvatarFallback>{video.channel.name}</AvatarFallback>
+                                                </Avatar>
+                                            </Link>
 
-                                    <div className="flex flex-col mr-2">
-                                        <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="flex items-center gap-1 cursor-pointer group">
-                                            <span className="font-semibold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors">{video?.channel.name}</span>
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                        </Link>
-                                        <span className="text-xs text-muted-foreground">125万 位订阅者</span>
-                                    </div>
+                                            <div className="flex flex-col mr-2">
+                                                <Link href={channelShow.url({ channel: video.channel_id, slug: video.channel.slug })} className="flex items-center gap-1 cursor-pointer group">
+                                                    <span className="font-semibold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors">{video.channel.name}</span>
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                                </Link>
+                                                <span className="text-xs text-muted-foreground">125万 位订阅者</span>
+                                            </div>
+                                        </>
+                                    )}
                                 </Deferred>
 
                                 <SubscribeButton
                                     subscribed={subscribed}
-                                    channelId={video?.channel.id}
+                                    channelId={video?.channel?.id}
                                     setSubscribed={setSubscribed}
-                                    channelSlug={video?.channel.slug}
+                                    channelSlug={video?.channel?.slug}
                                 />
                             </div>
 
