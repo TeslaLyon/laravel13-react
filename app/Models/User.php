@@ -69,7 +69,7 @@ use Illuminate\Database\Eloquent\Builder;
  * @method static \Illuminate\Database\Eloquent\Builder<static>|User whereUpdatedAt($value)
  * @mixin \Eloquent
  */
-class User extends Authenticatable implements PasskeyUser, MustVerifyEmail, ReacterableInterface, ReactableInterface
+class User extends Authenticatable implements FilamentUser, PasskeyUser, MustVerifyEmail, ReacterableInterface, ReactableInterface
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable, Reacterable, Reactable, SubscribesWithLove;
