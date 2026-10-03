@@ -940,7 +940,7 @@ class VixenCrawlerService
                 $postData['proxy'] = ['url' => $proxy];
             }
 
-            $response = Http::timeout(15)->post($endpoint, $postData);
+            $response = Http::timeout(30)->post($endpoint, $postData);
             if ($response->successful()) {
                 $data = $response->json();
                 if (($data['status'] ?? '') === 'ok' || str_contains($data['message'] ?? '', 'already exists')) {
@@ -984,11 +984,6 @@ class VixenCrawlerService
             $host = parse_url($url, PHP_URL_HOST) ?: 'default';
             $hostKey = strtolower(preg_replace('/^www\./i', '', $host)); // 如 vixen.com, deeper.com, blacked.com
 
-            // 💡 核心极速通道：若已知该域名在 Cloudflare 强盾保护下，直接使用 FlareSolverr Session 秒级拉取，彻底跳过必然 403 的 Guzzle 阶段！
-            if (!empty($flaresolverrUrl) && $this->isHostCfProtected($hostKey)) {
-                return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
-            }
-
             // 2. 获取配套的真实 Chrome User-Agent
             try {
                 $cachedUa = Redis::get('crawler:user_agent') ?: Redis::get('vixen_user_agent');
@@ -1028,6 +1023,11 @@ class VixenCrawlerService
                 'upgrade-insecure-requests' => '1',
             ];
 
+            // 💡 核心防崩优化：若已有通行 Cookie，坚决优先走轻量 HTTP 极速拉取（毫秒级响应，彻底杜绝无头浏览器打开重型视频流媒体页面发生 tab crashed）；仅在完全无 Cookie 且已知有盾时才唤醒 FlareSolverr
+            if (!empty($flaresolverrUrl) && empty($cookie) && $this->isHostCfProtected($hostKey)) {
+                return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
+            }
+
             if (!empty($cookie)) {
                 $headers['cookie'] = $cookie;
             }
@@ -1049,8 +1049,12 @@ class VixenCrawlerService
 
             // 5. 检查是否被 Cloudflare 拦截
             if ($response->status() === 403 || str_contains($response->body(), 'Just a moment...')) {
-                Log::warning("目标页面命中 Cloudflare 5秒盾阻断 [{$url}]");
+                Log::warning("目标页面命中 Cloudflare 5秒盾阻断 [{$url}]，正在通过 FlareSolverr 获取新通行证...");
                 $this->markHostCfProtected($hostKey);
+                try {
+                    Redis::del("crawler:cf_clearance:{$hostKey}");
+                    Redis::del("crawler:cookie_str:{$hostKey}");
+                } catch (Throwable) {}
 
                 if (!empty($flaresolverrUrl)) {
                     return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
@@ -1118,7 +1122,7 @@ class VixenCrawlerService
                 $postData['proxy'] = ['url' => $proxy];
             }
 
-            $response = Http::timeout(65)->post($endpoint, $postData);
+            $response = Http::timeout(75)->post($endpoint, $postData);
             $data = $response->json() ?? [];
 
             // 容错处理：若 session 失效、浏览器标签页崩溃(tab crashed)或 chromedriver 异常（FlareSolverr 返回 HTTP 500），清理后尝试重建并重试
@@ -1135,7 +1139,7 @@ class VixenCrawlerService
                 $this->destroyFlareSolverrSession($endpoint, $sessionId);
                 $this->ensureFlareSolverrSession($endpoint, $sessionId);
 
-                $response = Http::timeout(65)->post($endpoint, $postData);
+                $response = Http::timeout(75)->post($endpoint, $postData);
                 $data = $response->json() ?? [];
             }
 

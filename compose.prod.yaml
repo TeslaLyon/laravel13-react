@@ -210,11 +210,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 2048M
+          cpus: '2.0'
+          memory: 4096M
         reservations:
-          cpus: '0.1'
-          memory: 256M
+          cpus: '0.2'
+          memory: 512M
 
 networks:
   gateway_net:
