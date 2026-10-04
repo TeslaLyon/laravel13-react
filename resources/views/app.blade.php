@@ -36,7 +36,10 @@
 
         @fonts
 
-        <script>window.CDN_URL = @json(config('app.cdn_url'));</script>
+        <script>
+            window.APP_NAME = @json(config('app.name'));
+            window.CDN_URL = @json(config('app.cdn_url'));
+        </script>
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])

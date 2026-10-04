@@ -7,7 +7,7 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 // import { AuthPromptProvider } from './Contexts/AuthPromptContext';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = (typeof window !== 'undefined' && window.APP_NAME) || import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

@@ -17,3 +17,10 @@ declare module '@inertiajs/core' {
         };
     }
 }
+
+declare global {
+    interface Window {
+        APP_NAME?: string;
+        CDN_URL?: string;
+    }
+}
