@@ -124,6 +124,7 @@ export default function YoutubeVideoGrid({
 }: YoutubeVideoGridProps) {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [hasFetchedFilters, setHasFetchedFilters] = useState(false);
+    const [isActorSearching, setIsActorSearching] = useState(false);
     const [filterData, setFilterData] = useState<FilterGroupData>(initialFilterOptions);
 
     // 解析当前 URL 参数作为高级筛选面板的默认状态
@@ -206,10 +207,15 @@ export default function YoutubeVideoGrid({
         if (cachedData) {
             setFilterData(cachedData);
             setHasFetchedFilters(true);
+            setIsActorSearching(false);
             if (isInitialFetch) {
                 cachedDefaultData.current = cachedData;
             }
             return;
+        }
+
+        if (actorSearchKeyword) {
+            setIsActorSearching(true);
         }
 
         if (processing) cancel();
@@ -240,6 +246,9 @@ export default function YoutubeVideoGrid({
             },
             onError: () => {
                 toast.error('获取关联筛选数据失败');
+            },
+            onFinish: () => {
+                setIsActorSearching(false);
             }
         });
     };
@@ -284,6 +293,7 @@ export default function YoutubeVideoGrid({
     const handleResetFilter = () => {
         const emptyState = { actors: [], tags: [], channels: [] };
         setCurrentSelected(emptyState);
+        setIsActorSearching(false);
 
         if (cachedDefaultData.current) {
             setFilterData(cachedDefaultData.current);
@@ -356,8 +366,10 @@ export default function YoutubeVideoGrid({
                     <AdvancedFilterPanel
                         data={filterData}
                         initialSelected={currentSelected}
-                        isLoading={processing}
+                        isLoading={processing && !isActorSearching}
+                        isActorSearching={isActorSearching}
                         onSelectionChange={handleSelectionChange}
+                        onActorSearch={handleActorSearch}
                         onApply={handleApplyFilter}
                         onReset={handleResetFilter}
                     />

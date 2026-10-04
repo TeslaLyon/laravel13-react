@@ -23,6 +23,7 @@ interface AdvancedFilterPanelProps {
     data: FilterGroupData;
     initialSelected?: SelectedFilterState;
     isLoading?: boolean;
+    isActorSearching?: boolean;
     onSelectionChange?: (selected: SelectedFilterState) => void;
     onActorSearch?: (query: string) => void;
     onApply: (selected: SelectedFilterState) => void;
@@ -33,6 +34,7 @@ export function AdvancedFilterPanel({
     data,
     initialSelected = { actors: [], tags: [], channels: [] },
     isLoading = false,
+    isActorSearching = false,
     onSelectionChange,
     onActorSearch,
     onApply,
@@ -92,11 +94,14 @@ export function AdvancedFilterPanel({
         };
 
         return {
-            actors: filterItem(data?.actors, searchQueries.actors, selected.actors),
+            // 如果提供了远程搜索且有查询词，直接采用后端返回的结果（避免前端 includes 误杀 Meilisearch 容错/模糊结果）
+            actors: searchQueries.actors.trim() && onActorSearch
+                ? (Array.isArray(data?.actors) ? data.actors : [])
+                : filterItem(data?.actors, searchQueries.actors, selected.actors),
             tags: filterItem(data?.tags, searchQueries.tags, selected.tags),
             channels: filterItem(data?.channels, searchQueries.channels, selected.channels),
         };
-    }, [data, searchQueries, selected]);
+    }, [data, searchQueries, selected, onActorSearch]);
 
     const handleReset = () => {
         const emptyState = { actors: [], tags: [], channels: [] };
@@ -132,8 +137,11 @@ export function AdvancedFilterPanel({
                         disabled={isLoading}
                         value={currentSearch}
                         onChange={(e) => handleSearchChange(category, e.target.value)}
-                        className="w-full pl-10 pr-3.5 py-2 bg-background text-foreground text-sm rounded-xl border border-input focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder:text-muted-foreground/70 transition-all shadow-sm disabled:opacity-50"
+                        className={`w-full pl-10 ${category === 'actors' && isActorSearching ? 'pr-10' : 'pr-3.5'} py-2 bg-background text-foreground text-sm rounded-xl border border-input focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder:text-muted-foreground/70 transition-all shadow-sm disabled:opacity-50`}
                     />
+                    {category === 'actors' && isActorSearching && (
+                        <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary" />
+                    )}
                 </div>
 
                 <div className="flex-1 max-h-[260px] overflow-y-auto overscroll-y-contain pr-1 space-y-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
