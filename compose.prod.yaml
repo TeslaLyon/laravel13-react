@@ -22,6 +22,7 @@ services:
       - DB_HOST=laravel_pgsql
       - REDIS_HOST=laravel_valkey
       - MEILISEARCH_HOST=http://meilisearch:7700
+      - MEILISEARCH_KEY=${MEILISEARCH_KEY:-your_production_master_key}
       - SCOUT_DRIVER=meilisearch
       - SCOUT_QUEUE=true
       - BROADCAST_CONNECTION=pusher
@@ -59,6 +60,7 @@ services:
       - DB_HOST=laravel_pgsql
       - REDIS_HOST=laravel_valkey
       - MEILISEARCH_HOST=http://meilisearch:7700
+      - MEILISEARCH_KEY=${MEILISEARCH_KEY:-your_production_master_key}
       - SCOUT_DRIVER=meilisearch
       - SCOUT_QUEUE=true
       - BROADCAST_CONNECTION=pusher
