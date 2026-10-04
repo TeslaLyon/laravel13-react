@@ -65,45 +65,51 @@ use Illuminate\Support\Facades\DB;
 // Route::middleware(['auth', 'verified'])->group(function () {
 //     Route::inertia('dashboard', 'dashboard')->name('dashboard');
 // });
-Route::get('/', [HomeController::class, 'index'])->name('home');
-Route::get('/help', [HelpCenterController::class, 'index'])->name('help');
-Route::get('/help/category/{id}', [HelpCenterController::class, 'category'])->name('help.category');
-Route::get('/videos', [VideoController::class, 'index'])->name('videos.index');
-Route::get('/videos/{video}/{slug}', [VideoController::class, 'show'])->name('videos.show');
-Route::get('/actors', [ActorController::class, 'index'])->name('actors.index');
-Route::get('/actors/{actor}/{slug}/{tab?}', [ActorController::class, 'show'])->name('actors.show');
-Route::get('/pictures', [PictureController::class, 'index'])->name('pictures.index');
-Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
-Route::get('/channels/{channel}/{slug}/{tab?}', [ChannelController::class, 'show'])->where('tab', 'home|videos|photos|about')->name('channels.show');
-Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
-Route::get('/articles/{article}/{slug}', [ArticleController::class, 'show'])->name('articles.show');
-Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
-Route::get('/categories/{category}/{slug}/{tab?}', [CategoryController::class, 'show'])
-    ->where('tab', 'home|videos|photos')
-    ->name('categories.show');
-Route::get('/store', [StoreController::class, 'index'])->name('store.index');
-Route::get('/store/product/{product}/{slug}', [StoreController::class, 'show'])->name('store.product.show');
-Route::get('/vip', [VipController::class, 'index'])->name('vip.index');
-Route::get('/search', [SearchController::class, 'index'])->name('search');
-Route::prefix('search')->group(function () {
-    Route::get('/global', [SearchController::class, 'global'])->name('search.global');
-    Route::get('/actors', [SearchController::class, 'actors']);
-    Route::get('/categories', [SearchController::class, 'categories']);
-    Route::get('/tags', [SearchController::class, 'tags']);
+Route::middleware(['throttle:120,1'])->group(function () {
+    Route::get('/', [HomeController::class, 'index'])->name('home');
+    Route::get('/help', [HelpCenterController::class, 'index'])->name('help');
+    Route::get('/help/category/{id}', [HelpCenterController::class, 'category'])->name('help.category');
+    Route::get('/videos', [VideoController::class, 'index'])->name('videos.index');
+    Route::get('/videos/{video}/{slug}', [VideoController::class, 'show'])->name('videos.show');
+    Route::get('/actors', [ActorController::class, 'index'])->name('actors.index');
+    Route::get('/actors/{actor}/{slug}/{tab?}', [ActorController::class, 'show'])->name('actors.show');
+    Route::get('/pictures', [PictureController::class, 'index'])->name('pictures.index');
+    Route::get('/channels', [ChannelController::class, 'index'])->name('channels.index');
+    Route::get('/channels/{channel}/{slug}/{tab?}', [ChannelController::class, 'show'])->where('tab', 'home|videos|photos|about')->name('channels.show');
+    Route::get('/articles', [ArticleController::class, 'index'])->name('articles.index');
+    Route::get('/articles/{article}/{slug}', [ArticleController::class, 'show'])->name('articles.show');
+    Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+    Route::get('/categories/{category}/{slug}/{tab?}', [CategoryController::class, 'show'])
+        ->where('tab', 'home|videos|photos')
+        ->name('categories.show');
+    Route::get('/store', [StoreController::class, 'index'])->name('store.index');
+    Route::get('/store/product/{product}/{slug}', [StoreController::class, 'show'])->name('store.product.show');
+    Route::get('/vip', [VipController::class, 'index'])->name('vip.index');
+
+    Route::get('/@{user:name}/{tab?}', [UserSpaceController::class, 'show'])
+        ->name('userspace.show');
+
+    // 用户勋章荣誉馆详情页
+    Route::get('/@{user:name}/medals', [MedalController::class, 'userMedals'])->name('user.medals');
 });
-Route::post('/videos/cascade-filters', [VideoController::class, 'getCascadeFilters']);
 
-Route::get('/@{user:name}/{tab?}', [UserSpaceController::class, 'show'])
-    ->name('userspace.show');
-
-// 用户勋章荣誉馆详情页
-Route::get('/@{user:name}/medals', [MedalController::class, 'userMedals'])->name('user.medals');
+Route::middleware(['throttle:60,1'])->group(function () {
+    Route::get('/search', [SearchController::class, 'index'])->name('search');
+    Route::prefix('search')->group(function () {
+        Route::get('/global', [SearchController::class, 'global'])->name('search.global');
+        Route::get('/actors', [SearchController::class, 'actors']);
+        Route::get('/categories', [SearchController::class, 'categories']);
+        Route::get('/tags', [SearchController::class, 'tags']);
+    });
+    Route::post('/videos/cascade-filters', [VideoController::class, 'getCascadeFilters']);
+});
 
 Route::match(['get', 'post'], '/wallet/notify', [WalletController::class, 'notify'])
+    ->middleware('throttle:60,1')
     ->name('wallet.notify');
 
 // 🎯 论坛模块路由组
-Route::prefix('forum')->name('forum.')->controller(ForumController::class)->group(function () {
+Route::prefix('forum')->name('forum.')->middleware('throttle:120,1')->controller(ForumController::class)->group(function () {
 
     // 1. 论坛板块大厅首页: GET /forum
     Route::get('/', 'index')->name('index');
@@ -126,14 +132,14 @@ Route::prefix('forum')->name('forum.')->controller(ForumController::class)->grou
 
     // 提交回帖 (需要登录中间件 auth)
     Route::post('/threads/{thread}/posts', [ThreadController::class, 'storePost'])
-        ->middleware('auth')
+        ->middleware(['auth', 'throttle:10,1'])
         ->name('threads.posts.store');
 
 });
 
 
 // TODO: 该路由组下所有路由都需要检查在调用前是否验证了邮箱，没有的话就弹出提示框
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::post('/videos/{video}/{slug}/like', [VideoController::class, 'like'])
         ->name('videos.like');
     Route::post('/videos/{video}/{slug}/dislike', [VideoController::class, 'dislike'])
@@ -147,16 +153,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // 处理上传本地字幕文件或提交外部字幕链接
     Route::post('/videos/{video}/{slug}/subtitles/upload', [VideoController::class, 'subtitleUpload'])
+        ->middleware('throttle:10,1')
         ->name('videos.subtitles.upload');
 
     // 处理提交求字幕申请
     Route::post('/videos/{video}/{slug}/subtitles/request', [VideoController::class, 'subtitleRequest'])
+        ->middleware('throttle:10,1')
         ->name('videos.subtitles.request');
     Route::post('/videos/{video}/{slug}/subtitles/{subtitle}/download', [VideoController::class, 'subtitleDownload'])
+        ->middleware('throttle:30,1')
         ->name('videos.subtitles.download');
     Route::post('/videos/{video}/{slug}/subtitles/{subtitle}/feedback', [VideoSubtitleFeedbackController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('subtitles.feedback.store');
     Route::post('/videos/{video}/{slug}/download-submission', [VideoDownloadSubmissionController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('video.download-submission.store');
 
 
@@ -169,23 +180,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/actors/{actor}/{slug}/menu-status', [ActorController::class, 'menuStatus'])
         ->name('actors.menu.status');
     Route::post('/actors/{actor}/{slug}/corrections', [ActorCorrectionController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('actors.corrections.store');
 
     // Route::post('/videos/{video}/{slug}/report', [VideoController::class, 'report'])
     //     ->name('videos.report');
     Route::post('/videos/{video}/{slug}/corrections', [VideoCorrectionController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('videos.corrections');
 
     // 提交全站通用反馈
-    Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
+    Route::post('/feedback', [FeedbackController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('feedback.store');
 
 
     Route::get('/settings/avatar', [ProfileController::class, 'editAvatar'])->name('profile.avatar.edit');
-    Route::post('/settings/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar.update');
+    Route::post('/settings/avatar', [ProfileController::class, 'updateAvatar'])
+        ->middleware('throttle:10,1')
+        ->name('profile.avatar.update');
 
     Route::get('/settings/banner', [ProfileBannerController::class, 'edit'])->name('profile.banner.edit');
-    Route::post('/settings/banner', [ProfileBannerController::class, 'update'])->name('profile.banner.update');
-    Route::delete('/settings/banner', [ProfileBannerController::class, 'destroy'])->name('profile.banner.destroy');
+    Route::post('/settings/banner', [ProfileBannerController::class, 'update'])
+        ->middleware('throttle:10,1')
+        ->name('profile.banner.update');
+    Route::delete('/settings/banner', [ProfileBannerController::class, 'destroy'])
+        ->middleware('throttle:10,1')
+        ->name('profile.banner.destroy');
 
     Route::post('/subscribe/{type}/{id}', [SubscriptionController::class, 'subscribe'])
         ->name('entities.subscribe');
@@ -197,9 +218,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('entities.notification.edit');
 
     Route::get('/wallet', [WalletController::class, 'index'])->name('wallet.index');
-
     Route::get('/payment-methods', [WalletController::class, 'paymentMethods'])->name('wallet.payment-methods');
-    Route::post('/deposit', [WalletController::class, 'deposit'])->name('wallet.deposit');
+    Route::post('/deposit', [WalletController::class, 'deposit'])
+        ->middleware('throttle:10,1')
+        ->name('wallet.deposit');
     Route::get('/wallet/orders/{orderNo}/status', [WalletController::class, 'checkOrderStatus'])
         ->name('wallet.order.status');
 
@@ -208,7 +230,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user.medals.toggle-wear');
 
     Route::get('/checkin', [CheckInController::class, 'index'])->name('checkin.index');
-    Route::post('/checkin', [CheckInController::class, 'store'])->name('checkin.store');
+    Route::post('/checkin', [CheckInController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('checkin.store');
 
     Route::get('/user/center/growth', [GrowthController::class, 'index'])->name('growth.index');
 
@@ -242,7 +266,7 @@ Route::get('/test-timezone', function () {
             'postgres_now' => $pgNow,
         ],
     ]);
-});
+})->middleware('throttle:30,1');
 
 
 require __DIR__ . '/settings.php';
