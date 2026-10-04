@@ -195,7 +195,7 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: laravel_flaresolverr
     restart: always
-    shm_size: 1g
+    shm_size: 2g
     logging: *default-logging
     dns:
       - 8.8.8.8
@@ -205,19 +205,16 @@ services:
       - LOG_HTML=false
       - CAPTCHA_SOLVER=none
       - TZ=Asia/Shanghai
-      # 🛡️ 内存防泄露：会话超时自动关闭 Chromium 标签页与浏览器进程
-      - BROWSER_TIMEOUT=40000
-      - TEST_URL=https://www.google.com
     networks:
       - backend_net
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 2048M
+          cpus: '2.0'
+          memory: 4096M
         reservations:
-          cpus: '0.1'
-          memory: 256M
+          cpus: '0.2'
+          memory: 512M
 
 networks:
   gateway_net:
