@@ -2,28 +2,64 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     Search as SearchIcon,
-    BookOpen,
-    FileText,
-    Package,
-    ChevronRight,
-    MessageSquareX
+    Video as VideoIcon,
+    Users,
+    Clapperboard,
+    LayoutGrid,
+    Calendar,
+    Hash,
+    MessageSquareX,
+    Sparkles,
+    X,
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // --- 类型定义 ---
-interface SearchItem {
-    id: string;
-    title: string;
-    excerpt: string;
+export interface SearchVideoItem {
+    id: number;
+    name: string;
+    name_zh?: string | null;
+    slug?: string;
+    video_code?: string;
+    list_img?: any;
+    release_at?: string | null;
     url: string;
 }
 
-interface GroupedResults {
-    help?: SearchItem[];
-    blog?: SearchItem[];
-    products?: SearchItem[];
+export interface SearchActorItem {
+    id: number;
+    name: string;
+    slug?: string;
+    avatar?: string;
+    url: string;
+}
+
+export interface SearchChannelItem {
+    id: number;
+    name: string;
+    slug?: string;
+    avatar?: string;
+    logo?: string;
+    url: string;
+}
+
+export interface SearchCategoryItem {
+    id: number;
+    name: string;
+    name_zh?: string;
+    slug?: string;
+    url: string;
+}
+
+export interface GroupedResults {
+    videos?: SearchVideoItem[];
+    actors?: SearchActorItem[];
+    channels?: SearchChannelItem[];
+    categories?: SearchCategoryItem[];
 }
 
 interface GlobalSearchProps {
@@ -31,149 +67,356 @@ interface GlobalSearchProps {
     groupedResults?: GroupedResults;
 }
 
+type TabKey = 'all' | 'videos' | 'actors' | 'channels' | 'categories';
+
 export default function GlobalSearch({ query = '', groupedResults }: GlobalSearchProps) {
     const [searchQuery, setSearchQuery] = useState(query);
+    const [activeTab, setActiveTab] = useState<TabKey>('all');
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // 默认演示数据 (如果 Laravel 后端未传递 props)
-    const displayResults = groupedResults || {
-        products: [{ id: 'p1', title: '高级订阅会员 (Pro)', excerpt: '解锁所有功能，享受极速响应...', url: '/pricing' }],
-        help: [{ id: 'h1', title: '如何修改密码？', excerpt: '了解重置密码的详细步骤...', url: '/help/article/h1' }],
-        blog: [{ id: 'b1', title: '2026年网站设计趋势', excerpt: '极简主义与大圆角的回归...', url: '/blog/b1' }]
+    const results: GroupedResults = groupedResults || {
+        videos: [],
+        actors: [],
+        channels: [],
+        categories: [],
     };
 
-    // 监听 Cmd+K 或 Ctrl+K 快捷键，自动聚焦搜索框
+    const videos = results.videos || [];
+    const actors = results.actors || [];
+    const channels = results.channels || [];
+    const categories = results.categories || [];
+
+    const totalResults = videos.length + actors.length + channels.length + categories.length;
+
+    // 快捷键 ⌘K / Ctrl+K 聚焦输入框
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault(); // 阻止浏览器默认行为（如 Chrome 的搜索栏）
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
                 inputRef.current?.focus();
             }
         };
 
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!searchQuery.trim()) return;
+        const trimmed = searchQuery.trim();
+        if (!trimmed) return;
 
-        // 发起 Inertia 搜索请求
-        router.get('/search', { q: searchQuery }, { preserveState: true });
+        router.get('/search', { q: trimmed }, { preserveState: true });
     };
 
-    const totalResults =
-        (displayResults.help?.length || 0) +
-        (displayResults.blog?.length || 0) +
-        (displayResults.products?.length || 0);
-
-    // 渲染单个分组结果的辅助函数
-    const renderGroup = (title: string, icon: React.ReactNode, items?: SearchItem[]) => {
-        if (!items || items.length === 0) return null;
-
-        return (
-            <div className="mb-10 last:mb-0">
-                <div className="flex items-center space-x-2 mb-4 px-2">
-                    <div className="text-blue-600">{icon}</div>
-                    <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-                    <span className="text-xs font-medium bg-slate-100 text-slate-500 px-2 py-1 rounded-full">
-                        {items.length}
-                    </span>
-                </div>
-
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-100">
-                    {items.map((item) => (
-                        <Link
-                            key={item.id}
-                            href={item.url}
-                            className="group flex items-start sm:items-center p-5 sm:px-6 hover:bg-slate-50 transition-colors block"
-                        >
-                            <div className="flex-1 pr-4">
-                                <h3 className="text-base font-medium text-slate-900 group-hover:text-blue-600 transition-colors">
-                                    {item.title}
-                                </h3>
-                                {/* 实际应用中，如果接入了 Meilisearch 的高亮，这里可以使用 dangerouslySetInnerHTML */}
-                                <p className="text-slate-500 text-sm mt-1 line-clamp-1">
-                                    {item.excerpt}
-                                </p>
-                            </div>
-                            <div className="ml-auto pt-1 sm:pt-0">
-                                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-transform group-hover:translate-x-1" />
-                            </div>
-                        </Link>
-                    ))}
-                </div>
-            </div>
-        );
+    const handleClear = () => {
+        setSearchQuery('');
+        inputRef.current?.focus();
     };
+
+    const getVideoThumbnail = (video: SearchVideoItem): string | null => {
+        if (!video.list_img) return null;
+        if (typeof video.list_img === 'string') return video.list_img;
+        if (Array.isArray(video.list_img) && video.list_img[0]) {
+            return video.list_img[0].src || video.list_img[0].src_source || null;
+        }
+        return video.list_img.src || null;
+    };
+
+    const tabs: { key: TabKey; label: string; count: number; icon: React.ReactNode }[] = [
+        { key: 'all', label: '全部', count: totalResults, icon: <Sparkles className="size-3.5" /> },
+        { key: 'videos', label: '视频', count: videos.length, icon: <VideoIcon className="size-3.5" /> },
+        { key: 'actors', label: '演员', count: actors.length, icon: <Users className="size-3.5" /> },
+        { key: 'channels', label: '片商', count: channels.length, icon: <Clapperboard className="size-3.5" /> },
+        { key: 'categories', label: '分类', count: categories.length, icon: <LayoutGrid className="size-3.5" /> },
+    ];
 
     return (
         <>
-            <Head title={query ? `"${query}" 的搜索结果` : '全站搜索'} />
+            <Head title={query ? `"${query}" 的搜索结果` : '全站检索'} />
 
-            <div className="container mx-auto px-4 py-12 sm:py-20 space-y-12">
-
+            <div className="container mx-auto px-4 py-8 sm:py-14 max-w-5xl space-y-8">
                 {/* 1. 顶部搜索区域 */}
-                <header className="space-y-6 text-center">
-                    <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900">
-                        在全站寻找答案
+                <header className="space-y-4 text-center max-w-2xl mx-auto">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                        全站即时检索
                     </h1>
+                    <p className="text-sm text-muted-foreground">
+                        支持搜索视频番号与标题、演员姓名、片商厂牌及分类标签
+                    </p>
 
-                    <form onSubmit={handleSearch} className="relative group max-w-3xl w-full mx-auto">
-                        <SearchIcon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6 transition-colors group-focus-within:text-blue-500 z-10" />
+                    <form onSubmit={handleSearch} className="relative group w-full pt-2">
+                        <SearchIcon className="absolute left-4 top-1/2 translate-y-[2px] text-muted-foreground/70 size-5 transition-colors group-focus-within:text-primary z-10" />
 
                         <Input
                             ref={inputRef}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-14 pr-28 h-16 text-lg rounded-2xl bg-slate-50 border-transparent hover:border-slate-200 focus-visible:ring-4 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 transition-all shadow-sm"
-                            placeholder="搜索文章、产品、帮助文档..."
+                            className="w-full pl-11 pr-28 h-13 text-base rounded-2xl bg-card border-border/70 hover:border-border focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:border-primary transition-all shadow-sm"
+                            placeholder="输入视频名、番号、演员、片商或分类..."
                             autoFocus
                         />
 
-                        {/* 快捷键提示 (仅在大屏幕显示，增添细节感) */}
-                        <div className="absolute right-28 top-1/2 -translate-y-1/2 hidden sm:flex items-center space-x-1 text-slate-300 pointer-events-none">
-                            <kbd className="font-sans text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white">⌘</kbd>
-                            <kbd className="font-sans text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white">K</kbd>
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={handleClear}
+                                className="absolute right-24 top-1/2 translate-y-[2px] p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        )}
+
+                        <div className="absolute right-16 top-1/2 translate-y-[2px] hidden sm:flex items-center space-x-0.5 text-muted-foreground/60 pointer-events-none">
+                            <kbd className="font-mono text-[11px] border border-border/80 rounded px-1.5 py-0.5 bg-muted">⌘K</kbd>
                         </div>
 
                         <Button
                             type="submit"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 h-12 rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors"
+                            className="absolute right-1.5 top-1/2 translate-y-[2px] h-10 rounded-xl px-4 text-sm font-medium shadow-xs"
                         >
                             搜索
                         </Button>
                     </form>
                 </header>
 
-                {/* 2. 搜索结果展示区 */}
-                {(query || totalResults > 0) && (
-                    <section className="max-w-3xl mx-auto">
-                        {totalResults > 0 ? (
-                            <div className="space-y-2">
-                                <p className="text-sm text-slate-500 mb-8 px-2 text-center sm:text-left">
-                                    为您找到 {totalResults} 条关于 "{query || '默认展示'}" 的结果
-                                </p>
+                {/* 2. 检索结果分类标签栏 */}
+                {query && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-border/60 pb-4">
+                        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
+                            {tabs.map((tab) => {
+                                const isActive = activeTab === tab.key;
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.key)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
+                                            isActive
+                                                ? 'bg-primary text-primary-foreground shadow-xs'
+                                                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        }`}
+                                    >
+                                        {tab.icon}
+                                        <span>{tab.label}</span>
+                                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                                            isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-muted-foreground'
+                                        }`}>
+                                            {tab.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
 
-                                {/* 渲染各个分组 */}
-                                {renderGroup('产品与服务', <Package className="w-5 h-5" />, displayResults.products)}
-                                {renderGroup('帮助文档', <BookOpen className="w-5 h-5" />, displayResults.help)}
-                                {renderGroup('博客文章', <FileText className="w-5 h-5" />, displayResults.blog)}
+                        <div className="text-xs text-muted-foreground shrink-0 self-end sm:self-center">
+                            共检索到 <span className="font-semibold text-foreground">{totalResults}</span> 条结果
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. 搜索结果展示区 */}
+                {query ? (
+                    totalResults > 0 ? (
+                        <div className="space-y-10">
+                            {/* 1. 视频结果 */}
+                            {(activeTab === 'all' || activeTab === 'videos') && videos.length > 0 && (
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <VideoIcon className="size-4.5 text-blue-500" />
+                                            <h2 className="text-base font-semibold text-foreground">视频</h2>
+                                            <Badge variant="secondary" className="text-xs px-2 py-0">
+                                                {videos.length}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {videos.map((video) => {
+                                            const thumb = getVideoThumbnail(video);
+                                            return (
+                                                <Link
+                                                    key={`video-${video.id}`}
+                                                    href={video.url}
+                                                    className="group flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-border hover:shadow-md transition-all"
+                                                >
+                                                    <div className="relative aspect-video w-full bg-muted overflow-hidden">
+                                                        {thumb ? (
+                                                            <img
+                                                                src={thumb}
+                                                                alt={video.name}
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                                loading="lazy"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground/40">
+                                                                <VideoIcon className="size-10" />
+                                                            </div>
+                                                        )}
+                                                        {video.video_code && (
+                                                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[11px] font-mono font-medium text-white shadow-xs">
+                                                                {video.video_code}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="p-3.5 flex flex-col flex-1 justify-between gap-2">
+                                                        <div>
+                                                            <h3 className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+                                                                {video.name_zh || video.name}
+                                                            </h3>
+                                                            {video.name_zh && video.name && video.name !== video.name_zh && (
+                                                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5 font-mono">
+                                                                    {video.name}
+                                                                </p>
+                                                            )}
+                                                        </div>
+
+                                                        {video.release_at && (
+                                                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                                <Calendar className="size-3" />
+                                                                <span>{video.release_at.substring(0, 10)}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* 2. 演员结果 */}
+                            {(activeTab === 'all' || activeTab === 'actors') && actors.length > 0 && (
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Users className="size-4.5 text-pink-500" />
+                                            <h2 className="text-base font-semibold text-foreground">演员</h2>
+                                            <Badge variant="secondary" className="text-xs px-2 py-0">
+                                                {actors.length}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        {actors.map((actor) => (
+                                            <Link
+                                                key={`actor-${actor.id}`}
+                                                href={actor.url}
+                                                className="group flex flex-col items-center p-3.5 rounded-2xl border border-border/60 bg-card hover:border-border hover:shadow-md transition-all text-center"
+                                            >
+                                                <Avatar className="size-16 rounded-full border border-border/50 group-hover:scale-105 transition-transform duration-200">
+                                                    <AvatarImage src={actor.avatar || ''} alt={actor.name} className="object-cover" />
+                                                    <AvatarFallback className="text-sm font-semibold bg-pink-500/10 text-pink-600">
+                                                        {actor.name.slice(0, 2)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="mt-2.5 w-full">
+                                                    <div className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                                        {actor.name}
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* 3. 片商结果 */}
+                            {(activeTab === 'all' || activeTab === 'channels') && channels.length > 0 && (
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Clapperboard className="size-4.5 text-amber-500" />
+                                            <h2 className="text-base font-semibold text-foreground">片商</h2>
+                                            <Badge variant="secondary" className="text-xs px-2 py-0">
+                                                {channels.length}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        {channels.map((channel) => (
+                                            <Link
+                                                key={`channel-${channel.id}`}
+                                                href={channel.url}
+                                                className="group flex flex-col items-center p-3.5 rounded-2xl border border-border/60 bg-card hover:border-border hover:shadow-md transition-all text-center"
+                                            >
+                                                <Avatar className="size-16 rounded-2xl border border-border/50 group-hover:scale-105 transition-transform duration-200">
+                                                    <AvatarImage src={channel.logo || channel.avatar || ''} alt={channel.name} className="object-cover" />
+                                                    <AvatarFallback className="text-sm font-semibold bg-amber-500/10 text-amber-600">
+                                                        {channel.name.slice(0, 2)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="mt-2.5 w-full">
+                                                    <div className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                                        {channel.name}
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* 4. 分类结果 */}
+                            {(activeTab === 'all' || activeTab === 'categories') && categories.length > 0 && (
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <LayoutGrid className="size-4.5 text-emerald-500" />
+                                            <h2 className="text-base font-semibold text-foreground">分类</h2>
+                                            <Badge variant="secondary" className="text-xs px-2 py-0">
+                                                {categories.length}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2.5">
+                                        {categories.map((cat) => (
+                                            <Link
+                                                key={`cat-${cat.id}`}
+                                                href={cat.url}
+                                                className="group inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/70 bg-card hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all text-xs font-medium"
+                                            >
+                                                <Hash className="size-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                <span>{cat.name_zh || cat.name}</span>
+                                                {cat.name_zh && cat.name && cat.name !== cat.name_zh && (
+                                                    <span className="text-[11px] text-muted-foreground/80 font-normal">
+                                                        ({cat.name})
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+                        </div>
+                    ) : (
+                        /* 空搜索状态 */
+                        <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-border/80 bg-card/50">
+                            <div className="size-16 rounded-full bg-muted/80 flex items-center justify-center mx-auto mb-4 text-muted-foreground">
+                                <MessageSquareX className="size-8" />
                             </div>
-                        ) : (
-                            /* 空状态 */
-                            <div className="text-center py-20 px-6 bg-slate-50 rounded-3xl border border-slate-100 border-dashed">
-                                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                                    <MessageSquareX className="w-10 h-10 text-slate-400" />
-                                </div>
-                                <h2 className="text-xl font-semibold text-slate-900 mb-2">未找到相关内容</h2>
-                                <p className="text-slate-500 max-w-md mx-auto">
-                                    我们在全站都没有找到与“<span className="font-medium text-slate-700">{query}</span>”匹配的信息。请尝试精简您的搜索词。
-                                </p>
-                            </div>
-                        )}
-                    </section>
+                            <h2 className="text-lg font-semibold text-foreground mb-1">未找到相关结果</h2>
+                            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                                全站暂未发现与 “<span className="font-medium text-foreground">{query}</span>” 匹配的内容。请尝试更换关键词或检查拼写。
+                            </p>
+                        </div>
+                    )
+                ) : (
+                    /* 初始未搜索推荐/引导 */
+                    <div className="text-center py-16 px-6 rounded-3xl border border-border/60 bg-card/40">
+                        <div className="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+                            <Sparkles className="size-7" />
+                        </div>
+                        <h2 className="text-base font-semibold text-foreground mb-1">请输入搜索关键词</h2>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                            支持按番号、视频标题、演员名字、片商或分类进行多维全站检索。
+                        </p>
+                    </div>
                 )}
             </div>
         </>

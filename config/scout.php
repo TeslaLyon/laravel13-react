@@ -206,6 +206,61 @@ return [
                     ],
                 ],
             ],
+            \App\Models\Channel::class => [
+                'searchableAttributes' => [
+                    'name',
+                    'slug',
+                ],
+                'filterableAttributes' => [
+                    'id',
+                ],
+                'sortableAttributes' => [
+                    'id',
+                ],
+                'rankingRules' => [
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'sort',
+                    'exactness',
+                ],
+                'typoTolerance' => [
+                    'enabled' => true,
+                    'minWordSizeForTypos' => [
+                        'oneTypo' => 3,
+                        'twoTypos' => 7,
+                    ],
+                ],
+            ],
+            \App\Models\Category::class => [
+                'searchableAttributes' => [
+                    'name',
+                    'name_zh',
+                    'slug',
+                ],
+                'filterableAttributes' => [
+                    'id',
+                ],
+                'sortableAttributes' => [
+                    'id',
+                ],
+                'rankingRules' => [
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'sort',
+                    'exactness',
+                ],
+                'typoTolerance' => [
+                    'enabled' => true,
+                    'minWordSizeForTypos' => [
+                        'oneTypo' => 3,
+                        'twoTypos' => 7,
+                    ],
+                ],
+            ],
         ],
         'model-settings' => [
             // User::class => [

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
 use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
+use Laravel\Scout\Searchable;
 
 /**
  * @property int $id
@@ -44,7 +45,7 @@ use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
  */
 class Channel extends Model implements ReactableInterface
 {
-    use Reactable;
+    use Reactable, Searchable;
 
     protected $fillable = [
         'name',
@@ -56,6 +57,15 @@ class Channel extends Model implements ReactableInterface
         'logo',
         'official_website_url',
     ];
+
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'name' => $this->name,
+            'slug' => $this->slug,
+        ];
+    }
 
     public function videos(): HasMany
     {

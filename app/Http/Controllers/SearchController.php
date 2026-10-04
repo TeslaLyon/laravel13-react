@@ -6,43 +6,30 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\JsonResponse;
+use App\Models\Video;
 use App\Models\Actor;
+use App\Models\Channel;
 use App\Models\Category;
 use App\Models\Tag;
-use Illuminate\Support\Sleep;
 
 class SearchController extends Controller
 {
+    /**
+     * 全局搜索页面（Inertia 渲染）
+     */
     public function index(Request $request): Response
     {
-        $query = $request->input('q', '');
+        $query = trim((string) $request->input('q', ''));
 
-        // 初始化分组结果数组
         $results = [
-            'help' => [],
-            'blog' => [],
-            'products' => [],
+            'videos' => [],
+            'actors' => [],
+            'channels' => [],
+            'categories' => [],
         ];
 
-        if (!empty(trim($query))) {
-            // 这里我们模拟从 Meilisearch 或数据库中查询不同模块的数据
-            // 在实际项目中，你可以调用不同模型的 search() 方法
-
-            // 1. 模拟搜索帮助中心
-            $results['help'] = [
-                ['id' => 'h1', 'title' => '如何修改密码？', 'excerpt' => '了解重置密码的详细步骤...', 'url' => '/help/article/h1'],
-            ];
-
-            // 2. 模拟搜索博客/动态
-            $results['blog'] = [
-                ['id' => 'b1', 'title' => 'Laravel 13 与 React 的完美结合', 'excerpt' => '探讨现代全栈开发的最佳实践...', 'url' => '/blog/b1'],
-                ['id' => 'b2', 'title' => '2026年网站设计趋势', 'excerpt' => '极简主义与大圆角的回归...', 'url' => '/blog/b2'],
-            ];
-
-            // 3. 模拟搜索产品或服务
-            $results['products'] = [
-                ['id' => 'p1', 'title' => '高级订阅会员 (Pro)', 'excerpt' => '解锁所有功能，享受极速响应...', 'url' => '/pricing'],
-            ];
+        if (!empty($query)) {
+            $results = $this->performSearch($query, 12);
         }
 
         return Inertia::render('search/index', [
@@ -51,16 +38,180 @@ class SearchController extends Controller
         ]);
     }
 
+    /**
+     * 侧边栏/全局即时搜索接口（JSON 返回，供弹窗与自动补全使用）
+     */
+    public function global(Request $request): JsonResponse
+    {
+        $query = trim((string) $request->input('q', ''));
+        $limit = max(1, min(10, (int) $request->input('limit', 5)));
+
+        if (empty($query)) {
+            return response()->json([
+                'videos' => [],
+                'actors' => [],
+                'channels' => [],
+                'categories' => [],
+            ]);
+        }
+
+        $results = $this->performSearch($query, $limit);
+
+        return response()->json($results);
+    }
+
+    /**
+     * 执行四维 Meilisearch 聚合检索 (视频、演员、片商、分类)
+     */
+    private function performSearch(string $query, int $limit): array
+    {
+        // 1. 检索视频 (Video)
+        try {
+            $videos = Video::search($query)
+                ->take($limit)
+                ->get()
+                ->map(fn (Video $v) => [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'name_zh' => $v->name_zh,
+                    'slug' => $v->slug,
+                    'video_code' => $v->video_code,
+                    'list_img' => $v->list_img,
+                    'release_at' => $v->release_at,
+                    'url' => route('videos.show', ['video' => $v->id, 'slug' => $v->slug ?: 'video']),
+                ])
+                ->all();
+        } catch (\Throwable) {
+            $videos = Video::query()
+                ->where(function ($q) use ($query) {
+                    $q->where('name', 'ILIKE', "%{$query}%")
+                        ->orWhere('name_zh', 'ILIKE', "%{$query}%")
+                        ->orWhere('video_code', 'ILIKE', "%{$query}%");
+                })
+                ->limit($limit)
+                ->get()
+                ->map(fn (Video $v) => [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'name_zh' => $v->name_zh,
+                    'slug' => $v->slug,
+                    'video_code' => $v->video_code,
+                    'list_img' => $v->list_img,
+                    'release_at' => $v->release_at,
+                    'url' => route('videos.show', ['video' => $v->id, 'slug' => $v->slug ?: 'video']),
+                ])
+                ->all();
+        }
+
+        // 2. 检索演员 (Actor)
+        try {
+            $actors = Actor::search($query)
+                ->take($limit)
+                ->get()
+                ->map(fn (Actor $a) => [
+                    'id' => $a->id,
+                    'name' => $a->name,
+                    'slug' => $a->slug,
+                    'avatar' => $a->avatar,
+                    'url' => route('actors.show', ['actor' => $a->id, 'slug' => $a->slug ?: 'actor']),
+                ])
+                ->all();
+        } catch (\Throwable) {
+            $actors = Actor::query()
+                ->where('name', 'ILIKE', "%{$query}%")
+                ->limit($limit)
+                ->get()
+                ->map(fn (Actor $a) => [
+                    'id' => $a->id,
+                    'name' => $a->name,
+                    'slug' => $a->slug,
+                    'avatar' => $a->avatar,
+                    'url' => route('actors.show', ['actor' => $a->id, 'slug' => $a->slug ?: 'actor']),
+                ])
+                ->all();
+        }
+
+        // 3. 检索片商 (Channel)
+        try {
+            $channels = Channel::search($query)
+                ->take($limit)
+                ->get()
+                ->map(fn (Channel $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'slug' => $c->slug,
+                    'avatar' => $c->avatar,
+                    'logo' => $c->logo,
+                    'url' => route('channels.show', ['channel' => $c->id, 'slug' => $c->slug ?: 'channel']),
+                ])
+                ->all();
+        } catch (\Throwable) {
+            $channels = Channel::query()
+                ->where('name', 'ILIKE', "%{$query}%")
+                ->limit($limit)
+                ->get()
+                ->map(fn (Channel $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'slug' => $c->slug,
+                    'avatar' => $c->avatar,
+                    'logo' => $c->logo,
+                    'url' => route('channels.show', ['channel' => $c->id, 'slug' => $c->slug ?: 'channel']),
+                ])
+                ->all();
+        }
+
+        // 4. 检索分类 (Category)
+        try {
+            $categories = Category::search($query)
+                ->take($limit)
+                ->get()
+                ->map(fn (Category $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'name_zh' => $c->name_zh,
+                    'slug' => $c->slug,
+                    'url' => route('categories.show', ['category' => $c->id, 'slug' => $c->slug ?: 'category']),
+                ])
+                ->all();
+        } catch (\Throwable) {
+            $categories = Category::query()
+                ->where(function ($q) use ($query) {
+                    $q->where('name', 'ILIKE', "%{$query}%")
+                        ->orWhere('name_zh', 'ILIKE', "%{$query}%");
+                })
+                ->limit($limit)
+                ->get()
+                ->map(fn (Category $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'name_zh' => $c->name_zh,
+                    'slug' => $c->slug,
+                    'url' => route('categories.show', ['category' => $c->id, 'slug' => $c->slug ?: 'category']),
+                ])
+                ->all();
+        }
+
+        return [
+            'videos' => $videos,
+            'actors' => $actors,
+            'channels' => $channels,
+            'categories' => $categories,
+        ];
+    }
+
+    /**
+     * 单独搜索演员接口（配合高级筛选等异步补全）
+     */
     public function actors(Request $request): JsonResponse
     {
-        $keyword = trim($request->query('q', ''));
+        $keyword = trim((string) $request->query('q', ''));
 
         if (empty($keyword)) {
             return response()->json([]);
         }
 
         try {
-            // 🚀 优先使用 Meilisearch 毫秒级检索
             $actors = Actor::search($keyword)->take(10)->get(['id', 'name', 'avatar']);
             if ($actors->isEmpty()) {
                 $actors = Actor::query()
@@ -81,35 +232,48 @@ class SearchController extends Controller
     }
 
     /**
-     * 2. 搜索分类
+     * 单独搜索分类接口（配合筛选等异步补全）
      */
     public function categories(Request $request): JsonResponse
     {
-        $keyword = trim($request->query('q', ''));
+        $keyword = trim((string) $request->query('q', ''));
 
         if (empty($keyword)) {
             return response()->json([]);
         }
 
-        $categories = Category::query()
-            ->where('name', 'ILIKE', "{$keyword}%")
-            ->select(['id', 'name', 'name_zh'])
-            ->limit(10)
-            ->get();
-        // ->map(fn ($category) => [
-        //     'id'   => $category->id,
-        //     'name' => $category->name,
-        // ]);
-        Sleep::for(1000)->milliseconds();
+        try {
+            $categories = Category::search($keyword)->take(10)->get(['id', 'name', 'name_zh']);
+            if ($categories->isEmpty()) {
+                $categories = Category::query()
+                    ->where(function ($q) use ($keyword) {
+                        $q->where('name', 'ILIKE', "{$keyword}%")
+                            ->orWhere('name_zh', 'ILIKE', "{$keyword}%");
+                    })
+                    ->select(['id', 'name', 'name_zh'])
+                    ->limit(10)
+                    ->get();
+            }
+        } catch (\Throwable) {
+            $categories = Category::query()
+                ->where(function ($q) use ($keyword) {
+                    $q->where('name', 'ILIKE', "{$keyword}%")
+                        ->orWhere('name_zh', 'ILIKE', "{$keyword}%");
+                })
+                ->select(['id', 'name', 'name_zh'])
+                ->limit(10)
+                ->get();
+        }
+
         return response()->json($categories);
     }
 
     /**
-     * 3. 搜索标签
+     * 单独搜索标签接口
      */
     public function tags(Request $request): JsonResponse
     {
-        $keyword = trim($request->query('q', ''));
+        $keyword = trim((string) $request->query('q', ''));
 
         if (empty($keyword)) {
             return response()->json([]);
@@ -120,11 +284,7 @@ class SearchController extends Controller
             ->select(['id', 'name'])
             ->limit(10)
             ->get();
-        // ->map(fn ($tag) => [
-        //     'id'   => $tag->id,
-        //     'name' => $tag->name,
-        // ]);
-        Sleep::for(1000)->milliseconds();
+
         return response()->json($tags);
     }
 }

@@ -85,6 +85,12 @@ Route::get('/store', [StoreController::class, 'index'])->name('store.index');
 Route::get('/store/product/{product}/{slug}', [StoreController::class, 'show'])->name('store.product.show');
 Route::get('/vip', [VipController::class, 'index'])->name('vip.index');
 Route::get('/search', [SearchController::class, 'index'])->name('search');
+Route::prefix('search')->group(function () {
+    Route::get('/global', [SearchController::class, 'global'])->name('search.global');
+    Route::get('/actors', [SearchController::class, 'actors']);
+    Route::get('/categories', [SearchController::class, 'categories']);
+    Route::get('/tags', [SearchController::class, 'tags']);
+});
 Route::post('/videos/cascade-filters', [VideoController::class, 'getCascadeFilters']);
 
 Route::get('/@{user:name}/{tab?}', [UserSpaceController::class, 'show'])
@@ -164,12 +170,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('actors.menu.status');
     Route::post('/actors/{actor}/{slug}/corrections', [ActorCorrectionController::class, 'store'])
         ->name('actors.corrections.store');
-
-    Route::prefix('search')->group(function () {
-        Route::get('/actors', [SearchController::class, 'actors']);
-        Route::get('/categories', [SearchController::class, 'categories']);
-        Route::get('/tags', [SearchController::class, 'tags']);
-    });
 
     // Route::post('/videos/{video}/{slug}/report', [VideoController::class, 'report'])
     //     ->name('videos.report');
