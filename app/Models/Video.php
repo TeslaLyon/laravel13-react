@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
 use Cog\Laravel\Love\Reactable\Models\Traits\Reactable;
+use Laravel\Scout\Searchable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -63,9 +64,23 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class Video extends Model implements ReactableInterface
 {
-    use Reactable;
+    use Reactable, Searchable;
 
     protected $guarded = [];
+
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'name' => $this->name,
+            'name_zh' => $this->name_zh,
+            'video_code' => $this->video_code,
+            'slug' => $this->slug,
+            'channel_id' => (int) $this->channel_id,
+            'is_4k' => (bool) $this->is_4k,
+            'is_vr' => (bool) $this->is_vr,
+        ];
+    }
 
     protected function casts(): array
     {

@@ -627,7 +627,20 @@ class VideoController extends Controller
             });
         }
         if (!empty($actorSearch)) {
-            $actorQuery->where('name', 'ILIKE', "%{$actorSearch}%");
+            try {
+                // 🚀 优先使用 Meilisearch 进行毫秒级错别字容错模糊检索
+                $meiliActorIds = Actor::search($actorSearch)->take(50)->keys()->all();
+                if (!empty($meiliActorIds)) {
+                    $actorQuery->whereIn('id', $meiliActorIds);
+                    $sanitizedIds = implode(',', array_map('intval', $meiliActorIds));
+                    $actorQuery->orderByRaw("array_position(ARRAY[{$sanitizedIds}]::bigint[], id)");
+                } else {
+                    $actorQuery->where('name', 'ILIKE', "%{$actorSearch}%");
+                }
+            } catch (\Throwable) {
+                // 异常或本地未启动 Meilisearch 时安全优雅降级回数据库 ILIKE
+                $actorQuery->where('name', 'ILIKE', "%{$actorSearch}%");
+            }
         }
         $availableActors = $actorQuery->select('id', 'name')->limit(50)->get()->toArray();
 

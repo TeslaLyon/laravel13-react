@@ -59,25 +59,24 @@ class SearchController extends Controller
             return response()->json([]);
         }
 
-        $actors = Actor::query()
-            ->where('name', 'ILIKE', "{$keyword}%")
-            // 如果你的别名存放在 aliases 字段 (JSON 或字符串)，也可以加入搜索
-            // ->orWhere('aliases', 'like', "%{$keyword}%")
-            ->select(['id', 'name', 'avatar'])
-            ->limit(10)
-            ->get();
-        // ->map(function ($actor) {
-        //     // 格式化为前端 EntitySuggestInput 所需的 SuggestOption 结构
-        //     return [
-        //         'id'       => $actor->id,
-        //         'name'     => $actor->name,
-        //         'avatar'   => $actor->avatar ?? '/images/default-avatar.png',
-        //         // 'subtitle' => is_array($actor->aliases)
-        //         //                 ? implode(', ', $actor->aliases)
-        //         //                 : $actor->aliases,
-        //     ];
-        // });
-        Sleep::for(1000)->milliseconds();
+        try {
+            // 🚀 优先使用 Meilisearch 毫秒级检索
+            $actors = Actor::search($keyword)->take(10)->get(['id', 'name', 'avatar']);
+            if ($actors->isEmpty()) {
+                $actors = Actor::query()
+                    ->where('name', 'ILIKE', "{$keyword}%")
+                    ->select(['id', 'name', 'avatar'])
+                    ->limit(10)
+                    ->get();
+            }
+        } catch (\Throwable) {
+            $actors = Actor::query()
+                ->where('name', 'ILIKE', "{$keyword}%")
+                ->select(['id', 'name', 'avatar'])
+                ->limit(10)
+                ->get();
+        }
+
         return response()->json($actors);
     }
 
