@@ -795,14 +795,74 @@ class VixenCrawlerService
     }
 
     /**
+     * 从单条分辨率配置中解析标准画质数值 (例如 2160, 1080, 720, 480, 360, 270)
+     */
+    protected function extractResolutionValue(array $res): int
+    {
+        $label = strtoupper((string) ($res['label'] ?? ''));
+        $resText = strtoupper((string) ($res['res'] ?? ''));
+        $combinedText = "{$label} {$resText}";
+
+        // 1. 优先匹配明确的 4K / UHD 标识
+        if (str_contains($combinedText, '4K') || str_contains($combinedText, 'UHD') || str_contains($combinedText, '2160')) {
+            return 2160;
+        }
+
+        // 2. 提取数字属性 (过滤掉 width/height 中的非数字字符，例如 "480l")
+        $rawW = preg_replace('/[^\d]/', '', (string) ($res['width'] ?? ''));
+        $rawH = preg_replace('/[^\d]/', '', (string) ($res['height'] ?? ''));
+        $w = (int) $rawW;
+        $h = (int) $rawH;
+
+        // 如果 width 达到了 3840 (4K横向) 或 2160
+        if ($w >= 3840 || $h >= 3840 || $w >= 2160 || $h >= 2160) {
+            return 2160;
+        }
+
+        // 3. 匹配 1080p / FHD
+        if (str_contains($combinedText, '1080') || str_contains($combinedText, 'FHD')) {
+            return 1080;
+        }
+        if ($w >= 1920 || $h >= 1920 || $w >= 1080 || $h >= 1080) {
+            return 1080;
+        }
+
+        // 4. 匹配 720p / HD
+        if (str_contains($combinedText, '720') || str_contains($combinedText, 'HD')) {
+            return 720;
+        }
+        if ($w >= 1280 || $h >= 1280 || $w >= 720 || $h >= 720) {
+            return 720;
+        }
+
+        // 5. 匹配 480p / SD
+        if (str_contains($combinedText, '480') || str_contains($combinedText, 'SD')) {
+            return 480;
+        }
+        if ($w >= 480 || $h >= 480) {
+            return 480;
+        }
+
+        // 6. 匹配 360p
+        if (str_contains($combinedText, '360') || $w >= 360 || $h >= 360) {
+            return 360;
+        }
+
+        // 7. 匹配 270p
+        if (str_contains($combinedText, '270') || $w >= 270 || $h >= 270) {
+            return 270;
+        }
+
+        return max($w, $h);
+    }
+
+    /**
      * 校验是否为 4K 画质
      */
     protected function checkIs4k(array $downloadResolutions): bool
     {
         foreach ($downloadResolutions as $res) {
-            $w = (int) ($res['width'] ?? 0);
-            $h = (int) ($res['height'] ?? 0);
-            if ($w >= 2160 || $h >= 2160) {
+            if ($this->extractResolutionValue($res) >= 2160) {
                 return true;
             }
         }
@@ -817,12 +877,9 @@ class VixenCrawlerService
         $maxDimension = 0;
 
         foreach ($downloadResolutions as $res) {
-            $w = (int) ($res['width'] ?? 0);
-            $h = (int) ($res['height'] ?? 0);
-            // 分辨率通常以高度为画质标称 (如 3840x2160 为 2160p，1920x1080 为 1080p)
-            $dimension = min($w, $h) ?: max($w, $h);
-            if ($dimension > $maxDimension) {
-                $maxDimension = $dimension;
+            $val = $this->extractResolutionValue($res);
+            if ($val > $maxDimension) {
+                $maxDimension = $val;
             }
         }
 
@@ -837,6 +894,12 @@ class VixenCrawlerService
         }
         if ($maxDimension >= 480) {
             return '480p';
+        }
+        if ($maxDimension >= 360) {
+            return '360p';
+        }
+        if ($maxDimension >= 270) {
+            return '270p';
         }
 
         return $maxDimension > 0 ? "{$maxDimension}p" : '1080p';

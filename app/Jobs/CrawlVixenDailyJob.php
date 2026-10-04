@@ -14,12 +14,12 @@ class CrawlVixenDailyJob implements ShouldQueue
     /**
      * 任务最大超时时间（秒）：多片商演员及视频下载，设定 60 分钟
      */
-    public int $timeout = 3600;
+    public int $timeout = 7200;
 
     /**
      * 最大失败重试次数
      */
-    public int $tries = 2;
+    public int $tries = 1;
 
     /**
      * 片商 slug（可选，为 null 时遍历所有片商）
