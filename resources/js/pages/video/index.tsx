@@ -147,6 +147,7 @@ export default function YoutubeVideoGrid({
 
     const cachedDefaultData = useRef<FilterGroupData | null>(null);
     const actorSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastSearchedActorKeyword = useRef<string>('');
 
     const { post, cancel, processing, transform } = useHttp({
         actors: [] as (string | number)[],
@@ -257,9 +258,18 @@ export default function YoutubeVideoGrid({
         if (actorSearchTimer.current) {
             clearTimeout(actorSearchTimer.current);
         }
+
+        const trimmed = query.trim();
+        // 过滤完全相同关键词的冗余请求
+        if (trimmed === lastSearchedActorKeyword.current) {
+            return;
+        }
+
+        // 延长防抖到 600ms，用户连续打字期间绝不发请求，停顿输入后才发出单次请求
         actorSearchTimer.current = setTimeout(() => {
-            fetchCascadeFilters(currentSelected, query);
-        }, 300);
+            lastSearchedActorKeyword.current = trimmed;
+            fetchCascadeFilters(currentSelected, trimmed);
+        }, 600);
     };
 
     const handleToggleFilterPanel = () => {
@@ -294,6 +304,7 @@ export default function YoutubeVideoGrid({
         const emptyState = { actors: [], tags: [], channels: [] };
         setCurrentSelected(emptyState);
         setIsActorSearching(false);
+        lastSearchedActorKeyword.current = '';
 
         if (cachedDefaultData.current) {
             setFilterData(cachedDefaultData.current);

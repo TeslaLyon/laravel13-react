@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Search, Plus, Check, RotateCcw, Filter, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
@@ -47,6 +47,7 @@ export function AdvancedFilterPanel({
         tags: '',
         channels: '',
     });
+    const isComposingRef = useRef(false);
 
     const toggleSelect = (category: keyof SelectedFilterState, id: string | number) => {
         if (isLoading) return;
@@ -136,7 +137,22 @@ export function AdvancedFilterPanel({
                         placeholder="搜索名称..."
                         disabled={isLoading}
                         value={currentSearch}
-                        onChange={(e) => handleSearchChange(category, e.target.value)}
+                        onCompositionStart={() => {
+                            isComposingRef.current = true;
+                        }}
+                        onCompositionEnd={(e) => {
+                            isComposingRef.current = false;
+                            handleSearchChange(category, e.currentTarget.value);
+                        }}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSearchQueries((prev) => ({ ...prev, [category]: val }));
+                            if (!isComposingRef.current) {
+                                if (category === 'actors' && onActorSearch) {
+                                    onActorSearch(val);
+                                }
+                            }
+                        }}
                         className={`w-full pl-10 ${category === 'actors' && isActorSearching ? 'pr-10' : 'pr-3.5'} py-2 bg-background text-foreground text-sm rounded-xl border border-input focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder:text-muted-foreground/70 transition-all shadow-sm disabled:opacity-50`}
                     />
                     {category === 'actors' && isActorSearching && (
