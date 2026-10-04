@@ -91,15 +91,32 @@ class SearchController extends Controller
                 ->get();
         }
 
+        $videoModels->loadMissing('channel:id,name,slug,avatar,data_crawl_type');
+
         $videos = $videoModels->map(fn (Video $v) => [
             'id' => $v->id,
             'name' => $v->name,
             'name_zh' => $v->name_zh,
             'slug' => $v->slug,
             'video_code' => $v->video_code,
+            'channel_id' => $v->channel_id,
             'list_img' => $v->list_img,
+            'preview' => $v->preview,
             'release_at' => $v->release_at,
+            'country' => $v->country,
+            'is_4k' => (bool) $v->is_4k,
+            'is_vr' => (bool) $v->is_vr,
+            'likes_count' => $v->likes_count,
+            'favorites_count' => $v->favorites_count,
+            'created_at' => $v->created_at?->toISOString() ?? (string) $v->created_at,
             'url' => route('videos.show', ['video' => $v->id, 'slug' => $v->slug ?: 'video']),
+            'channel' => $v->channel ? [
+                'id' => $v->channel->id,
+                'name' => $v->channel->name,
+                'slug' => $v->channel->slug,
+                'avatar' => $v->channel->avatar,
+                'data_crawl_type' => $v->channel->data_crawl_type,
+            ] : null,
         ])->all();
 
         // 2. 检索演员 (Actor)

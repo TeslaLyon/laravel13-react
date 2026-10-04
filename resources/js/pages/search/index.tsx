@@ -6,7 +6,6 @@ import {
     Users,
     Clapperboard,
     LayoutGrid,
-    Calendar,
     Hash,
     MessageSquareX,
     Sparkles,
@@ -17,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { VideoCard } from '@/components/video/Card';
 
 // --- 类型定义 ---
 export interface SearchVideoItem {
@@ -25,9 +25,24 @@ export interface SearchVideoItem {
     name_zh?: string | null;
     slug?: string;
     video_code?: string;
+    channel_id?: number;
     list_img?: any;
+    preview?: string;
     release_at?: string | null;
+    country?: string | null;
+    is_4k?: boolean;
+    is_vr?: boolean;
+    likes_count?: number;
+    favorites_count?: number;
+    created_at?: string;
     url: string;
+    channel?: {
+        id: number;
+        name: string;
+        slug: string;
+        avatar?: string;
+        data_crawl_type?: number;
+    } | null;
 }
 
 export interface SearchActorItem {
@@ -117,15 +132,6 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
     const handleClear = () => {
         setSearchQuery('');
         inputRef.current?.focus();
-    };
-
-    const getVideoThumbnail = (video: SearchVideoItem): string | null => {
-        if (!video.list_img) return null;
-        if (typeof video.list_img === 'string') return video.list_img;
-        if (Array.isArray(video.list_img) && video.list_img[0]) {
-            return video.list_img[0].src || video.list_img[0].src_source || null;
-        }
-        return video.list_img.src || null;
     };
 
     const tabs: { key: TabKey; label: string; count: number; icon: React.ReactNode }[] = [
@@ -242,57 +248,15 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {videos.map((video) => {
-                                            const thumb = getVideoThumbnail(video);
-                                            return (
-                                                <Link
-                                                    key={`video-${video.id}`}
-                                                    href={video.url}
-                                                    className="group flex flex-col rounded-2xl border border-border/60 bg-card overflow-hidden hover:border-border hover:shadow-md transition-all"
-                                                >
-                                                    <div className="relative aspect-video w-full bg-muted overflow-hidden">
-                                                        {thumb ? (
-                                                            <img
-                                                                src={thumb}
-                                                                alt={video.name}
-                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                                loading="lazy"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground/40">
-                                                                <VideoIcon className="size-10" />
-                                                            </div>
-                                                        )}
-                                                        {video.video_code && (
-                                                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[11px] font-mono font-medium text-white shadow-xs">
-                                                                {video.video_code}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="p-3.5 flex flex-col flex-1 justify-between gap-2">
-                                                        <div>
-                                                            <h3 className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors">
-                                                                {video.name_zh || video.name}
-                                                            </h3>
-                                                            {video.name_zh && video.name && video.name !== video.name_zh && (
-                                                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5 font-mono">
-                                                                    {video.name}
-                                                                </p>
-                                                            )}
-                                                        </div>
-
-                                                        {video.release_at && (
-                                                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                                                <Calendar className="size-3" />
-                                                                <span>{video.release_at.substring(0, 10)}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </Link>
-                                            );
-                                        })}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-8">
+                                        {videos.map((video) => (
+                                            <Link
+                                                key={`video-${video.id}`}
+                                                href={video.url}
+                                            >
+                                                <VideoCard video={video as any} />
+                                            </Link>
+                                        ))}
                                     </div>
                                 </section>
                             )}

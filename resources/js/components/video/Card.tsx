@@ -46,8 +46,8 @@ export function VideoCard({ video }: { video: Video }) {
             {/* 底部信息区域 */}
             <div className="flex gap-3 px-1 mt-2">
                 <Avatar className="h-9 w-9 shrink-0 mt-0.5">
-                    <AvatarImage src={video.channel.avatar} alt={video.channel.name} />
-                    <AvatarFallback>{video.channel.name.substring(0, 2)}</AvatarFallback>
+                    <AvatarImage src={video.channel?.avatar} alt={video.channel?.name} />
+                    <AvatarFallback>{video.channel?.name?.substring(0, 2) || '视频'}</AvatarFallback>
                 </Avatar>
 
                 <div className="flex flex-col flex-1 min-w-0">
@@ -67,9 +67,11 @@ export function VideoCard({ video }: { video: Video }) {
                         </p>
                     )}
 
-                    <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
-                        {video.channel.name}
-                    </p>
+                    {video.channel && (
+                        <p className="text-sm text-muted-foreground mt-1 hover:text-primary transition-colors truncate">
+                            {video.channel.name}
+                        </p>
+                    )}
                     <p className="text-sm text-muted-foreground truncate">
                         1.2万次观看 • {dayjs(video.created_at).fromNow()}
                     </p>
