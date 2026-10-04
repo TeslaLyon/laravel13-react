@@ -101,6 +101,11 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // 监听 props.query 变化同步至输入框
+    useEffect(() => {
+        setSearchQuery(query);
+    }, [query]);
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         const trimmed = searchQuery.trim();
