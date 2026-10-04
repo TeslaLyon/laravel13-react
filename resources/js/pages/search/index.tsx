@@ -145,39 +145,44 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
                         支持搜索视频番号与标题、演员姓名、片商厂牌及分类标签
                     </p>
 
-                    <form onSubmit={handleSearch} className="relative group w-full pt-2">
-                        <SearchIcon className="absolute left-4 top-1/2 translate-y-[2px] text-muted-foreground/70 size-5 transition-colors group-focus-within:text-primary z-10" />
+                    <div className="pt-2 max-w-2xl mx-auto w-full">
+                        <form onSubmit={handleSearch} className="relative group flex items-center w-full">
+                            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 size-5 transition-colors group-focus-within:text-primary pointer-events-none z-10" />
 
-                        <Input
-                            ref={inputRef}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-11 pr-28 h-13 text-base rounded-2xl bg-card border-border/70 hover:border-border focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:border-primary transition-all shadow-sm"
-                            placeholder="输入视频名、番号、演员、片商或分类..."
-                            autoFocus
-                        />
+                            <Input
+                                ref={inputRef}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-12 pr-36 h-13 text-base rounded-2xl bg-card border-border/70 hover:border-border focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:border-primary transition-all shadow-sm"
+                                placeholder="输入视频名、番号、演员、片商或分类..."
+                                autoFocus
+                            />
 
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={handleClear}
-                                className="absolute right-24 top-1/2 translate-y-[2px] p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        )}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={handleClear}
+                                        className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                        title="清空"
+                                    >
+                                        <X className="size-4" />
+                                    </button>
+                                )}
 
-                        <div className="absolute right-16 top-1/2 translate-y-[2px] hidden sm:flex items-center space-x-0.5 text-muted-foreground/60 pointer-events-none">
-                            <kbd className="font-mono text-[11px] border border-border/80 rounded px-1.5 py-0.5 bg-muted">⌘K</kbd>
-                        </div>
+                                <div className="hidden sm:flex items-center text-muted-foreground/60 pointer-events-none">
+                                    <kbd className="font-mono text-[11px] border border-border/80 rounded px-1.5 py-0.5 bg-muted">⌘K</kbd>
+                                </div>
 
-                        <Button
-                            type="submit"
-                            className="absolute right-1.5 top-1/2 translate-y-[2px] h-10 rounded-xl px-4 text-sm font-medium shadow-xs"
-                        >
-                            搜索
-                        </Button>
-                    </form>
+                                <Button
+                                    type="submit"
+                                    className="h-9.5 rounded-xl px-4 text-sm font-medium shadow-xs"
+                                >
+                                    搜索
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
                 </header>
 
                 {/* 2. 检索结果分类标签栏 */}

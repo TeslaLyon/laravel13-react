@@ -24,7 +24,6 @@ import { index as storeIndex } from '@/routes/store';
 import { index as vipIndex } from '@/routes/vip';
 import { index as ForumIndex } from '@/routes/forum';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
-import { SidebarSearch } from '@/components/sidebar-search';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -108,7 +107,6 @@ export function AppSidebar() {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
-                <SidebarSearch />
             </SidebarHeader>
 
             <SidebarContent>
