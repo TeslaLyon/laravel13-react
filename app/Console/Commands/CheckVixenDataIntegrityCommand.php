@@ -46,6 +46,11 @@ class CheckVixenDataIntegrityCommand extends Command
         $onlyActors = (bool) $this->option('only-actors');
         $strict = (bool) $this->option('strict');
 
+        // 🌟 智能全量模式：如果传了 --all 且用户没有显式传递 --limit，则自动解除 50 条限制，全量检查库内所有数据
+        if ($all && !$this->input->hasParameterOption('--limit')) {
+            $limit = 0;
+        }
+
         DB::disableQueryLog();
 
         // 1. 获取目标片商列表
@@ -91,26 +96,32 @@ class CheckVixenDataIntegrityCommand extends Command
 
             $videoQuery->orderByDesc('updated_at');
 
-            if ($limit > 0) {
-                $videoQuery->limit($limit);
-            }
-
-            $videos = $videoQuery->get();
-            $totalVideosChecked = $videos->count();
+            $totalVideosAvailable = (clone $videoQuery)->count();
+            $totalVideosChecked = $limit > 0 ? min($totalVideosAvailable, $limit) : $totalVideosAvailable;
 
             $progressBar = $this->output->createProgressBar(max(1, $totalVideosChecked));
             $progressBar->start();
 
-            foreach ($videos as $video) {
-                $issues = $this->inspectVideo($video);
-                if (!empty($issues)) {
-                    $videoIssues[] = [
-                        'video'  => $video,
-                        'issues' => $issues,
-                    ];
+            // 🌟 采用分批 chunk(200) 流式扫描，杜绝全量查询时内存溢出 (OOM)
+            $processedVideoCount = 0;
+            (clone $videoQuery)->chunk(200, function ($videos) use (&$videoIssues, $progressBar, &$processedVideoCount, $limit) {
+                foreach ($videos as $video) {
+                    if ($limit > 0 && $processedVideoCount >= $limit) {
+                        return false;
+                    }
+
+                    $issues = $this->inspectVideo($video);
+                    if (!empty($issues)) {
+                        $videoIssues[] = [
+                            'video'  => $video,
+                            'issues' => $issues,
+                        ];
+                    }
+
+                    $processedVideoCount++;
+                    $progressBar->advance();
                 }
-                $progressBar->advance();
-            }
+            });
 
             $progressBar->finish();
             $this->newLine(2);
@@ -130,26 +141,32 @@ class CheckVixenDataIntegrityCommand extends Command
 
             $actorQuery->orderByDesc('updated_at');
 
-            if ($limit > 0) {
-                $actorQuery->limit($limit);
-            }
-
-            $actors = $actorQuery->get();
-            $totalActorsChecked = $actors->count();
+            $totalActorsAvailable = (clone $actorQuery)->count();
+            $totalActorsChecked = $limit > 0 ? min($totalActorsAvailable, $limit) : $totalActorsAvailable;
 
             $progressBar = $this->output->createProgressBar(max(1, $totalActorsChecked));
             $progressBar->start();
 
-            foreach ($actors as $actor) {
-                $issues = $this->inspectActor($actor);
-                if (!empty($issues)) {
-                    $actorIssues[] = [
-                        'actor'  => $actor,
-                        'issues' => $issues,
-                    ];
+            // 🌟 采用分批 chunk(200) 流式扫描
+            $processedActorCount = 0;
+            (clone $actorQuery)->chunk(200, function ($actors) use (&$actorIssues, $progressBar, &$processedActorCount, $limit) {
+                foreach ($actors as $actor) {
+                    if ($limit > 0 && $processedActorCount >= $limit) {
+                        return false;
+                    }
+
+                    $issues = $this->inspectActor($actor);
+                    if (!empty($issues)) {
+                        $actorIssues[] = [
+                            'actor'  => $actor,
+                            'issues' => $issues,
+                        ];
+                    }
+
+                    $processedActorCount++;
+                    $progressBar->advance();
                 }
-                $progressBar->advance();
-            }
+            });
 
             $progressBar->finish();
             $this->newLine(2);
