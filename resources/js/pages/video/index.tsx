@@ -145,11 +145,13 @@ export default function YoutubeVideoGrid({
     }, [currentSelected]);
 
     const cachedDefaultData = useRef<FilterGroupData | null>(null);
+    const actorSearchTimer = useRef<NodeJS.Timeout | null>(null);
 
     const { post, cancel, processing, transform } = useHttp({
         actors: [] as (string | number)[],
         tags: [] as (string | number)[],
         channels: [] as (string | number)[],
+        actor_search: '',
     });
 
     // 判断横向快捷分类高亮状态（纯根据 URL 参数判断）
@@ -188,16 +190,17 @@ export default function YoutubeVideoGrid({
         router.get('/videos', cleanParams(rawParams), { preserveState: true, preserveScroll: true });
     };
 
-    const fetchCascadeFilters = (selectedState?: SelectedFilterState) => {
+    const fetchCascadeFilters = (selectedState?: SelectedFilterState, actorSearchKeyword?: string) => {
         const stateToUse = selectedState || currentSelected;
 
         const isInitialFetch = (
             (!stateToUse.actors || stateToUse.actors.length === 0) &&
             (!stateToUse.tags || stateToUse.tags.length === 0) &&
-            (!stateToUse.channels || stateToUse.channels.length === 0)
+            (!stateToUse.channels || stateToUse.channels.length === 0) &&
+            !actorSearchKeyword
         );
 
-        const cacheKey = generateCacheKey(stateToUse);
+        const cacheKey = generateCacheKey(stateToUse) + (actorSearchKeyword ? `_actor:${actorSearchKeyword}` : '');
 
         const cachedData = getFilterFromCache(cacheKey);
         if (cachedData) {
@@ -215,6 +218,7 @@ export default function YoutubeVideoGrid({
             actors: stateToUse.actors || [],
             tags: stateToUse.tags || [],
             channels: stateToUse.channels || [],
+            actor_search: actorSearchKeyword || '',
         }));
 
         post(VideoController.getCascadeFilters.url(), {
@@ -238,6 +242,15 @@ export default function YoutubeVideoGrid({
                 toast.error('获取关联筛选数据失败');
             }
         });
+    };
+
+    const handleActorSearch = (query: string) => {
+        if (actorSearchTimer.current) {
+            clearTimeout(actorSearchTimer.current);
+        }
+        actorSearchTimer.current = setTimeout(() => {
+            fetchCascadeFilters(currentSelected, query);
+        }, 300);
     };
 
     const handleToggleFilterPanel = () => {

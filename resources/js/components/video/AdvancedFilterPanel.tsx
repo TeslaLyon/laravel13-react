@@ -24,6 +24,7 @@ interface AdvancedFilterPanelProps {
     initialSelected?: SelectedFilterState;
     isLoading?: boolean;
     onSelectionChange?: (selected: SelectedFilterState) => void;
+    onActorSearch?: (query: string) => void;
     onApply: (selected: SelectedFilterState) => void;
     onReset: () => void;
 }
@@ -33,6 +34,7 @@ export function AdvancedFilterPanel({
     initialSelected = { actors: [], tags: [], channels: [] },
     isLoading = false,
     onSelectionChange,
+    onActorSearch,
     onApply,
     onReset,
 }: AdvancedFilterPanelProps) {
@@ -66,26 +68,35 @@ export function AdvancedFilterPanel({
 
     const handleSearchChange = (category: keyof SelectedFilterState, query: string) => {
         setSearchQueries((prev) => ({ ...prev, [category]: query }));
+        if (category === 'actors' && onActorSearch) {
+            onActorSearch(query);
+        }
     };
 
-    // 🎯 核心防错优化 1：确保 filterItem 处理的一定是数组
+    // 🎯 核心防错优化 1：确保 filterItem 处理的一定是数组，且已选中的项在搜索时不会被隐藏
     const filteredData = useMemo(() => {
-        const filterItem = (list: FilterOption[], query: string): FilterOption[] => {
+        const filterItem = (
+            list: FilterOption[],
+            query: string,
+            keepSelectedIds: (string | number)[] = []
+        ): FilterOption[] => {
             // 安全防护：如果 list 不是有效数组，返回空数组
             if (!Array.isArray(list)) return [];
             if (!query.trim()) return list;
 
-            return list.filter((item) =>
-                item && typeof item.name === 'string' && item.name.toLowerCase().includes(query.toLowerCase())
-            );
+            return list.filter((item) => {
+                if (!item) return false;
+                if (keepSelectedIds.includes(item.id)) return true;
+                return typeof item.name === 'string' && item.name.toLowerCase().includes(query.toLowerCase());
+            });
         };
 
         return {
-            actors: filterItem(data?.actors, searchQueries.actors),
-            tags: filterItem(data?.tags, searchQueries.tags),
-            channels: filterItem(data?.channels, searchQueries.channels),
+            actors: filterItem(data?.actors, searchQueries.actors, selected.actors),
+            tags: filterItem(data?.tags, searchQueries.tags, selected.tags),
+            channels: filterItem(data?.channels, searchQueries.channels, selected.channels),
         };
-    }, [data, searchQueries]);
+    }, [data, searchQueries, selected]);
 
     const handleReset = () => {
         const emptyState = { actors: [], tags: [], channels: [] };

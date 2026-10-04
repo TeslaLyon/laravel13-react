@@ -508,10 +508,9 @@ class VideoController extends Controller
         $selectedActors = $request->input('actors', []);
         $selectedMixedTags = $request->input('tags', []);
         $selectedChannels = $request->input('channels', []);
+        $actorSearch = trim((string) $request->input('actor_search', ''));
 
-        Sleep::for(1000)->milliseconds();
-
-        $isDefaultRequest = empty($selectedActors) && empty($selectedMixedTags) && empty($selectedChannels);
+        $isDefaultRequest = empty($selectedActors) && empty($selectedMixedTags) && empty($selectedChannels) && empty($actorSearch);
 
         if ($isDefaultRequest) {
             // 🎯 缓存键名保持一致
@@ -522,7 +521,7 @@ class VideoController extends Controller
             return response()->json($defaultData);
         }
 
-        return response()->json($this->fetchDynamicCascadeData($selectedActors, $selectedMixedTags, $selectedChannels));
+        return response()->json($this->fetchDynamicCascadeData($selectedActors, $selectedMixedTags, $selectedChannels, $actorSearch));
     }
 
     /**
@@ -530,9 +529,28 @@ class VideoController extends Controller
      */
     private function fetchDefaultFilterData(): array
     {
-        // 🎯 在 get() 后面加上 ->toArray()，将其转为纯数组
-        $actors = Actor::select('id', 'name')->limit(30)->get()->toArray();
-        $channels = Channel::select('id', 'name')->limit(30)->get()->toArray();
+        // 🎯 优先展示有作品或热门的演员，不足时自动兜底补充
+        $actors = Actor::whereHas('videos')
+            ->orderByDesc('follow_num')
+            ->select('id', 'name')
+            ->limit(50)
+            ->get()
+            ->toArray();
+
+        if (count($actors) < 20) {
+            $fallback = Actor::select('id', 'name')->limit(50)->get()->toArray();
+            $existingIds = array_column($actors, 'id');
+            foreach ($fallback as $fa) {
+                if (!in_array($fa['id'], $existingIds)) {
+                    $actors[] = $fa;
+                }
+            }
+        }
+
+        $channels = Channel::orderByDesc('created_at')->select('id', 'name')->limit(50)->get()->toArray();
+        if (count($channels) < 10) {
+            $channels = Channel::select('id', 'name')->limit(50)->get()->toArray();
+        }
 
         $categories = Category::select('id', 'name', 'name_zh')->get()->map(function ($item) {
             return [
@@ -559,7 +577,7 @@ class VideoController extends Controller
         ];
     }
 
-    private function fetchDynamicCascadeData(array $selectedActors, array $selectedMixedTags, array $selectedChannels): array
+    private function fetchDynamicCascadeData(array $selectedActors, array $selectedMixedTags, array $selectedChannels, string $actorSearch = ''): array
     {
         $selectedCatIds = [];
         $selectedTagIds = [];
@@ -598,37 +616,71 @@ class VideoController extends Controller
             });
         }
 
-        $matchingVideoIds = $videoQuery->pluck('id');
+        $hasVideoFilters = !empty($selectedActors) || !empty($selectedChannels) || !empty($selectedCatIds) || !empty($selectedTagIds);
 
-        $availableActors = Actor::whereHas('videos', function ($q) use ($matchingVideoIds) {
-            $q->whereIn('videos.id', $matchingVideoIds);
-        })->select('id', 'name')->get()->toArray(); // 🎯 转为纯数组
+        // 1. 动态检索或级联获取可用演员
+        $actorQuery = Actor::query();
+        if ($hasVideoFilters) {
+            $matchingVideoIds = $videoQuery->pluck('id');
+            $actorQuery->whereHas('videos', function ($q) use ($matchingVideoIds) {
+                $q->whereIn('videos.id', $matchingVideoIds);
+            });
+        }
+        if (!empty($actorSearch)) {
+            $actorQuery->where('name', 'ILIKE', "%{$actorSearch}%");
+        }
+        $availableActors = $actorQuery->select('id', 'name')->limit(50)->get()->toArray();
 
-        $availableChannels = Channel::whereHas('videos', function ($q) use ($matchingVideoIds) {
-            $q->whereIn('videos.id', $matchingVideoIds);
-        })->select('id', 'name')->get()->toArray(); // 🎯 转为纯数组
+        // 🎯 确保用户已选中的演员始终保留在列表顶端，绝不丢失勾选状态
+        if (!empty($selectedActors)) {
+            $existingSelected = Actor::whereIn('id', $selectedActors)->select('id', 'name')->get()->toArray();
+            $currentActorIds = array_column($availableActors, 'id');
+            foreach ($existingSelected as $selActor) {
+                if (!in_array($selActor['id'], $currentActorIds)) {
+                    array_unshift($availableActors, $selActor);
+                }
+            }
+        }
 
-        $availableCategories = Category::whereHas('videos', function ($q) use ($matchingVideoIds) {
-            $q->whereIn('videos.id', $matchingVideoIds);
-        })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
+        // 2. 获取片商与标签的级联数据
+        if ($hasVideoFilters) {
+            if (!isset($matchingVideoIds)) {
+                $matchingVideoIds = $videoQuery->pluck('id');
+            }
+
+            $availableChannels = Channel::whereHas('videos', function ($q) use ($matchingVideoIds) {
+                $q->whereIn('videos.id', $matchingVideoIds);
+            })->select('id', 'name')->get()->toArray();
+
+            $availableCategories = Category::whereHas('videos', function ($q) use ($matchingVideoIds) {
+                $q->whereIn('videos.id', $matchingVideoIds);
+            })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
+                return [
+                    'id' => 'cat_' . $item->id,
+                    'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
+                ];
+            });
+
+            $availableTags = Tag::whereHas('videos', function ($q) use ($matchingVideoIds) {
+                $q->whereIn('videos.id', $matchingVideoIds);
+            })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
+                return [
+                    'id' => 'tag_' . $item->id,
+                    'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
+                ];
+            });
+        } else {
+            $defaultData = $this->fetchDefaultFilterData();
             return [
-                'id' => 'cat_' . $item->id,
-                'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
+                'actors' => $availableActors,
+                'tags' => $defaultData['tags'],
+                'channels' => $defaultData['channels'],
             ];
-        });
-
-        $availableTags = Tag::whereHas('videos', function ($q) use ($matchingVideoIds) {
-            $q->whereIn('videos.id', $matchingVideoIds);
-        })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
-            return [
-                'id' => 'tag_' . $item->id,
-                'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
-            ];
-        });
+        }
 
         return [
             'actors' => $availableActors,
-            'tags' => $availableCategories->concat($availableTags)->values()->all(), // 🎯 转为纯数组
+            'tags' => $availableCategories->concat($availableTags)->values()->all(),
             'channels' => $availableChannels,
         ];
     }
