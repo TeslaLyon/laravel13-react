@@ -141,12 +141,70 @@ return [
         'key' => env('MEILISEARCH_KEY'),
         'index-settings' => [
             \App\Models\Actor::class => [
-                'searchableAttributes' => ['name', 'slug'],
-                'filterableAttributes' => ['id', 'gender'],
+                'searchableAttributes' => [
+                    'name',
+                    'slug',
+                ],
+                'filterableAttributes' => [
+                    'id',
+                    'gender',
+                    'is_trans_model',
+                ],
+                'sortableAttributes' => [
+                    'id',
+                ],
+                'rankingRules' => [
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'sort',
+                    'exactness',
+                ],
+                'typoTolerance' => [
+                    'enabled' => true,
+                    'minWordSizeForTypos' => [
+                        'oneTypo' => 3,
+                        'twoTypos' => 7,
+                    ],
+                ],
             ],
             \App\Models\Video::class => [
-                'searchableAttributes' => ['name', 'name_zh', 'video_code'],
-                'filterableAttributes' => ['id', 'channel_id', 'is_4k', 'is_vr'],
+                'searchableAttributes' => [
+                    'name',
+                    'name_zh',
+                    'video_code',
+                    'slug',
+                ],
+                'filterableAttributes' => [
+                    'id',
+                    'channel_id',
+                    'is_4k',
+                    'is_vr',
+                    'sexual_orientation',
+                    'status',
+                ],
+                'sortableAttributes' => [
+                    'id',
+                    'created_at',
+                    'likes_count',
+                    'favorites_count',
+                ],
+                'rankingRules' => [
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'sort',
+                    'exactness',
+                ],
+                'typoTolerance' => [
+                    'enabled' => true,
+                    'minWordSizeForTypos' => [
+                        'oneTypo' => 3,
+                        'twoTypos' => 7,
+                    ],
+                ],
             ],
         ],
         'model-settings' => [

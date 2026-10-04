@@ -145,7 +145,7 @@ export default function YoutubeVideoGrid({
     }, [currentSelected]);
 
     const cachedDefaultData = useRef<FilterGroupData | null>(null);
-    const actorSearchTimer = useRef<NodeJS.Timeout | null>(null);
+    const actorSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const { post, cancel, processing, transform } = useHttp({
         actors: [] as (string | number)[],

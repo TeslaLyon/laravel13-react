@@ -79,6 +79,11 @@ class Video extends Model implements ReactableInterface
             'channel_id' => (int) $this->channel_id,
             'is_4k' => (bool) $this->is_4k,
             'is_vr' => (bool) $this->is_vr,
+            'sexual_orientation' => (int) $this->sexual_orientation,
+            'status' => (int) $this->status,
+            'likes_count' => (int) $this->likes_count,
+            'favorites_count' => (int) $this->favorites_count,
+            'created_at' => $this->created_at?->timestamp,
         ];
     }
 
