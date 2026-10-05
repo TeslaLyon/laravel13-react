@@ -3,6 +3,7 @@
 use App\Jobs\CrawlProject1VideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
+use App\Jobs\SyncVideoViewsToDatabaseJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -37,3 +38,12 @@ Schedule::job(new CrawlVixenDailyJob())
     ->dailyAt('02:00')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
+
+/**
+ * 视频浏览量 Redis 缓冲批量回写持久化任务
+ * 每 5 分钟将 Redis 缓冲的增量批量同步至数据库，避免高频并发写锁
+ */
+Schedule::job(new SyncVideoViewsToDatabaseJob())
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+

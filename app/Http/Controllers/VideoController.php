@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
+use App\Services\VideoViewService;
 
 
 class VideoController extends Controller
@@ -47,6 +48,7 @@ class VideoController extends Controller
                 'is_vr',
                 'likes_count',
                 'favorites_count',
+                'views_count',
                 'created_at',
                 'country'
             ]);
@@ -159,7 +161,12 @@ class VideoController extends Controller
         $isDisLike = false;
         $isCollect = false;
 
-        // 2. 如果用户已登录，获取其互动状态
+        // 2. 记录视频有效浏览量（防抖 + Redis 内存原子缓冲，零写压力）
+        $viewService = app(VideoViewService::class);
+        $viewService->recordView($video, $request);
+        $realViewsCount = $viewService->getViewCount($video);
+
+        // 3. 如果用户已登录，获取其互动状态
         if ($user) {
             $isSubscribed = $video->channel->viaLoveReactant()->isReactedBy($user, 'SubscribeChannel');
             $isLike = $video->viaLoveReactant()->isReactedBy($user, 'Like');
@@ -167,10 +174,10 @@ class VideoController extends Controller
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");
         }
 
-        // 3. 获取侧边栏推荐视频
+        // 4. 获取侧边栏推荐视频
         $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
             ->orderByDesc('created_at')
-            ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'likes_count', 'favorites_count', 'created_at')
+            ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'likes_count', 'favorites_count', 'views_count', 'created_at')
             ->take(10)
             ->get();
 
@@ -200,6 +207,7 @@ class VideoController extends Controller
             'liked' => $isLike,
             'disLiked' => $isDisLike,
             'likeCount' => $video->likes_count ?? 0, // 建议使用数据库中真实的统计数据
+            'viewsCount' => $realViewsCount,
             'initialIsCollect' => $isCollect,
             'categories' => $categories,
             'tags' => $tags,

@@ -33,6 +33,7 @@ import { Category } from '@/types/video';
 import { Tag } from '@/types/video';
 import { SubtitleDialog } from '@/components/video/SubtitleDialog';
 import { VideoHeader } from '@/components/video/VideoHeader';
+import { formatChineseUnit } from '@/lib/utils';
 import {show as channelShow} from '@/actions/App/Http/Controllers/ChannelController';
 
 // /channels/${video?.channel.id}
@@ -43,6 +44,7 @@ interface VideoDetailPageProps {
     liked: boolean;
     disLiked: boolean;
     likeCount: number;
+    viewsCount?: number;
     initialIsCollect: boolean;
     recommendVideos: Video[];
     actors: Actor[];
@@ -50,7 +52,7 @@ interface VideoDetailPageProps {
     tags: Tag[];
 }
 
-export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
+export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, viewsCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
@@ -352,7 +354,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                         <div className="mt-4 bg-muted hover:bg-muted/80 transition-colors p-3 sm:p-4 rounded-xl text-sm text-foreground">
                             <div className="flex flex-col gap-2 mb-3">
                                 <div className="text-sm font-medium text-muted-foreground">
-                                    85万次观看 • {video?.release_at || "2026年6月29日"}
+                                    {formatChineseUnit(viewsCount ?? video?.views_count)}次观看 • {video?.release_at || "2026年6月29日"}
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
                                     <span className="shrink-0">视频编号：</span>

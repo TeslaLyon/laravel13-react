@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Video } from "@/types/video";
 import { VideoMenu } from "@/components/video/Menu";
-import { getCardHoverColor } from "@/lib/utils";
+import { getCardHoverColor, formatChineseUnit } from "@/lib/utils";
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
@@ -73,7 +73,7 @@ export function VideoCard({ video }: { video: Video }) {
                         </p>
                     )}
                     <p className="text-sm text-muted-foreground truncate">
-                        1.2万次观看 • {dayjs(video.created_at).fromNow()}
+                        {formatChineseUnit(video.views_count)}次观看 • {dayjs(video.created_at).fromNow()}
                     </p>
                 </div>
             </div>
