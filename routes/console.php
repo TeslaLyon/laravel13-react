@@ -47,3 +47,13 @@ Schedule::job(new SyncVideoViewsToDatabaseJob())
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+/**
+ * 视频点赞数与收藏数全量对齐校准定时任务
+ * 每天凌晨 03:30 自动执行一次，确保事实反应表与视频表计数绝对一致
+ */
+Schedule::command('video:sync-counts')
+    ->dailyAt('03:30')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+

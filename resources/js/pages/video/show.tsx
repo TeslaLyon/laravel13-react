@@ -44,6 +44,7 @@ interface VideoDetailPageProps {
     liked: boolean;
     disLiked: boolean;
     likeCount: number;
+    favoritesCount?: number;
     viewsCount?: number;
     initialIsCollect: boolean;
     recommendVideos: Video[];
@@ -52,7 +53,7 @@ interface VideoDetailPageProps {
     tags: Tag[];
 }
 
-export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, viewsCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
+export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
@@ -345,7 +346,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                         <DownloadDialog video={video} />
                                     </Deferred>
                                 </div>
-                                <div className="shrink-0"><Save videoId={video?.id} slug={video?.slug} initialIsCollect={initialIsCollect} /></div>
+                                <div className="shrink-0"><Save videoId={video?.id} slug={video?.slug} initialIsCollect={initialIsCollect} initialFavoritesCount={favoritesCount ?? video?.favorites_count ?? 0} /></div>
                                 <div className="shrink-0"><MoreOption video={video} /></div>
                             </div>
                         </div>

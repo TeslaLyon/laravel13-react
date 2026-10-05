@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use App\Services\VideoViewService;
+use App\Services\VideoInteractionService;
 
 
 class VideoController extends Controller
@@ -206,7 +207,8 @@ class VideoController extends Controller
             'isSubscribed' => $isSubscribed,
             'liked' => $isLike,
             'disLiked' => $isDisLike,
-            'likeCount' => $video->likes_count ?? 0, // 建议使用数据库中真实的统计数据
+            'likeCount' => (int) ($video->likes_count ?? 0),
+            'favoritesCount' => (int) ($video->favorites_count ?? 0),
             'viewsCount' => $realViewsCount,
             'initialIsCollect' => $isCollect,
             'categories' => $categories,
@@ -215,94 +217,34 @@ class VideoController extends Controller
         ]);
     }
 
-    // TODO：延迟更新 video 表的 likes_count 和 favorites_count 字段，避免频繁更新数据库
-    // TODO：考虑使用队列异步处理点赞、踩、收藏等操作，
     /**
      * 处理“点赞”逻辑
      */
-    public function like(Request $request, Video $video)
+    public function like(Request $request, Video $video, VideoInteractionService $interactionService)
     {
-        // 1. 获取当前登录用户并转化为 "反应者 (Reacter)"
-        $reacter = $request->user()->viaLoveReacter();
+        $result = $interactionService->toggleLike($video, $request->user());
 
-        // 2. 互斥处理：如果用户之前“踩 (Dislike)”过这个视频，先撤销“踩”
-        if ($reacter->hasReactedTo($video, 'Dislike')) {
-            $reacter->unreactTo($video, 'Dislike');
-        }
-
-        // 3. 切换处理：如果用户已经“点赞 (Like)”过，说明这次点击是为了“取消点赞”
-        if ($reacter->hasReactedTo($video, 'Like')) {
-            $reacter->unreactTo($video, 'Like');
-
-            return response()->json([
-                'status' => 'unliked',
-                'message' => '已取消点赞'
-            ]);
-        }
-
-        // 4. 正常点赞
-        $reacter->reactTo($video, 'Like');
-
-        return response()->json([
-            'status' => 'liked',
-            'message' => '点赞成功'
-        ]);
+        return response()->json($result);
     }
 
     /**
      * 处理“踩”逻辑
      */
-    public function dislike(Request $request, Video $video)
+    public function dislike(Request $request, Video $video, VideoInteractionService $interactionService)
     {
-        $reacter = $request->user()->viaLoveReacter();
+        $result = $interactionService->toggleDislike($video, $request->user());
 
-        // 互斥处理：如果用户之前“点赞”过，先撤销“点赞”
-        if ($reacter->hasReactedTo($video, 'Like')) {
-            $reacter->unreactTo($video, 'Like');
-        }
-
-        // 切换处理：如果用户已经“踩”过，说明这次点击是为了“取消踩”
-        if ($reacter->hasReactedTo($video, 'Dislike')) {
-            $reacter->unreactTo($video, 'Dislike');
-
-            return response()->json([
-                'status' => 'undisliked',
-                'message' => '已取消踩'
-            ]);
-        }
-
-        // 正常踩
-        $reacter->reactTo($video, 'Dislike');
-
-        return response()->json([
-            'status' => 'disliked',
-            'message' => '踩成功'
-        ]);
+        return response()->json($result);
     }
 
-    public function collect(Request $request, Video $video)
+    /**
+     * 处理“收藏”逻辑
+     */
+    public function collect(Request $request, Video $video, VideoInteractionService $interactionService)
     {
-        $user = $request->user();
-        $reacter = $user->viaLoveReacter();
+        $result = $interactionService->toggleCollect($video, $request->user());
 
-        $isCollect = false;
-        $msg = '操作成功';
-
-        if ($reacter->hasReactedTo($video, "VideoCollect")) {
-            $reacter->unreactTo($video, "VideoCollect");
-            $isCollect = false;
-            $msg = '已取消收藏';
-        } else {
-            $reacter->reactTo($video, "VideoCollect");
-            $isCollect = true;
-            $msg = '收藏成功';
-        }
-
-        Sleep::for(1000)->milliseconds();
-        return response()->json([
-            'status' => $isCollect,
-            'message' => $msg,
-        ]);
+        return response()->json($result);
     }
 
     public function saveToWatchLater(Request $request, Video $video)

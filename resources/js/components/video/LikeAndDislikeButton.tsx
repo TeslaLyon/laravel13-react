@@ -60,6 +60,9 @@ export function LikeAndDislikeButton({ videoId, slug, initialLiked, initialDisli
             post(`/videos/${videoId}/${slug}/like`, {
                 onSuccess: (response: any) => {
                     toast.success(response.message);
+                    if (typeof response?.likes_count === 'number') {
+                        setLikeCount(response.likes_count);
+                    }
                 },
                 onError: () => {
                     toast.error('刷新页面后重试');
@@ -95,13 +98,16 @@ export function LikeAndDislikeButton({ videoId, slug, initialLiked, initialDisli
                 setDisLiked(true);
                 if (liked) {
                     setLiked(false);
-                    setLikeCount(prev => prev - 1);
+                    setLikeCount(prev => Math.max(0, prev - 1));
                 }
             }
 
             post(`/videos/${videoId}/${slug}/dislike`, {
                 onSuccess: (response: any) => {
                     toast.success(response.message);
+                    if (typeof response?.likes_count === 'number') {
+                        setLikeCount(response.likes_count);
+                    }
                 },
                 onError: () => {
                     toast.error('刷新页面后重试');
