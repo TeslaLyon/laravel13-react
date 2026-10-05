@@ -9,9 +9,10 @@ import { WalletTransactionsTable } from './partials/wallet-transactions-table';
 interface Props {
     wallet?: WalletData;                                 // 延迟加载资产属性
     transactions?: PaginatedData<WalletTransactionItem>; // 延迟加载流水属性
+    recharge_enabled?: boolean;
 }
 
-export default function WalletIndex({ wallet, transactions }: Props) {
+export default function WalletIndex({ wallet, transactions, recharge_enabled = false }: Props) {
     return (
         <div className="container mx-auto max-w-6xl py-8 px-4 space-y-6 pb-24">
             <Head title="资金钱包" />
@@ -20,7 +21,7 @@ export default function WalletIndex({ wallet, transactions }: Props) {
             <div className="flex flex-col gap-1">
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">我的资产钱包</h1>
                 <p className="text-sm text-muted-foreground">
-                    统一管理账户现金余额、社区虚拟金币、快速充值及全量财务流水。
+                    统一管理账户现金余额、社区虚拟金币及全量财务流水。
                 </p>
             </div>
 
@@ -29,7 +30,7 @@ export default function WalletIndex({ wallet, transactions }: Props) {
                 data="wallet"
                 fallback={<WalletCardsSkeleton />}
             >
-                <WalletCards wallet={wallet!} />
+                <WalletCards wallet={wallet!} recharge_enabled={recharge_enabled} />
             </Deferred>
 
             {/* 2. 流水明细表格区：延迟加载并展示 10 行等高骨架屏 */}

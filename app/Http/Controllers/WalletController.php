@@ -45,6 +45,7 @@ class WalletController extends Controller
                 ['title' => '首页', 'href' => route('home')],
                 ['title' => '我的资产钱包', 'href' => null],
             ],
+            'recharge_enabled' => (bool) config('wallet.recharge_enabled', false),
 
             // 🌟 2. 核心资产数据：延迟加载，全部字段统一为 (int) 整型分
             'wallet' => Inertia::defer(function () use ($getWallet) {
@@ -141,6 +142,17 @@ class WalletController extends Controller
      */
     public function paymentMethods(Request $request): JsonResponse
     {
+        if (!config('wallet.recharge_enabled', false)) {
+            return response()->json([
+                'success' => false,
+                'message' => '充值功能暂未开放',
+                'data' => [
+                    'methods' => [],
+                    'deposit_amounts' => [],
+                ],
+            ], 403);
+        }
+
         $methods = collect(config('wallet.payment_methods', []))
             ->where('is_active', true)
             ->map(function ($method) {
@@ -167,6 +179,13 @@ class WalletController extends Controller
      */
     public function deposit(Request $request, ThirdPartyApiClient $apiClient)
     {
+        if (!config('wallet.recharge_enabled', false)) {
+            return response()->json([
+                'success' => false,
+                'message' => '充值功能暂未开放',
+            ], 403);
+        }
+
         $allowedAmounts = collect(config('wallet.deposit_amounts', []))->pluck('amount')->toArray();
 
         $validated = $request->validate([
@@ -244,6 +263,11 @@ class WalletController extends Controller
      */
     public function notify(Request $request)
     {
+        if (!config('wallet.recharge_enabled', false)) {
+            Log::warning('[NOTIFY-REJECT] 充值功能当前已关闭，拒绝回调请求');
+            return response('fail: recharge feature disabled', 403)->header('Content-Type', 'text/plain');
+        }
+
         Log::info('[NOTIFY-RECEIVE] 收到网关回调:', [
             'headers' => [
                 'x-app-key' => $request->header('X-App-Key'),
@@ -459,6 +483,10 @@ class WalletController extends Controller
      */
     public function checkOrderStatus(string $orderNo)
     {
+        if (!config('wallet.recharge_enabled', false)) {
+            return response()->json(['success' => false, 'message' => '充值功能暂未开放'], 403);
+        }
+
         $order = WalletOrder::where('order_no', $orderNo)
             ->where('user_id', Auth::id())
             ->select(['order_no', 'status', 'amount', 'really_amount', 'paid_at'])

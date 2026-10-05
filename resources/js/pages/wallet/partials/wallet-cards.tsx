@@ -49,6 +49,7 @@ interface DepositAmountOption {
 
 interface Props {
     wallet: WalletData;
+    recharge_enabled?: boolean;
 }
 
 /**
@@ -81,7 +82,7 @@ function TwitterSpinner() {
     );
 }
 
-export function WalletCards({ wallet }: Props) {
+export function WalletCards({ wallet, recharge_enabled = false }: Props) {
     const [depositOpen, setDepositOpen] = useState(false);
     const [isReady, setIsReady] = useState(false);
 
@@ -411,8 +412,9 @@ export function WalletCards({ wallet }: Props) {
                         </Badge>
                     </div>
 
-                    <div className="pt-1">
-                        <Dialog open={depositOpen} onOpenChange={handleOpenChange}>
+                    {recharge_enabled && (
+                        <div className="pt-1">
+                            <Dialog open={depositOpen} onOpenChange={handleOpenChange}>
                             <DialogTrigger asChild>
                                 <Button
                                     className="w-full h-10 gap-2 rounded-xl text-sm font-medium shadow-xs bg-red-600 hover:bg-red-700 text-white transition-all active:scale-[0.99]"
@@ -675,6 +677,7 @@ export function WalletCards({ wallet }: Props) {
                             </DialogContent>
                         </Dialog>
                     </div>
+                )}
                 </CardContent>
             </Card>
 
