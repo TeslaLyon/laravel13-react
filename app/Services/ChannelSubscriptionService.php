@@ -24,6 +24,14 @@ class ChannelSubscriptionService
      */
     public function toggleSubscribe(Channel $channel, User $user): array
     {
+        if ($channel->isNotRegisteredAsLoveReactant()) {
+            $channel->registerAsLoveReactant();
+        }
+
+        if ($user->isNotRegisteredAsLoveReacter()) {
+            $user->registerAsLoveReacter();
+        }
+
         $reacter = $user->viaLoveReacter();
 
         if ($reacter->hasReactedTo($channel, 'SubscribeChannel')) {
@@ -177,6 +185,15 @@ class ChannelSubscriptionService
      */
     public function syncAllCounts(): int
     {
+        // 0. 自动扫描并为所有缺失 reactant 的片商补齐注册
+        Channel::query()
+            ->whereNull('love_reactant_id')
+            ->chunkById(200, function ($channels) {
+                foreach ($channels as $channel) {
+                    $channel->registerAsLoveReactant();
+                }
+            });
+
         $reactionTypes = [
             'SubscribeChannel',
             'SubscribeAll',

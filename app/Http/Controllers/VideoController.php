@@ -170,6 +170,16 @@ class VideoController extends Controller
 
         // 3. 如果用户已登录，获取其互动状态
         if ($user) {
+            if ($user->isNotRegisteredAsLoveReacter()) {
+                $user->registerAsLoveReacter();
+            }
+            if ($video->channel && $video->channel->isNotRegisteredAsLoveReactant()) {
+                $video->channel->registerAsLoveReactant();
+            }
+            if ($video->isNotRegisteredAsLoveReactant()) {
+                $video->registerAsLoveReactant();
+            }
+
             $isSubscribed = $video->channel ? $video->channel->viaLoveReactant()->isReactedBy($user, 'SubscribeChannel') : false;
             $isLike = $video->viaLoveReactant()->isReactedBy($user, 'Like');
             $isDisLike = $video->viaLoveReactant()->isReactedBy($user, 'Dislike');

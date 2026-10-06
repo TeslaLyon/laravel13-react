@@ -71,6 +71,13 @@ class ChannelController extends Controller
 
         // 2. 已登录分支：仅在用户登录时查询个人偏好并更新状态
         if ($currentUser) {
+            if ($channel->isNotRegisteredAsLoveReactant()) {
+                $channel->registerAsLoveReactant();
+            }
+            if ($currentUser->isNotRegisteredAsLoveReacter()) {
+                $currentUser->registerAsLoveReacter();
+            }
+
             $activeType = $currentUser->getSubscriptionNotificationType($channel);
             if ($activeType !== null) {
                 $isSubscribed = true;
@@ -158,6 +165,13 @@ class ChannelController extends Controller
         }
 
         // 2. 获取 Laravel Love 的 Reacter 实例
+        if ($channel->isNotRegisteredAsLoveReactant()) {
+            $channel->registerAsLoveReactant();
+        }
+        if ($user->isNotRegisteredAsLoveReacter()) {
+            $user->registerAsLoveReacter();
+        }
+
         $reacter = $user->viaLoveReacter();
 
         // 3. 检查是否已经存在类型为 'Subscribe' 的 Reaction
