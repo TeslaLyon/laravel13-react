@@ -66,6 +66,14 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
+    React.useEffect(() => {
+        setIsSubscribed(initialIsSubscribed);
+    }, [initialIsSubscribed]);
+
+    React.useEffect(() => {
+        setNotificationType(initialNotificationType);
+    }, [initialNotificationType]);
+
     const { requireAuth } = useRequireAuth();
 
     // 1. 订阅与修改通知状态

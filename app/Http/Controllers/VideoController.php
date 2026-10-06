@@ -180,7 +180,9 @@ class VideoController extends Controller
                 $video->registerAsLoveReactant();
             }
 
-            $isSubscribed = $video->channel ? $video->channel->viaLoveReactant()->isReactedBy($user, 'SubscribeChannel') : false;
+            $isSubscribed = $video->channel
+                ? app(ChannelSubscriptionService::class)->getSubscriptionStatus($video->channel, $user)['is_subscribed']
+                : false;
             $isLike = $video->viaLoveReactant()->isReactedBy($user, 'Like');
             $isDisLike = $video->viaLoveReactant()->isReactedBy($user, 'Dislike');
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");

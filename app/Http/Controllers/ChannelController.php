@@ -44,14 +44,15 @@ class ChannelController extends Controller
         /** @var User|null $currentUser */
         $currentUser = $request->user();
 
-        // 1. 初始化默认状态（未登录 / 未订阅时的默认返回值）
-        $isSubscribed = false;
+        // 1. 获取当前用户对该片商的真实订阅状态与通知偏好（单条带索引高能 SQL，涵盖快捷订阅与偏好订阅）
+        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($channel, $currentUser);
+        $isSubscribed = $subscriptionStatus['is_subscribed'];
 
-        // 3. 计算实体的总订阅人数（从数据库基数 + Redis 增量高效获取）
+        // 2. 计算实体的总订阅人数（从数据库基数 + Redis 增量高效获取）
         $subscribersCount = $subscriptionService->getSubscribersCount($channel);
 
         // ==========================================
-        // 4. 数据结构拍平处理，适配前端 BaseDetailShow 组件
+        // 3. 数据结构拍平处理，适配前端 BaseDetailShow 组件
         // ==========================================
         $channelData = $channel->toArray();
         $channelData['subscribersCount'] = $subscribersCount;
@@ -67,23 +68,7 @@ class ChannelController extends Controller
             $channelData['socials'] = [];
         }
 
-        $channelData['notificationType'] = 'personalized';
-
-        // 2. 已登录分支：仅在用户登录时查询个人偏好并更新状态
-        if ($currentUser) {
-            if ($channel->isNotRegisteredAsLoveReactant()) {
-                $channel->registerAsLoveReactant();
-            }
-            if ($currentUser->isNotRegisteredAsLoveReacter()) {
-                $currentUser->registerAsLoveReacter();
-            }
-
-            $activeType = $currentUser->getSubscriptionNotificationType($channel);
-            if ($activeType !== null) {
-                $isSubscribed = true;
-                $channelData['notificationType'] = $activeType;
-            }
-        }
+        $channelData['notificationType'] = $subscriptionStatus['notification_type'];
 
         // ==========================================
         // 5. 渲染前端 Inertia 组件并使用 defer 延迟加载大体积数据
@@ -154,33 +139,12 @@ class ChannelController extends Controller
 
     public function subscribeStatus(Request $request, Channel $channel, ChannelSubscriptionService $subscriptionService)
     {
-        $user = $request->user();
+        $status = $subscriptionService->getSubscriptionStatus($channel, $request->user());
 
-        // 1. 如果用户未登录，直接返回未关注
-        if (!$user) {
-            return response()->json([
-                'is_subscribed' => false,
-                'subscribers_count' => $subscriptionService->getSubscribersCount($channel),
-            ]);
-        }
-
-        // 2. 获取 Laravel Love 的 Reacter 实例
-        if ($channel->isNotRegisteredAsLoveReactant()) {
-            $channel->registerAsLoveReactant();
-        }
-        if ($user->isNotRegisteredAsLoveReacter()) {
-            $user->registerAsLoveReacter();
-        }
-
-        $reacter = $user->viaLoveReacter();
-
-        // 3. 检查是否已经存在类型为 'Subscribe' 的 Reaction
-        $isSubscribed = $reacter->hasReactedTo($channel, 'SubscribeChannel');
-
-        // 4. 返回 JSON 数据供前端读取
         return response()->json([
-            'is_subscribed' => $isSubscribed,
-            'message' => $isSubscribed ? '已订阅' : '未订阅',
+            'is_subscribed' => $status['is_subscribed'],
+            'notification_type' => $status['notification_type'],
+            'message' => $status['is_subscribed'] ? '已订阅' : '未订阅',
             'subscribers_count' => $subscriptionService->getSubscribersCount($channel),
         ]);
     }

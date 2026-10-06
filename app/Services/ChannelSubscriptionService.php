@@ -18,6 +18,67 @@ class ChannelSubscriptionService
     public const BUFFER_KEY = 'channel:subscribers:buffer';
 
     /**
+     * 最优最高效读取用户对片商的订阅状态及通知偏好（单条索引查询，覆盖快捷订阅与偏好订阅）
+     *
+     * @return array{is_subscribed: bool, notification_type: string}
+     */
+    public function getSubscriptionStatus(Channel $channel, ?User $user): array
+    {
+        if (!$user) {
+            return [
+                'is_subscribed' => false,
+                'notification_type' => 'personalized',
+            ];
+        }
+
+        if ($channel->isNotRegisteredAsLoveReactant()) {
+            $channel->registerAsLoveReactant();
+        }
+
+        if ($user->isNotRegisteredAsLoveReacter()) {
+            $user->registerAsLoveReacter();
+        }
+
+        $reacterId = $user->love_reacter_id;
+        $reactantId = $channel->love_reactant_id;
+
+        if (!$reacterId || !$reactantId) {
+            return [
+                'is_subscribed' => false,
+                'notification_type' => 'personalized',
+            ];
+        }
+
+        $reactionTypeName = DB::table('love_reactions as r')
+            ->join('love_reaction_types as rt', 'rt.id', '=', 'r.reaction_type_id')
+            ->where('r.reacter_id', $reacterId)
+            ->where('r.reactant_id', $reactantId)
+            ->whereIn('rt.name', [
+                'SubscribeChannel',
+                'SubscribePersonalized',
+                'SubscribeAll',
+                'SubscribeNone',
+            ])
+            ->value('rt.name');
+
+        if (!$reactionTypeName) {
+            return [
+                'is_subscribed' => false,
+                'notification_type' => 'personalized',
+            ];
+        }
+
+        return [
+            'is_subscribed' => true,
+            'notification_type' => match ($reactionTypeName) {
+                'SubscribeAll' => 'all',
+                'SubscribeNone' => 'none',
+                default => 'personalized',
+            },
+        ];
+    }
+
+    /**
      * 处理用户对片商的“订阅 / 取消订阅”切换逻辑
      *
      * @return array{is_subscribed: bool, message: string, subscribers_count: int}

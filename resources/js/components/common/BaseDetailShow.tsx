@@ -143,6 +143,12 @@ export default function BaseDetailShow({
     const [searchKeyword, setSearchKeyword] = useState('');
     const [subscribersCount, setSubscribersCount] = useState(entity.subscribersCount ?? 0);
 
+    useEffect(() => {
+        if (typeof entity.subscribersCount === 'number') {
+            setSubscribersCount(entity.subscribersCount);
+        }
+    }, [entity.subscribersCount]);
+
     // 路由前缀
     const routePrefix = moduleType === 'category' ? '/categories' : `/${moduleType}s`;
 

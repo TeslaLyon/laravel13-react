@@ -4,6 +4,7 @@ namespace App\Concerns;
 
 use Cog\Contracts\Love\Reactable\Models\Reactable as ReactableInterface;
 use Cog\Laravel\Love\ReactionType\Models\ReactionType;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 通用订阅与通知级别业务 Trait
@@ -29,6 +30,14 @@ trait SubscribesWithLove
      */
     public function subscribeToEntity(ReactableInterface $target, string $notificationType = 'personalized'): void
     {
+        if ($target->isNotRegisteredAsLoveReactant()) {
+            $target->registerAsLoveReactant();
+        }
+
+        if ($this->isNotRegisteredAsLoveReacter()) {
+            $this->registerAsLoveReacter();
+        }
+
         $reacterFacade = $this->viaLoveReacter();
         $targetReactionName = self::$subscriptionReactionTypes[$notificationType] ?? 'SubscribePersonalized';
 
@@ -48,6 +57,10 @@ trait SubscribesWithLove
      */
     public function unsubscribeFromEntity(ReactableInterface $target): void
     {
+        if ($target->isNotRegisteredAsLoveReactant() || $this->isNotRegisteredAsLoveReacter()) {
+            return;
+        }
+
         $reacterFacade = $this->viaLoveReacter();
 
         foreach (self::$subscriptionReactionTypes as $reactionName) {
@@ -62,15 +75,7 @@ trait SubscribesWithLove
      */
     public function hasSubscribedToEntity(ReactableInterface $target): bool
     {
-        $reacterFacade = $this->viaLoveReacter();
-
-        foreach (self::$subscriptionReactionTypes as $reactionName) {
-            if ($reacterFacade->hasReactedTo($target, $reactionName)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->getSubscriptionNotificationType($target) !== null;
     }
 
     /**
@@ -78,15 +83,39 @@ trait SubscribesWithLove
      */
     public function getSubscriptionNotificationType(ReactableInterface $target): ?string
     {
-        $reacterFacade = $this->viaLoveReacter();
-
-        foreach (self::$subscriptionReactionTypes as $typeKey => $reactionName) {
-            if ($reacterFacade->hasReactedTo($target, $reactionName)) {
-                return $typeKey; // 返回 'all' | 'personalized' | 'none'
-            }
+        if ($target->isNotRegisteredAsLoveReactant() || $this->isNotRegisteredAsLoveReacter()) {
+            return null;
         }
 
-        return null;
+        $reacterId = $this->getAttribute('love_reacter_id');
+        $reactantId = $target->getAttribute('love_reactant_id');
+
+        if (!$reacterId || !$reactantId) {
+            return null;
+        }
+
+        // 🚀 最优极速查询：单条索引命中的 SQL，一次性涵盖偏好订阅与片商快捷订阅
+        $reactionTypeName = DB::table('love_reactions as r')
+            ->join('love_reaction_types as rt', 'rt.id', '=', 'r.reaction_type_id')
+            ->where('r.reacter_id', $reacterId)
+            ->where('r.reactant_id', $reactantId)
+            ->whereIn('rt.name', [
+                'SubscribeAll',
+                'SubscribePersonalized',
+                'SubscribeNone',
+                'SubscribeChannel',
+            ])
+            ->value('rt.name');
+
+        if (!$reactionTypeName) {
+            return null;
+        }
+
+        return match ($reactionTypeName) {
+            'SubscribeAll' => 'all',
+            'SubscribeNone' => 'none',
+            default => 'personalized',
+        };
     }
 
     /**
@@ -94,8 +123,12 @@ trait SubscribesWithLove
      */
     public function getEntitySubscribersCount(ReactableInterface $target): int
     {
+        if ($target->isNotRegisteredAsLoveReactant()) {
+            return 0;
+        }
+
         $reactant = $target->getLoveReactant();
-        if (!$reactant) {
+        if (!$reactant || $reactant->isNull()) {
             return 0;
         }
 
