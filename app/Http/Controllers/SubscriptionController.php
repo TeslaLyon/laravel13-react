@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Sleep;
+use App\Services\ChannelSubscriptionService;
 
 class SubscriptionController extends Controller
 {
@@ -52,14 +53,24 @@ class SubscriptionController extends Controller
 
         $notificationType = $validated['notification_type'] ?? 'personalized';
 
+        $wasSubscribed = $user->hasSubscribedToEntity($target);
+
         // 🎯 调用规范命名的方法
         $user->subscribeToEntity($target, $notificationType);
-        Sleep::for(2000)->milliseconds();
+
+        if ($target instanceof Channel && !$wasSubscribed) {
+            app(ChannelSubscriptionService::class)->incrementBuffer($target->id, 1);
+        }
+
+        $followersCount = $target instanceof Channel
+            ? app(ChannelSubscriptionService::class)->getSubscribersCount($target)
+            : $user->getEntitySubscribersCount($target);
+
         return response()->json([
             'message' => '订阅成功',
             'is_following' => true,
             'notification_type' => $notificationType,
-            'followers_count' => $user->getEntitySubscribersCount($target),
+            'followers_count' => $followersCount,
         ]);
     }
 
@@ -72,13 +83,23 @@ class SubscriptionController extends Controller
         $user = $request->user();
         $target = $this->resolveTarget($type, $id);
 
+        $wasSubscribed = $user->hasSubscribedToEntity($target);
+
         $user->unsubscribeFromEntity($target);
-        Sleep::for(2000)->milliseconds();
+
+        if ($target instanceof Channel && $wasSubscribed) {
+            app(ChannelSubscriptionService::class)->incrementBuffer($target->id, -1);
+        }
+
+        $followersCount = $target instanceof Channel
+            ? app(ChannelSubscriptionService::class)->getSubscribersCount($target)
+            : $user->getEntitySubscribersCount($target);
+
         return response()->json([
             'message' => '已取消订阅',
             'is_following' => false,
             'notification_type' => 'personalized',
-            'followers_count' => $user->getEntitySubscribersCount($target),
+            'followers_count' => $followersCount,
         ]);
     }
 
@@ -103,7 +124,7 @@ class SubscriptionController extends Controller
             'notification_type.required' => '请选择通知类型',
             'notification_type.in' => '通知类型参数无效',
         ]);
-        Sleep::for(2000)->milliseconds();
+
         // 2. 前置检查：必须处于已订阅状态才能修改偏好
         if (!$user->hasSubscribedToEntity($target)) {
             return response()->json([
@@ -114,12 +135,16 @@ class SubscriptionController extends Controller
         // 3. 执行变更：通过 SubscribesWithLove 自动替换为新的 Reaction
         $user->subscribeToEntity($target, $validated['notification_type']);
 
+        $followersCount = $target instanceof Channel
+            ? app(ChannelSubscriptionService::class)->getSubscribersCount($target)
+            : $user->getEntitySubscribersCount($target);
+
         // 4. 返回与前端 useHttp 契约一致的 JSON 响应
         return response()->json([
             'message' => '通知偏好已更新',
             'notification_type' => $validated['notification_type'],
             'is_following' => true,
-            'followers_count' => $user->getEntitySubscribersCount($target),
+            'followers_count' => $followersCount,
         ]);
     }
 }

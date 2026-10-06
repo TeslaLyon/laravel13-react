@@ -17,17 +17,19 @@ import ChannelController from "@/actions/App/Http/Controllers/ChannelController"
 interface SubscribeResponse {
     is_subscribed: boolean;
     message: string;
+    subscribers_count?: number;
 }
 interface PostOptions {
     onSuccess?: (response: unknown) => void;
     onError?: (error: unknown) => void;
 }
 
-export function SubscribeButton({ subscribed, channelId, setSubscribed, channelSlug }: {
+export function SubscribeButton({ subscribed, channelId, setSubscribed, channelSlug, onCountChange }: {
     subscribed: boolean,
     channelId: number,
     setSubscribed: (subscribed: boolean) => void,
-    channelSlug: string
+    channelSlug: string,
+    onCountChange?: (count: number) => void
 }) {
 
     const { post, processing } = useHttp()
@@ -43,6 +45,9 @@ export function SubscribeButton({ subscribed, channelId, setSubscribed, channelS
                     const subscribeResponse = response as SubscribeResponse;
                     toast.success(subscribeResponse.message);
                     setSubscribed(subscribeResponse.is_subscribed);
+                    if (typeof subscribeResponse.subscribers_count === 'number' && onCountChange) {
+                        onCountChange(subscribeResponse.subscribers_count);
+                    }
                 },
                 onError: () => {
                     toast.error('刷新页面后重试');

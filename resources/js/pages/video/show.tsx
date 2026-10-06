@@ -46,6 +46,7 @@ interface VideoDetailPageProps {
     likeCount: number;
     favoritesCount?: number;
     viewsCount?: number;
+    channelSubscribersCount?: number;
     initialIsCollect: boolean;
     recommendVideos: Video[];
     actors: Actor[];
@@ -53,12 +54,23 @@ interface VideoDetailPageProps {
     tags: Tag[];
 }
 
-export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
+export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, channelSubscribersCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
     const [subscribed, setSubscribed] = useState(isSubscribed);
+    const [subscribersCount, setSubscribersCount] = useState<number>(
+        channelSubscribersCount ?? video?.channel?.follow_num ?? 0
+    );
     const [isTagsExpanded, setIsTagsExpanded] = useState(false);
+
+    useEffect(() => {
+        if (channelSubscribersCount !== undefined) {
+            setSubscribersCount(channelSubscribersCount);
+        } else if (video?.channel?.follow_num !== undefined) {
+            setSubscribersCount(video.channel.follow_num);
+        }
+    }, [channelSubscribersCount, video?.channel?.follow_num]);
 
     // 分类展示状态：控制隐藏和显示（超过两行时可折叠与展开）
     const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
@@ -318,7 +330,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                                     <span className="font-semibold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors">{video.channel.name}</span>
                                                     <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
                                                 </Link>
-                                                <span className="text-xs text-muted-foreground">125万 位订阅者</span>
+                                                <span className="text-xs text-muted-foreground">{formatChineseUnit(subscribersCount)} 位订阅者</span>
                                             </div>
                                         </>
                                     )}
@@ -329,6 +341,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                     channelId={video?.channel?.id}
                                     setSubscribed={setSubscribed}
                                     channelSlug={video?.channel?.slug}
+                                    onCountChange={setSubscribersCount}
                                 />
                             </div>
 

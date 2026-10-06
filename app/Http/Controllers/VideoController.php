@@ -18,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use App\Services\VideoViewService;
 use App\Services\VideoInteractionService;
+use App\Services\ChannelSubscriptionService;
 
 
 class VideoController extends Controller
@@ -169,11 +170,15 @@ class VideoController extends Controller
 
         // 3. 如果用户已登录，获取其互动状态
         if ($user) {
-            $isSubscribed = $video->channel->viaLoveReactant()->isReactedBy($user, 'SubscribeChannel');
+            $isSubscribed = $video->channel ? $video->channel->viaLoveReactant()->isReactedBy($user, 'SubscribeChannel') : false;
             $isLike = $video->viaLoveReactant()->isReactedBy($user, 'Like');
             $isDisLike = $video->viaLoveReactant()->isReactedBy($user, 'Dislike');
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");
         }
+
+        $channelSubscribersCount = $video->channel
+            ? app(ChannelSubscriptionService::class)->getSubscribersCount($video->channel)
+            : 0;
 
         // 4. 获取侧边栏推荐视频
         $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
@@ -210,6 +215,7 @@ class VideoController extends Controller
             'likeCount' => (int) ($video->likes_count ?? 0),
             'favoritesCount' => (int) ($video->favorites_count ?? 0),
             'viewsCount' => $realViewsCount,
+            'channelSubscribersCount' => $channelSubscribersCount,
             'initialIsCollect' => $isCollect,
             'categories' => $categories,
             'tags' => $tags,

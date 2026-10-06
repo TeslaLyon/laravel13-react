@@ -4,6 +4,7 @@ use App\Jobs\CrawlProject1VideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
 use App\Jobs\SyncVideoViewsToDatabaseJob;
+use App\Jobs\SyncChannelSubscribersToDatabaseJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -55,5 +56,23 @@ Schedule::command('video:sync-counts')
     ->dailyAt('03:30')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
+
+/**
+ * 片商订阅数 Redis 缓冲批量回写持久化任务
+ * 每 2 分钟将 Redis 缓冲的增量批量同步至数据库 channels 表
+ */
+Schedule::job(new SyncChannelSubscribersToDatabaseJob())
+    ->everyTwoMinutes()
+    ->withoutOverlapping();
+
+/**
+ * 片商订阅数全量对齐校准定时任务
+ * 每天凌晨 03:40 自动执行一次，确保事实反应表与片商表计数绝对一致
+ */
+Schedule::command('channel:sync-subscribers')
+    ->dailyAt('03:40')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
 
 

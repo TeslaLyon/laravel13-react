@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Channel;
 use Illuminate\Support\Sleep;
 use App\Models\User;
+use App\Services\ChannelSubscriptionService;
 
 class ChannelController extends Controller
 {
@@ -36,7 +37,7 @@ class ChannelController extends Controller
         ]);
     }
 
-    public function show(Request $request, Channel $channel, string $slug, string $tab = 'home')
+    public function show(Request $request, Channel $channel, string $slug, ChannelSubscriptionService $subscriptionService, string $tab = 'home')
     {
         abort_if($channel->slug !== $slug, 404);
 
@@ -46,15 +47,15 @@ class ChannelController extends Controller
         // 1. 初始化默认状态（未登录 / 未订阅时的默认返回值）
         $isSubscribed = false;
 
-        // 3. 计算实体的总订阅人数（独立于具体用户）
-        $subscribersCount = $currentUser
-            ? $currentUser->getEntitySubscribersCount($channel)
-            : (new User)->getEntitySubscribersCount($channel);
+        // 3. 计算实体的总订阅人数（从数据库基数 + Redis 增量高效获取）
+        $subscribersCount = $subscriptionService->getSubscribersCount($channel);
 
         // ==========================================
         // 4. 数据结构拍平处理，适配前端 BaseDetailShow 组件
         // ==========================================
         $channelData = $channel->toArray();
+        $channelData['subscribersCount'] = $subscribersCount;
+        $channelData['follow_num'] = $subscribersCount;
         if ($channel->detail) {
             $channelData['basic_info'] = $channel->detail->basic_info ?? [];
             $channelData['physical_info'] = $channel->detail->physical_info ?? [];
@@ -134,40 +135,25 @@ class ChannelController extends Controller
     /**
      * 处理订阅与取消订阅的切换
      */
-    public function toggleSubscribe(Request $request, Channel $channel)
+    public function toggleSubscribe(Request $request, Channel $channel, ChannelSubscriptionService $subscriptionService)
     {
-        // 1. 获取当前登录的用户实例
         /** @var \App\Models\User $user */
         $user = $request->user();
-        $reacter = $user->viaLoveReacter();
 
-        // 定义一个变量来记录最终的订阅状态
-        $isSubscribed = false;
+        $result = $subscriptionService->toggleSubscribe($channel, $user);
 
-        if ($reacter->hasReactedTo($channel, "SubscribeChannel")) {
-            $reacter->unreactTo($channel, "SubscribeChannel");
-            $isSubscribed = false; // 取消订阅后，状态为 false
-        } else {
-            $reacter->reactTo($channel, "SubscribeChannel");
-            $isSubscribed = true;  // 订阅后，状态为 true
-        }
-
-        Sleep::for(2000)->milliseconds();
-        // 返回 JSON 数据，供前端精细化控制
-        return response()->json([
-            'is_subscribed' => $isSubscribed,
-            'message' => $isSubscribed ? '订阅成功' : '已取消订阅'
-        ]);
+        return response()->json($result);
     }
 
-    public function subscribeStatus(Request $request, Channel $channel)
+    public function subscribeStatus(Request $request, Channel $channel, ChannelSubscriptionService $subscriptionService)
     {
         $user = $request->user();
 
         // 1. 如果用户未登录，直接返回未关注
         if (!$user) {
             return response()->json([
-                'is_subscribed' => false
+                'is_subscribed' => false,
+                'subscribers_count' => $subscriptionService->getSubscribersCount($channel),
             ]);
         }
 
@@ -176,11 +162,12 @@ class ChannelController extends Controller
 
         // 3. 检查是否已经存在类型为 'Subscribe' 的 Reaction
         $isSubscribed = $reacter->hasReactedTo($channel, 'SubscribeChannel');
-        Sleep::for(2000)->milliseconds();
+
         // 4. 返回 JSON 数据供前端读取
         return response()->json([
             'is_subscribed' => $isSubscribed,
-            'message' => $isSubscribed ? '订阅成功' : '已取消订阅'
+            'message' => $isSubscribed ? '已订阅' : '未订阅',
+            'subscribers_count' => $subscriptionService->getSubscribersCount($channel),
         ]);
     }
 }
