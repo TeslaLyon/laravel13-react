@@ -1,5 +1,5 @@
 // src/components/common/BaseDetailShow.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, router, Deferred, Link } from '@inertiajs/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -141,13 +141,15 @@ export default function BaseDetailShow({
 }: BaseDetailShowProps) {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchKeyword, setSearchKeyword] = useState('');
-    const [subscribersCount, setSubscribersCount] = useState(entity.subscribersCount ?? 0);
+    const [subscribersCount, setSubscribersCount] = useState(entity.subscribersCount ?? entity.follow_num ?? 0);
 
-    useEffect(() => {
+    React.useEffect(() => {
         if (typeof entity.subscribersCount === 'number') {
             setSubscribersCount(entity.subscribersCount);
+        } else if (typeof entity.follow_num === 'number') {
+            setSubscribersCount(entity.follow_num);
         }
-    }, [entity.subscribersCount]);
+    }, [entity.subscribersCount, entity.follow_num]);
 
     // 路由前缀
     const routePrefix = moduleType === 'category' ? '/categories' : `/${moduleType}s`;
