@@ -9,6 +9,9 @@ export type Channel = {
     avatar: string;
     logo?: string; // 数据样例中未出现，设为可选
     data_crawl_type?: number;
+    follow_num?: number;
+    video_num?: number;
+    love_reactant_id?: number;
 };
 
 export type Actor = {
@@ -70,6 +73,7 @@ export type Video = {
     status: number;
     likes_count: number;
     favorites_count: number;
+    views_count?: number;
     love_reactant_id: number | null; // 根据样例新增
     created_at: string;
     updated_at: string;
@@ -125,7 +129,7 @@ export type VideoDetail = {
      * 原始数据为 JSON 字符串，解析后为 ListImageMeta 数组
      * 示例: "[{\"src\": \"...\", \"webp\": {\"src\": \"...\"}}]"
      */
-    list_img_large_meta: [];
+    list_img_large_meta?: any;
 
     /** 下载信息，可为 null */
     download_info: string | null;

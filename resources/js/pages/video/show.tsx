@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Deferred, Link } from "@inertiajs/react";
 import {
     CheckCircle2,
     ChevronDown,
@@ -11,30 +11,30 @@ import {
     FolderPlus,
     UserPlus
 } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { show as CategoryShow } from '@/actions/App/Http/Controllers/CategoryController';
+import { show as channelShow } from '@/actions/App/Http/Controllers/ChannelController';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Video } from "@/types/video";
-import { Deferred, Link } from "@inertiajs/react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ActorSquare } from '@/components/video/ActorSquare';
+import { VideoCard } from "@/components/video/Card";
+import VideoCorrectionDialog from '@/components/video/Correction';
+import { DownloadDialog } from '@/components/video/DownloadDialog';
 import { LikeAndDislikeButton } from '@/components/video/LikeAndDislikeButton';
-import { SubscribeButton } from '@/components/video/SubscribeButton';
 import { MoreOption } from '@/components/video/MoreOption';
 import { Save } from '@/components/video/Save';
-import { ActorSquare } from '@/components/video/ActorSquare';
-import { VideoPreviews } from '@/components/video/VideoPreviews';
-import { VideoSkeleton } from "@/components/video/VideoSkeleton";
-import { VideoCard } from "@/components/video/Card";
-import { show } from '@/routes/videos';
-import { DownloadDialog } from '@/components/video/DownloadDialog';
-import VideoCorrectionDialog from '@/components/video/Correction';
-import { Actor } from '@/types/actor';
-import { Category } from '@/types/video';
-import { Tag } from '@/types/video';
+import { SubscribeButton } from '@/components/video/SubscribeButton';
 import { SubtitleDialog } from '@/components/video/SubtitleDialog';
 import { VideoHeader } from '@/components/video/VideoHeader';
+import type { ImageMeta } from '@/components/video/VideoHeader';
+import { VideoPreviews } from '@/components/video/VideoPreviews';
+import { VideoSkeleton } from "@/components/video/VideoSkeleton";
 import { formatChineseUnit } from '@/lib/utils';
-import {show as channelShow} from '@/actions/App/Http/Controllers/ChannelController';
+import { show } from '@/routes/videos';
+import type { Actor } from '@/types/actor';
+import type { Video, Category, Tag } from "@/types/video";
 
 // /channels/${video?.channel.id}
 
@@ -59,18 +59,16 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
     const [subscribed, setSubscribed] = useState(isSubscribed);
-    const [subscribersCount, setSubscribersCount] = useState<number>(
-        channelSubscribersCount ?? video?.channel?.follow_num ?? 0
-    );
-    const [isTagsExpanded, setIsTagsExpanded] = useState(false);
+    const targetSubscribersCount = channelSubscribersCount ?? video?.channel?.follow_num ?? 0;
+    const [subscribersCount, setSubscribersCount] = useState<number>(targetSubscribersCount);
+    const [prevSubscribersCount, setPrevSubscribersCount] = useState<number>(targetSubscribersCount);
 
-    useEffect(() => {
-        if (channelSubscribersCount !== undefined) {
-            setSubscribersCount(channelSubscribersCount);
-        } else if (video?.channel?.follow_num !== undefined) {
-            setSubscribersCount(video.channel.follow_num);
-        }
-    }, [channelSubscribersCount, video?.channel?.follow_num]);
+    if (targetSubscribersCount !== prevSubscribersCount) {
+        setPrevSubscribersCount(targetSubscribersCount);
+        setSubscribersCount(targetSubscribersCount);
+    }
+
+    const [isTagsExpanded, setIsTagsExpanded] = useState(false);
 
     // 分类展示状态：控制隐藏和显示（超过两行时可折叠与展开）
     const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
@@ -80,8 +78,10 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
 
     useEffect(() => {
         const el = descriptionRef.current;
+
         if (!el || !video?.video_detail?.description) {
             setCanExpandDescription(false);
+
             return;
         }
 
@@ -111,17 +111,21 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
 
     useEffect(() => {
         const el = categoriesRef.current;
+
         if (!el || !video?.categories || video.categories.length === 0) {
             setCanExpandCategories(false);
             setTwoRowsHeight(null);
+
             return;
         }
 
         const checkRows = () => {
             const children = Array.from(el.children) as HTMLElement[];
+
             if (children.length === 0) {
                 setCanExpandCategories(false);
                 setTwoRowsHeight(null);
+
                 return;
             }
 
@@ -132,6 +136,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
             });
 
             const sortedTops = Array.from(topsSet).sort((a, b) => a - b);
+
             if (sortedTops.length > 2) {
                 setCanExpandCategories(true);
                 const row1Top = sortedTops[0];
@@ -162,15 +167,19 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
 
     const getResolutionColor = (res: string) => {
         const resLower = res.toLowerCase();
+
         if (resLower.includes('2160') || resLower.includes('4k') || resLower.includes('8k')) {
             return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200 dark:border-purple-800';
         }
+
         if (resLower.includes('1080')) {
             return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800';
         }
+
         if (resLower.includes('720')) {
             return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
         }
+
         return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
     };
 
@@ -184,8 +193,9 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
     };
 
     // 详情页头图优先使用 videos 的 list_img 中尺寸最大的图片（优先取 highdpi.double 2倍高清图）
-    const headerImgMeta = useMemo(() => {
+    const headerImgMeta = useMemo<ImageMeta[] | string>(() => {
         const listImg = video?.list_img;
+
         if (Array.isArray(listImg) && listImg.length > 0) {
             let largest = listImg[0];
             let maxPixels = (Number(largest.width) || 0) * (Number(largest.height) || 0);
@@ -193,6 +203,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
             for (let i = 1; i < listImg.length; i++) {
                 const item = listImg[i];
                 const pixels = (Number(item.width) || 0) * (Number(item.height) || 0);
+
                 if (pixels > maxPixels) {
                     maxPixels = pixels;
                     largest = item;
@@ -200,7 +211,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
             }
 
             // 🎯 优先使用 highdpi.double 高清大图链接
-            const highDpiSrc = largest?.highdpi?.double || largest?.src;
+            const highDpiSrc = largest?.highdpi?.double || largest?.src || '';
 
             return [{
                 ...largest,
@@ -211,7 +222,15 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
             }];
         }
 
-        return video?.video_detail?.list_img_large_meta || [];
+        if (Array.isArray(video?.video_detail?.list_img_large_meta)) {
+            return video.video_detail.list_img_large_meta as ImageMeta[];
+        }
+
+        if (typeof video?.video_detail?.list_img_large_meta === 'string') {
+            return video.video_detail.list_img_large_meta;
+        }
+
+        return [];
     }, [video?.list_img, video?.video_detail?.list_img_large_meta]);
 
     return (
@@ -515,7 +534,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                             {video.categories.map(category => (
                                                 <Link
                                                     key={category.id}
-                                                    href={`/categories/${category.id}`}
+                                                    href={CategoryShow.url({ category: category.id, slug: category.slug })}
                                                     className="px-4 py-1.5 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 transition-colors rounded-xl text-sm font-semibold shadow-sm"
                                                 >
                                                     {category.name}
@@ -583,7 +602,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                         {(isTagsExpanded ? video.tags : video.tags.slice(0, VISIBLE_TAGS_COUNT)).map(tag => (
                                             <Link
                                                 key={tag.id}
-                                                href={`/tags/${tag.id}`}
+                                                href="#"
                                                 className="px-3 py-1 bg-secondary/60 hover:bg-secondary text-secondary-foreground transition-colors cursor-pointer text-xs font-medium rounded-lg"
                                             >
                                                 #{tag.name}
