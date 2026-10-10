@@ -165,8 +165,12 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         }
     };
 
-    const handleDirectDownload = (link: string) => {
-        window.open(link, '_blank');
+    const handleDirectDownload = (link: string, type?: string) => {
+        if (type === 'magnet' || link.startsWith('magnet:')) {
+            window.location.href = link;
+        } else {
+            window.open(link, '_blank', 'noopener,noreferrer');
+        }
     };
 
     const resetForm = () => {
@@ -326,13 +330,15 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                             {item.type === 'magnet' ? (
                                                 <>
                                                     <Button
+                                                        asChild
                                                         variant="default"
                                                         size="sm"
                                                         className="flex-1 sm:flex-none h-8 sm:h-9 px-3.5 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
-                                                        onClick={() => handleDirectDownload(item.link)}
                                                     >
-                                                        <Zap className="w-3.5 h-3.5 mr-1" />
-                                                        直接下载
+                                                        <a href={item.link}>
+                                                            <Zap className="w-3.5 h-3.5 mr-1" />
+                                                            直接下载
+                                                        </a>
                                                     </Button>
 
                                                     <Button
@@ -347,13 +353,15 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                 </>
                                             ) : (
                                                 <Button
+                                                    asChild
                                                     variant="default"
                                                     size="sm"
                                                     className="w-full sm:w-auto h-8 sm:h-9 px-4 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
-                                                    onClick={() => handleDirectDownload(item.link)}
                                                 >
-                                                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                                                    前往获取
+                                                    <a href={item.link} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                                                        前往获取
+                                                    </a>
                                                 </Button>
                                             )}
                                         </div>
