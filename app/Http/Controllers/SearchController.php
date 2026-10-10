@@ -74,7 +74,11 @@ class SearchController extends Controller
                         $q->where('name', 'ILIKE', "%{$query}%")
                             ->orWhere('name_zh', 'ILIKE', "%{$query}%")
                             ->orWhere('video_code', 'ILIKE', "%{$query}%")
-                            ->orWhere('slug', 'ILIKE', "%{$query}%");
+                            ->orWhere('slug', 'ILIKE', "%{$query}%")
+                            ->orWhereHas('downloads', function ($dq) use ($query) {
+                                $dq->where('title', 'ILIKE', "%{$query}%")
+                                    ->orWhere('hash', 'ILIKE', "%{$query}%");
+                            });
                     })
                     ->limit($limit)
                     ->get();
@@ -85,7 +89,11 @@ class SearchController extends Controller
                     $q->where('name', 'ILIKE', "%{$query}%")
                         ->orWhere('name_zh', 'ILIKE', "%{$query}%")
                         ->orWhere('video_code', 'ILIKE', "%{$query}%")
-                        ->orWhere('slug', 'ILIKE', "%{$query}%");
+                        ->orWhere('slug', 'ILIKE', "%{$query}%")
+                        ->orWhereHas('downloads', function ($dq) use ($query) {
+                            $dq->where('title', 'ILIKE', "%{$query}%")
+                                ->orWhere('hash', 'ILIKE', "%{$query}%");
+                        });
                 })
                 ->limit($limit)
                 ->get();

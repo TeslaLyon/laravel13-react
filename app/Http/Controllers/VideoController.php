@@ -218,7 +218,8 @@ class VideoController extends Controller
                 'tags:id,name,name_zh,slug',
                 'channel:id,name,slug,avatar,love_reactant_id,data_crawl_type',
                 'categories:id,name,name_zh,slug',
-                'approvedSubtitles:id,video_id,user_id,language,file_path,file_size,is_external'
+                'approvedSubtitles:id,video_id,user_id,language,file_path,file_size,is_external',
+                'activeDownloads:id,video_id,title,type,cost_type,resolution,price,link,hash,file_size,extraction_code,archive_password,description,status,sort_order'
             ])->findOrFail($video->id)),
             'recommendVideos' => Inertia::defer(fn() => $recommendVideos),
             'isSubscribed' => $isSubscribed,

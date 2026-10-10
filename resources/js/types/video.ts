@@ -86,6 +86,29 @@ export type Video = {
     actors: Actor[];       // 新增演员数组
     tags: Tag[];           // 新增标签数组
     categories: Category[]; // 新增分类数组
+    downloads?: VideoDownload[];
+    active_downloads?: VideoDownload[];
+};
+
+export type VideoDownload = {
+    id: number;
+    video_id: number;
+    user_id?: number | null;
+    title: string;
+    type: 'magnet' | 'torrent' | 'netdisk' | 'ed2k' | 'direct' | 'store' | string;
+    cost_type: 'free' | 'paid' | string;
+    resolution?: '4K' | '1080P' | '720P' | string | null;
+    price?: string | null;
+    link: string;
+    hash?: string | null;
+    file_size?: number | null;
+    extraction_code?: string | null;
+    archive_password?: string | null;
+    description?: string | null;
+    status: number;
+    sort_order: number;
+    created_at?: string;
+    updated_at?: string;
 };
 
 export type ImageItem = {

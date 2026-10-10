@@ -84,6 +84,12 @@ class Video extends Model implements ReactableInterface
             'likes_count' => (int) $this->likes_count,
             'favorites_count' => (int) $this->favorites_count,
             'created_at' => $this->created_at?->timestamp,
+            'download_titles' => $this->relationLoaded('downloads')
+                ? $this->downloads->pluck('title')->filter()->values()->all()
+                : $this->downloads()->limit(20)->pluck('title')->filter()->values()->all(),
+            'download_hashes' => $this->relationLoaded('downloads')
+                ? $this->downloads->pluck('hash')->filter()->values()->all()
+                : $this->downloads()->limit(20)->pluck('hash')->filter()->values()->all(),
         ];
     }
 
@@ -187,6 +193,25 @@ class Video extends Model implements ReactableInterface
         return $this->hasMany(VideoSubtitle::class)
             ->where('status', 'approved')
             ->with('user:id,name,nickname');
+    }
+
+    /**
+     * 获取该视频下的所有下载项（一对多）
+     */
+    public function downloads(): HasMany
+    {
+        return $this->hasMany(VideoDownload::class);
+    }
+
+    /**
+     * 获取该视频下所有有效/上架的下载项
+     */
+    public function activeDownloads(): HasMany
+    {
+        return $this->hasMany(VideoDownload::class)
+            ->where('status', 1)
+            ->orderByDesc('sort_order')
+            ->orderBy('id');
     }
 
     /**

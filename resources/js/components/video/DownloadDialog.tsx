@@ -73,12 +73,26 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
     });
 
     const downloads = useMemo<DownloadItem[]>(() => {
+        const tableDownloads = video?.active_downloads ?? video?.downloads;
+        if (Array.isArray(tableDownloads) && tableDownloads.length > 0) {
+            return tableDownloads.map((item) => ({
+                id: item.id,
+                type: (item.type as 'magnet' | 'store' | 'link') || 'magnet',
+                costType: (item.cost_type as 'free' | 'paid') || 'free',
+                title: item.title,
+                description: item.description || '',
+                resolution: (item.resolution as '4K' | '1080P' | '720P') || undefined,
+                price: item.price || undefined,
+                link: item.link,
+            }));
+        }
+
         const rawInfo = video?.video_detail?.download_info;
         if (Array.isArray(rawInfo)) {
             return rawInfo as unknown as DownloadItem[];
         }
         return [];
-    }, [video?.video_detail?.download_info]);
+    }, [video?.active_downloads, video?.downloads, video?.video_detail?.download_info]);
 
     useEffect(() => {
         if (isOpen) {
