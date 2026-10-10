@@ -252,7 +252,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
             </Button>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="w-[95vw] sm:max-w-2xl rounded-2xl p-5 sm:p-6 max-h-[90vh] flex flex-col">
+                <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl rounded-2xl p-5 sm:p-6 max-h-[90vh] flex flex-col">
                     <DialogHeader className="flex flex-row items-center justify-between border-b pb-4 min-w-0 w-full shrink-0">
                         <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2 truncate">
                             {activeView === 'submit' && downloads.length > 0 && (
@@ -292,21 +292,18 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                         key={item.id}
                                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card hover:bg-muted/40 transition-all duration-200 min-w-0 w-full"
                                     >
-                                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                                            <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${item.type === 'magnet' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400'}`}>
+                                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                                            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${item.type === 'magnet' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400'}`}>
                                                 {item.type === 'magnet' ? <Magnet className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <ShoppingBag className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
                                             </div>
 
-                                            <div className="flex flex-col min-w-0 flex-1 justify-center">
-                                                <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                    <span className="font-semibold text-foreground text-sm sm:text-base tracking-tight truncate max-w-full" title={item.title}>
-                                                        {item.title}
-                                                    </span>
-
+                                            <div className="flex flex-col min-w-0 flex-1 justify-center gap-1.5">
+                                                {/* 1. 状态与标签行 (清晰度、类型) */}
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     {getResolutionBadge(item.resolution)}
 
                                                     {item.costType === 'free' ? (
-                                                        <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-500/20 px-2 py-0.5 text-xs font-medium shrink-0">
+                                                        <Badge variant="outline" className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20 px-2 py-0.5 text-xs font-medium shrink-0">
                                                             免费
                                                         </Badge>
                                                     ) : (
@@ -314,12 +311,25 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                             付费
                                                         </Badge>
                                                     )}
+
+                                                    <span className="text-[11px] text-muted-foreground font-mono">
+                                                        {item.type === 'magnet' ? 'BT 磁力' : item.type === 'store' ? '官方商城' : '下载链接'}
+                                                    </span>
                                                 </div>
+
+                                                {/* 2. 磁力文件名/标题行 (独立完整展现，不被省略号截断，支持双击选择) */}
+                                                <div
+                                                    className="font-medium text-foreground text-sm sm:text-[15px] tracking-tight leading-snug break-all select-all font-mono"
+                                                    title={item.title}
+                                                >
+                                                    {item.title}
+                                                </div>
+
                                                 {item.description && (
-                                                    <span className="text-xs sm:text-sm text-muted-foreground line-clamp-2 break-all">{item.description}</span>
+                                                    <span className="text-xs text-muted-foreground line-clamp-2 break-all">{item.description}</span>
                                                 )}
                                                 {item.type === 'store' && item.price && (
-                                                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400 mt-1">
+                                                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
                                                         {item.price}
                                                     </span>
                                                 )}
