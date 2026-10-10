@@ -155,7 +155,7 @@ class ImportBrazzersMagnetsCommand extends Command
             }
             $siteStats[$site]['total']++;
 
-            // 在 Brazzers 视频库中查找最匹配的视频
+            // 在 Brazzers 视频库中查找最匹配的视频 (必须满足原片片名实质性匹配)
             $matchResult = $this->findBestMatchingVideo($parsed, $videosByDate, $indexedVideos, $dateWindow);
 
             if (!$matchResult['video']) {
@@ -521,6 +521,7 @@ class ImportBrazzersMagnetsCommand extends Command
 
         // =========================================================
         // 第一优先级：精准匹配发布日期当天 (daysDiff === 0)
+        // 核心要求：原片片名必须实质性匹配，杜绝仅凭日期相同的伪匹配！
         // =========================================================
         $sameDayItems = $videosByDate[$torrentDate] ?? [];
 
@@ -577,7 +578,7 @@ class ImportBrazzersMagnetsCommand extends Command
 
             foreach ($dateCandidates as $item) {
                 $score = $this->calculateMatchScore($parsed, $item, $diff);
-                // 前后一天容错必须达到较高特征门槛 (至少命中标题或有效演员)
+                // 前后一天容错必须达到较高特征门槛 (原片片名必须命中)
                 if ($score >= 120) {
                     $offsetCandidates[] = [
                         'video'     => $item['model'],
@@ -676,24 +677,18 @@ class ImportBrazzersMagnetsCommand extends Command
         $slugNorm = $item['slug_norm'];
         $codeNorm = $item['code_norm'];
 
-        $score = ($daysDiff === 0) ? 60 : max(10, 35 - $daysDiff * 5);
-
         // 1. 原片片名命中判断
-        $titleMatched = false;
-        if (!empty($titleNorm) && strlen($titleNorm) >= 4) {
-            if ($middleNorm === $titleNorm) {
-                $titleMatched = true;
-                $score += 120; // 纯标题完全一致
-            } elseif (str_contains($middleNorm, $titleNorm) || str_contains($titleNorm, $middleNorm)) {
-                $titleMatched = true;
-                $score += 100; // 标题作为子串包含
+        $titleMatched = $this->isTitleMatched($middleNorm, $titleNorm, $slugNorm);
+
+        // 2. video_code 强特征完整比对
+        $codeMatched = false;
+        if (!empty($codeNorm) && strlen($codeNorm) >= 6) {
+            if (str_contains($codeNorm, $middleNorm) || str_contains($middleNorm, $codeNorm)) {
+                $codeMatched = true;
             }
-        } elseif (!empty($slugNorm) && strlen($slugNorm) >= 4 && str_contains($middleNorm, $slugNorm)) {
-            $titleMatched = true;
-            $score += 90;
         }
 
-        // 2. 演员命中数判断
+        // 3. 演员命中数判断
         $matchedActorCount = 0;
         $totalActors = count($item['actor_normalized']);
         foreach ($item['actor_normalized'] as $vActorNorm) {
@@ -702,26 +697,72 @@ class ImportBrazzersMagnetsCommand extends Command
             }
         }
 
+        // 🚨 严密硬性门槛：原片片名（或 video_code 完整命名）必须在磁力段落中出现！
+        // 坚决杜绝“仅日期对应上、但原片片名完全不符”的伪匹配！
+        if (!$titleMatched && !$codeMatched) {
+            return 0; // 坚决不匹配！
+        }
+
+        // 基础日期得分
+        $score = ($daysDiff === 0) ? 60 : max(10, 35 - $daysDiff * 5);
+
+        // 片名命中得分
+        if ($titleMatched) {
+            $score += ($middleNorm === $titleNorm) ? 120 : 100;
+        }
+
+        // video_code 命中得分
+        if ($codeMatched) {
+            $score += 110;
+        }
+
+        // 演员命中得分
         if ($matchedActorCount > 0) {
             $score += ($matchedActorCount === $totalActors && $totalActors > 0) ? 90 : ($matchedActorCount * 40);
         }
 
-        // 3. video_code 辅助比对 (通常包含 Collection.YY.MM.DD.Actors.Title)
-        if (!empty($codeNorm) && (str_contains($codeNorm, $middleNorm) || str_contains($middleNorm, $codeNorm))) {
-            $score += 110;
-        }
-
-        // 4. 双重命中（原片片名 + 演员同时命中）协同加分
+        // 双重命中（原片片名 + 演员同时命中）协同加分
         if ($titleMatched && $matchedActorCount > 0) {
             $score += 80;
         }
 
-        // 基础门槛：至少需要片名命中，或者至少命中演员与当天日期
-        if (!$titleMatched && $matchedActorCount === 0 && empty($codeNorm)) {
-            return 0;
+        return $score;
+    }
+
+    /**
+     * 判断原片片名是否命中
+     */
+    protected function isTitleMatched(string $middleNorm, string $titleNorm, string $slugNorm): bool
+    {
+        if (empty($titleNorm) && empty($slugNorm)) {
+            return false;
         }
 
-        return $score;
+        // 1. 原片名全等或作为子串命中 (长度必须 >= 4，避免极短词误伤)
+        if (!empty($titleNorm) && strlen($titleNorm) >= 4) {
+            if ($middleNorm === $titleNorm || str_contains($middleNorm, $titleNorm)) {
+                return true;
+            }
+            if (strlen($middleNorm) >= 6 && str_contains($titleNorm, $middleNorm)) {
+                return true;
+            }
+        }
+
+        // 2. Slug 命中
+        if (!empty($slugNorm) && strlen($slugNorm) >= 4) {
+            if ($middleNorm === $slugNorm || str_contains($middleNorm, $slugNorm)) {
+                return true;
+            }
+        }
+
+        // 3. 常见缩写变体规范化 (如 episode -> ep, part -> pt)
+        $titleNormAlt = str_replace(['episode', 'part'], ['ep', 'pt'], $titleNorm);
+        $middleNormAlt = str_replace(['episode', 'part'], ['ep', 'pt'], $middleNorm);
+        if (strlen($titleNormAlt) >= 4 && str_contains($middleNormAlt, $titleNormAlt)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -736,7 +777,7 @@ class ImportBrazzersMagnetsCommand extends Command
         $sameDayItems = $videosByDate[$torrentDate] ?? [];
         if (!empty($sameDayItems)) {
             $first = $sameDayItems[0]['model'];
-            return "当天存在视频 [ID: {$first->id}, 标题: {$first->name}] 但片名与演员不匹配";
+            return "当天存在视频 [标题: {$first->name}]，但原片片名不匹配，拒绝伪匹配";
         }
 
         // 检查前后 7 天内的最近视频
@@ -772,4 +813,3 @@ class ImportBrazzersMagnetsCommand extends Command
         return preg_replace('/[^a-z0-9]/', '', strtolower($name));
     }
 }
-

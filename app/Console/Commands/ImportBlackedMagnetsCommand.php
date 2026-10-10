@@ -619,16 +619,19 @@ class ImportBlackedMagnetsCommand extends Command
             $actorMatchCount = $this->countActorMatches($torrentActorsNorm, $torrentSectionNorm, $item);
             $titleMatched = $this->isTitleMatched($torrentSectionNorm, $item);
 
+            // 当天匹配要求：必须至少命中演员或片名，杜绝仅凭日期相同的伪匹配
+            if ($actorMatchCount === 0 && !$titleMatched) {
+                continue;
+            }
+
             // 当天得分：基础分 50 + 特征加分
             $score = 50;
             if ($actorMatchCount > 0 && $titleMatched) {
                 $score += 110; // 演员和片名双重命中
             } elseif ($actorMatchCount > 0) {
                 $score += ($actorMatchCount === count($torrentActorsNorm)) ? 100 : 85;
-            } elseif ($titleMatched) {
-                $score += 95; // 片名命中
             } else {
-                $score += 60; // 当天唯一视频兜底保底分
+                $score += 95; // 片名命中
             }
 
             $exactDayCandidates[] = [
