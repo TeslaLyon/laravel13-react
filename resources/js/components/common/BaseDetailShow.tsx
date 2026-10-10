@@ -403,7 +403,7 @@ export default function BaseDetailShow({
 
                             {/* 🎯 视频 Tab */}
                             <TabsContent value="videos" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <Deferred data="paginatedVideos" fallback={<VideoSkeletonGrid count={8} />}>
+                                <Deferred data="paginatedVideos" fallback={<VideoSkeletonGrid count={12} />}>
                                     {paginatedVideos?.data && paginatedVideos.data.length > 0 ? (
                                         <>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-5">

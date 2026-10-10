@@ -222,7 +222,7 @@ class ImportBlackedMagnetsCommand extends Command
                     'file_size'        => null,
                     'extraction_code'  => null,
                     'archive_password' => null,
-                    'description'      => "匹配自 {$channel->name} 官方视频库 (原发布日期: " . substr((string) $matchedVideo->release_at, 0, 10) . ")",
+                    'description'      => null,
                     'status'           => 1,
                     'sort_order'       => $parsed['sort_order'],
                 ];
