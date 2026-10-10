@@ -248,43 +248,45 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
             </Button>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="sm:max-w-2xl rounded-2xl p-6">
-                    <DialogHeader className="flex flex-row items-center justify-between pr-12 sm:pr-14 border-b pb-4">
-                        <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <DialogContent className="w-[95vw] sm:max-w-2xl rounded-2xl p-5 sm:p-6 max-h-[90vh] flex flex-col">
+                    <DialogHeader className="flex flex-row items-center justify-between border-b pb-4 min-w-0 w-full shrink-0">
+                        <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2 truncate">
                             {activeView === 'submit' && downloads.length > 0 && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full mr-1 cursor-pointer"
+                                    className="h-8 w-8 rounded-full mr-1 cursor-pointer shrink-0"
                                     onClick={() => setActiveView('list')}
                                 >
                                     <ArrowLeft className="w-4 h-4" />
                                 </Button>
                             )}
-                            {activeView === 'list' ? '资源获取' : '提交下载资源'}
+                            <span>{activeView === 'list' ? '资源获取' : '提交下载资源'}</span>
                         </DialogTitle>
 
                         {activeView === 'list' && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 gap-1.5 text-xs font-semibold rounded-lg border-dashed shrink-0 cursor-pointer"
-                                onClick={() => setActiveView('submit')}
-                            >
-                                <Plus className="w-3.5 h-3.5" />
-                                贡献/补充链接
-                            </Button>
+                            <div className="mr-8 sm:mr-10 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1.5 text-xs font-semibold rounded-lg border-dashed cursor-pointer"
+                                    onClick={() => setActiveView('submit')}
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    贡献/补充链接
+                                </Button>
+                            </div>
                         )}
                     </DialogHeader>
 
-                    <div className="flex flex-col gap-4 mt-3">
+                    <div className="flex-1 min-w-0 w-full overflow-hidden flex flex-col mt-3">
                         {/* 视图 1：已有的下载资源列表 */}
                         {activeView === 'list' && (
-                            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                            <div className="space-y-3 overflow-y-auto overflow-x-hidden pr-1.5 flex-1 min-w-0 w-full max-h-[60vh]">
                                 {downloads.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card hover:bg-muted/40 transition-all duration-200"
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card hover:bg-muted/40 transition-all duration-200 min-w-0 w-full"
                                     >
                                         <div className="flex items-start gap-3 min-w-0 flex-1">
                                             <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${item.type === 'magnet' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400'}`}>
@@ -358,12 +360,12 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                     </div>
                                 ))}
 
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-muted/40 text-sm text-muted-foreground border border-dashed gap-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-muted/40 text-sm text-muted-foreground border border-dashed gap-2 min-w-0 w-full">
                                     <span className="font-normal text-foreground/80">没有找到你想要的清晰度或下载格式？</span>
                                     <Button
                                         variant="link"
                                         size="sm"
-                                        className="h-auto p-0 text-sm font-semibold text-primary hover:underline self-start sm:self-auto"
+                                        className="h-auto p-0 text-sm font-semibold text-primary hover:underline self-start sm:self-auto cursor-pointer"
                                         onClick={() => setActiveView('submit')}
                                     >
                                         提交新资源获奖励 &rarr;
