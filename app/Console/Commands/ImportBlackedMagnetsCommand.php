@@ -234,6 +234,11 @@ class ImportBlackedMagnetsCommand extends Command
                     VideoDownload::create($downloadPayload);
                     $stats['inserted']++;
                 }
+
+                if (!$matchedVideo->has_downloads) {
+                    $matchedVideo->update(['has_downloads' => true]);
+                    $matchedVideo->has_downloads = true;
+                }
             }
         }
 

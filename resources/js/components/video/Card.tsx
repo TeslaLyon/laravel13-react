@@ -8,6 +8,7 @@ import 'dayjs/locale/zh-cn'
 
 import { ResponsiveVideoImage } from '@/components/video/ResponsiveVideoImage';
 import { CountryFlag } from "@/components/CountryFlag";
+import { Download } from "lucide-react";
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
@@ -20,6 +21,13 @@ export function VideoCard({ video }: { video: Video }) {
 
     // 🎯 2. 提取并校验 name_zh 是否为有效的非空字符串
     const hasValidNameZh = Boolean(video.name_zh && video.name_zh.trim());
+
+    // 🎯 3. 校验是否拥有下载资源 (优先数据库字段，兜底关联模型)
+    const hasDownloads = Boolean(
+        video.has_downloads ||
+        (video.active_downloads && video.active_downloads.length > 0) ||
+        (video.downloads && video.downloads.length > 0)
+    );
 
     return (
         <div className="group relative flex flex-col gap-1 cursor-pointer z-0">
@@ -35,6 +43,26 @@ export function VideoCard({ video }: { video: Video }) {
                     dataCrawlType={video.channel?.data_crawl_type}
                     className="w-full h-full object-cover rounded-xl transition-all duration-200"
                 />
+
+                {/* 封面左上角状态徽章 */}
+                <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 pointer-events-none">
+                    {hasDownloads && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 backdrop-blur-md shadow-sm">
+                            <Download className="w-2.5 h-2.5" />
+                            <span>下载</span>
+                        </span>
+                    )}
+                    {video.has_zh_subtitles && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-950/80 text-orange-300 border border-orange-500/40 backdrop-blur-md shadow-sm">
+                            中字
+                        </span>
+                    )}
+                    {video.is_4k && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-950/80 text-purple-300 border border-purple-500/40 backdrop-blur-md shadow-sm">
+                            4K
+                        </span>
+                    )}
+                </div>
 
                 {hasValidCountry && (
                     <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none bg-transparent">

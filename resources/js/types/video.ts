@@ -58,6 +58,7 @@ export type Video = {
     name: string;
     name_zh: string;
     has_zh_subtitles: boolean;
+    has_downloads?: boolean;
     slug: string;
     source_uuid: string;
     list_img: ImageItem[]; // 后端返回的是 JSON 字符串

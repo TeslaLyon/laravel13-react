@@ -84,6 +84,8 @@ class Video extends Model implements ReactableInterface
             'likes_count' => (int) $this->likes_count,
             'favorites_count' => (int) $this->favorites_count,
             'created_at' => $this->created_at?->timestamp,
+            'has_zh_subtitles' => (bool) $this->has_zh_subtitles,
+            'has_downloads' => (bool) $this->has_downloads,
             'download_titles' => $this->relationLoaded('downloads')
                 ? $this->downloads->pluck('title')->filter()->values()->all()
                 : $this->downloads()->limit(20)->pluck('title')->filter()->values()->all(),
@@ -97,6 +99,10 @@ class Video extends Model implements ReactableInterface
     {
         return [
             'list_img' => 'array',
+            'is_4k' => 'boolean',
+            'is_vr' => 'boolean',
+            'has_zh_subtitles' => 'boolean',
+            'has_downloads' => 'boolean',
         ];
     }
 
@@ -244,6 +250,8 @@ class Video extends Model implements ReactableInterface
                 'videos.release_at',
                 'videos.is_4k',
                 'videos.is_vr',
+                'videos.has_zh_subtitles',
+                'videos.has_downloads',
                 'videos.likes_count',
                 'videos.favorites_count',
                 'videos.created_at',

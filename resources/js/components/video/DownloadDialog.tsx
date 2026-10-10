@@ -38,7 +38,7 @@ export interface DownloadItem {
     costType: 'free' | 'paid';
     title: string;
     description: string;
-    resolution?: '4K' | '1080P' | '720P';
+    resolution?: string;
     price?: string;
     link: string;
 }
@@ -81,7 +81,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                 costType: (item.cost_type as 'free' | 'paid') || 'free',
                 title: item.title,
                 description: item.description || '',
-                resolution: (item.resolution as '4K' | '1080P' | '720P') || undefined,
+                resolution: item.resolution || undefined,
                 price: item.price || undefined,
                 link: item.link,
             }));
@@ -107,27 +107,40 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
     }, [isOpen, downloads.length]);
 
     const getResolutionBadge = (resolution?: string) => {
-        switch (resolution) {
+        if (!resolution) return null;
+        switch (resolution.toUpperCase()) {
             case '4K':
+            case '2160P':
                 return (
-                    <Badge variant="outline" className="text-purple-600 bg-purple-500/10 border-purple-500/30 px-2.5 py-0.5 text-xs font-bold">
+                    <Badge variant="outline" className="text-purple-600 bg-purple-500/10 border-purple-500/30 px-2 py-0.5 text-xs font-bold shrink-0">
                         4K UHD
                     </Badge>
                 );
             case '1080P':
                 return (
-                    <Badge variant="outline" className="text-blue-600 bg-blue-500/10 border-blue-500/30 px-2.5 py-0.5 text-xs font-bold">
+                    <Badge variant="outline" className="text-blue-600 bg-blue-500/10 border-blue-500/30 px-2 py-0.5 text-xs font-bold shrink-0">
                         1080P HD
                     </Badge>
                 );
             case '720P':
                 return (
-                    <Badge variant="outline" className="text-slate-600 bg-slate-500/10 border-slate-500/30 px-2.5 py-0.5 text-xs font-medium">
+                    <Badge variant="outline" className="text-slate-600 bg-slate-500/10 border-slate-500/30 px-2 py-0.5 text-xs font-medium shrink-0">
                         720P
                     </Badge>
                 );
+            case 'SD':
+            case '480P':
+                return (
+                    <Badge variant="outline" className="text-amber-600 bg-amber-500/10 border-amber-500/30 px-2 py-0.5 text-xs font-bold shrink-0">
+                        SD 标清
+                    </Badge>
+                );
             default:
-                return null;
+                return (
+                    <Badge variant="outline" className="text-slate-600 bg-slate-500/10 border-slate-500/30 px-2 py-0.5 text-xs font-medium shrink-0">
+                        {resolution}
+                    </Badge>
+                );
         }
     };
 
@@ -223,22 +236,26 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         <>
             <Button
                 variant="secondary"
-                className="rounded-full px-4 h-9 shadow-none hover:bg-muted-foreground/10 gap-2 shrink-0 font-medium text-sm"
+                className={`rounded-full px-4 h-9 shadow-none gap-2 shrink-0 font-medium text-sm transition-colors cursor-pointer ${
+                    downloads.length > 0
+                        ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-500/20"
+                        : "hover:bg-muted-foreground/10"
+                }`}
                 onClick={handleOpenDialog}
             >
                 <Download className="w-4 h-4" />
-                <span>下载</span>
+                <span>下载{downloads.length > 0 ? ` (${downloads.length})` : ''}</span>
             </Button>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogContent className="sm:max-w-2xl rounded-2xl p-6">
-                    <DialogHeader className="flex flex-row items-center justify-between pr-6 border-b pb-4">
+                    <DialogHeader className="flex flex-row items-center justify-between pr-12 sm:pr-14 border-b pb-4">
                         <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
                             {activeView === 'submit' && downloads.length > 0 && (
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 rounded-full mr-1"
+                                    className="h-8 w-8 rounded-full mr-1 cursor-pointer"
                                     onClick={() => setActiveView('list')}
                                 >
                                     <ArrowLeft className="w-4 h-4" />
@@ -251,7 +268,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 gap-1.5 text-xs font-semibold rounded-lg border-dashed"
+                                className="h-8 gap-1.5 text-xs font-semibold rounded-lg border-dashed shrink-0 cursor-pointer"
                                 onClick={() => setActiveView('submit')}
                             >
                                 <Plus className="w-3.5 h-3.5" />
@@ -263,34 +280,38 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                     <div className="flex flex-col gap-4 mt-3">
                         {/* 视图 1：已有的下载资源列表 */}
                         {activeView === 'list' && (
-                            <div className="space-y-3.5">
+                            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
                                 {downloads.map((item) => (
                                     <div
                                         key={item.id}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-border/80 bg-card hover:bg-muted/40 transition-all duration-200"
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card hover:bg-muted/40 transition-all duration-200"
                                     >
-                                        <div className="flex items-start gap-3.5 w-full">
-                                            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${item.type === 'magnet' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400'}`}>
-                                                {item.type === 'magnet' ? <Magnet className="w-6 h-6" /> : <ShoppingBag className="w-6 h-6" />}
+                                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                                            <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${item.type === 'magnet' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400'}`}>
+                                                {item.type === 'magnet' ? <Magnet className="w-5 h-5 text-blue-600 dark:text-blue-400" /> : <ShoppingBag className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
                                             </div>
 
                                             <div className="flex flex-col min-w-0 flex-1 justify-center">
                                                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                    <span className="font-semibold text-foreground text-base tracking-tight truncate">{item.title}</span>
+                                                    <span className="font-semibold text-foreground text-sm sm:text-base tracking-tight truncate max-w-full" title={item.title}>
+                                                        {item.title}
+                                                    </span>
 
                                                     {getResolutionBadge(item.resolution)}
 
                                                     {item.costType === 'free' ? (
-                                                        <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-500/20 px-2 py-0.5 text-xs font-medium">
+                                                        <Badge variant="outline" className="text-green-600 bg-green-500/10 border-green-500/20 px-2 py-0.5 text-xs font-medium shrink-0">
                                                             免费
                                                         </Badge>
                                                     ) : (
-                                                        <Badge variant="outline" className="text-orange-600 bg-orange-500/10 border-orange-500/20 px-2 py-0.5 text-xs font-medium">
+                                                        <Badge variant="outline" className="text-orange-600 bg-orange-500/10 border-orange-500/20 px-2 py-0.5 text-xs font-medium shrink-0">
                                                             付费
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <span className="text-sm text-muted-foreground">{item.description}</span>
+                                                {item.description && (
+                                                    <span className="text-xs sm:text-sm text-muted-foreground line-clamp-2 break-all">{item.description}</span>
+                                                )}
                                                 {item.type === 'store' && item.price && (
                                                     <span className="text-sm font-bold text-orange-600 dark:text-orange-400 mt-1">
                                                         {item.price}
@@ -299,26 +320,26 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto mt-1 sm:mt-0">
                                             {item.type === 'magnet' ? (
                                                 <>
                                                     <Button
                                                         variant="default"
                                                         size="sm"
-                                                        className="flex-1 sm:flex-none h-9 px-4 font-medium text-sm"
+                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3.5 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                         onClick={() => handleDirectDownload(item.link)}
                                                     >
-                                                        <Zap className="w-4 h-4 mr-1.5" />
+                                                        <Zap className="w-3.5 h-3.5 mr-1" />
                                                         直接下载
                                                     </Button>
 
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="flex-1 sm:flex-none h-9 px-4 font-medium text-sm"
+                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3.5 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                         onClick={() => handleCopy(item.link)}
                                                     >
-                                                        <Copy className="w-4 h-4 mr-1.5" />
+                                                        <Copy className="w-3.5 h-3.5 mr-1" />
                                                         复制
                                                     </Button>
                                                 </>
@@ -326,10 +347,10 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                 <Button
                                                     variant="default"
                                                     size="sm"
-                                                    className="w-full sm:w-auto h-9 px-4 font-medium text-sm"
+                                                    className="w-full sm:w-auto h-8 sm:h-9 px-4 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                     onClick={() => handleDirectDownload(item.link)}
                                                 >
-                                                    <ExternalLink className="w-4 h-4 mr-1.5" />
+                                                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
                                                     前往获取
                                                 </Button>
                                             )}

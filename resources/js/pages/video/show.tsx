@@ -9,7 +9,8 @@ import {
     Sparkles,
     Tag as TagIcon,
     FolderPlus,
-    UserPlus
+    UserPlus,
+    Download
 } from "lucide-react";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -268,28 +269,51 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                             }>
                                 <div className="flex flex-col gap-1.5">
                                     {/* 主标题 */}
-                                    <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug sm:leading-snug line-clamp-2">
-                                        {(video?.max_quality || video?.is_vr) && (
-                                            <span className="inline-flex items-center gap-1.5 align-middle mr-2 -mt-1">
-                                                {video?.has_zh_subtitles && (
-                                                    <span className="px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-600/50">
-                                                        中文字幕
+                                    {(() => {
+                                        const hasDownloads = Boolean(
+                                            video?.has_downloads ||
+                                            (video?.active_downloads && video?.active_downloads.length > 0) ||
+                                            (video?.downloads && video?.downloads.length > 0) ||
+                                            (Array.isArray(video?.video_detail?.download_info) && video?.video_detail?.download_info.length > 0)
+                                        );
+                                        const hasBadges = Boolean(
+                                            video?.has_zh_subtitles ||
+                                            hasDownloads ||
+                                            video?.max_quality ||
+                                            video?.is_vr
+                                        );
+
+                                        return (
+                                            <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug sm:leading-snug line-clamp-2">
+                                                {hasBadges && (
+                                                    <span className="inline-flex items-center gap-1.5 align-middle mr-2 -mt-1 flex-wrap">
+                                                        {video?.has_zh_subtitles && (
+                                                            <span className="px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-600/50">
+                                                                中文字幕
+                                                            </span>
+                                                        )}
+                                                        {hasDownloads && (
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                                                                <Download className="w-3 h-3" />
+                                                                含下载
+                                                            </span>
+                                                        )}
+                                                        {video?.max_quality && (
+                                                            <span className={`px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider ${getResolutionColor(video.max_quality)}`}>
+                                                                {video.max_quality.toUpperCase()}
+                                                            </span>
+                                                        )}
+                                                        {video?.is_vr && (
+                                                            <span className="px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800">
+                                                                VR
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 )}
-                                                {video?.max_quality && (
-                                                    <span className={`px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider ${getResolutionColor(video.max_quality)}`}>
-                                                        {video.max_quality.toUpperCase()}
-                                                    </span>
-                                                )}
-                                                {video?.is_vr && (
-                                                    <span className="px-1.5 py-0.5 text-[10px] sm:text-xs font-bold rounded border shadow-sm tracking-wider bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800">
-                                                        VR
-                                                    </span>
-                                                )}
-                                            </span>
-                                        )}
-                                        {video?.name}
-                                    </h1>
+                                                {video?.name}
+                                            </h1>
+                                        );
+                                    })()}
 
                                     {/* 中文名及修正按钮布局 */}
                                     <div className="flex items-center gap-2">
