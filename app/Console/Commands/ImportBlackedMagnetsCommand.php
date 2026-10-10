@@ -19,7 +19,7 @@ class ImportBlackedMagnetsCommand extends Command
      */
     protected $signature = 'video:import-blacked-magnets
                             {file=torrent.txt : 包含磁力链接的文件路径}
-                            {--channel=blackedraw : 目标片商 slug 或名称}
+                            {--channel= : 目标片商 slug 或名称（留空默认处理所有 data_crawl_type=2 的片商）}
                             {--date-window=1 : 允许的发布日期前后浮动天数(默认前后1天)}
                             {--dry-run : 演练模式：仅匹配并输出统计报告，不实际写入数据库}
                             {--force : 强制更新已存在的下载记录}
@@ -30,7 +30,7 @@ class ImportBlackedMagnetsCommand extends Command
      *
      * @var string
      */
-    protected $description = '根据女演员/原片片名与发布日期（容许前后一天时区差），将 BlackedRaw 磁力链接匹配并导入到 video_downloads 表中';
+    protected $description = '根据女演员/原片片名与发布日期（容许前后一天时区差），将 Vixen 系列（data_crawl_type=2）各片商磁力链接匹配并导入到 video_downloads 表中';
 
     /**
      * 执行命令
@@ -38,7 +38,7 @@ class ImportBlackedMagnetsCommand extends Command
     public function handle(): int
     {
         $filePath = $this->argument('file');
-        $channelIdentifier = $this->option('channel') ?: 'blackedraw';
+        $channelIdentifier = $this->option('channel');
         $dateWindow = max(0, (int) $this->option('date-window'));
         $isDryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
@@ -59,33 +59,63 @@ class ImportBlackedMagnetsCommand extends Command
             $this->warn("🔍 当前处于 --dry-run 演练模式，将只进行匹配分析，不执行数据库写入操作。");
         }
 
-        // 1. 查找目标片商
-        $channel = Channel::where('slug', $channelIdentifier)
-            ->orWhereRaw('LOWER(name) = ?', [strtolower($channelIdentifier)])
-            ->orWhere('name', 'ILIKE', "%{$channelIdentifier}%")
-            ->first();
+        // 1. 查找目标片商（支持指定单个片商，或默认加载所有 data_crawl_type=2 的片商）
+        if (!empty($channelIdentifier) && strtolower($channelIdentifier) !== 'all') {
+            $targetChannels = Channel::where('slug', $channelIdentifier)
+                ->orWhereRaw('LOWER(name) = ?', [strtolower($channelIdentifier)])
+                ->orWhere('name', 'ILIKE', "%{$channelIdentifier}%")
+                ->get();
 
-        if (!$channel) {
-            $this->error("❌ 数据库中未找到片商: [{$channelIdentifier}]");
-            return self::FAILURE;
+            if ($targetChannels->isEmpty()) {
+                $this->error("❌ 数据库中未找到指定片商: [{$channelIdentifier}]");
+                return self::FAILURE;
+            }
+        } else {
+            $targetChannels = Channel::where('data_crawl_type', 2)->get();
+            if ($targetChannels->isEmpty()) {
+                $this->error("❌ 数据库中未找到任何 data_crawl_type=2 的片商！");
+                return self::FAILURE;
+            }
         }
 
-        $this->info("🎬 目标片商匹配成功: [{$channel->name}] (ID: {$channel->id}, Slug: {$channel->slug})");
+        // 建立片商映射字典 (以规范化后的 slug 和 name 为键)
+        $channelMap = [];
+        $channelNames = [];
+        $channelStats = [];
+        foreach ($targetChannels as $c) {
+            $normSlug = $this->normalizeName($c->slug);
+            $normName = $this->normalizeName($c->name);
+            if ($normSlug) {
+                $channelMap[$normSlug] = $c;
+            }
+            if ($normName) {
+                $channelMap[$normName] = $c;
+            }
+            $channelNames[] = "{$c->name} (ID: {$c->id}, Slug: {$c->slug})";
+            $channelStats[$c->id] = [
+                'name'    => $c->name,
+                'total'   => 0,
+                'matched' => 0,
+            ];
+        }
 
-        // 2. 预加载该片商下的所有视频与演员
-        $this->info("⏳ 正在预加载片商 [{$channel->name}] 下的所有视频与演员数据...");
-        $videos = Video::where('channel_id', $channel->id)
+        $this->info("🎬 目标片商范围 (" . count($targetChannels) . " 个): " . implode(', ', $channelNames));
+
+        // 2. 预加载所有目标片商下的所有视频与演员
+        $this->info("⏳ 正在预加载相关片商下的所有视频与演员数据...");
+        $channelIds = $targetChannels->pluck('id')->all();
+        $videos = Video::whereIn('channel_id', $channelIds)
             ->with('actors:id,name,slug')
-            ->select(['id', 'channel_id', 'name', 'slug', 'video_code', 'release_at'])
+            ->select(['id', 'channel_id', 'name', 'slug', 'video_code', 'release_at', 'has_downloads'])
             ->get();
 
         if ($videos->isEmpty()) {
-            $this->error("❌ 片商 [{$channel->name}] 下暂无任何视频记录，请先同步片商视频元数据！");
+            $this->error("❌ 相关片商下暂无任何视频记录，请先同步片商视频元数据！");
             return self::FAILURE;
         }
 
-        // 🎯 明确查询 2024 年以前的视频数据分布情况
-        $before2024Count = Video::where('channel_id', $channel->id)
+        // 统计视频数据分布情况
+        $before2024Count = Video::whereIn('channel_id', $channelIds)
             ->where(function ($q) {
                 $q->where('release_at', '<', '2024-01-01 00:00:00')
                   ->orWhere('video_code', 'LIKE', '%.17.%')
@@ -98,34 +128,40 @@ class ImportBlackedMagnetsCommand extends Command
             })
             ->count();
 
-        $after2024Count = Video::where('channel_id', $channel->id)
+        $after2024Count = Video::whereIn('channel_id', $channelIds)
             ->where('release_at', '>=', '2024-01-01 00:00:00')
             ->count();
 
-        $nullDateCount = Video::where('channel_id', $channel->id)
+        $nullDateCount = Video::whereIn('channel_id', $channelIds)
             ->whereNull('release_at')
             ->count();
 
-        $this->info("✅ 成功加载 {$videos->count()} 部视频 (其中 2024 年以前: {$before2024Count} 部, 2024 年及以后: {$after2024Count} 部, 无日期: {$nullDateCount} 部)，准备开始逐条匹配...");
+        $this->info("✅ 成功加载 {$videos->count()} 部视频 (其中 2024 年以前: {$before2024Count} 部, 2024 年及以后: {$after2024Count} 部, 无日期: {$nullDateCount} 部)，按片商构建内存索引加速比对...");
 
-        // 3. 构建内存索引加速比对
-        $indexedVideos = $this->buildVideoIndex($videos);
+        // 3. 按片商分组构建加速检索索引
+        $videosGrouped = $videos->groupBy('channel_id');
+        $indexedVideosByChannel = [];
+        foreach ($targetChannels as $c) {
+            $channelVideos = $videosGrouped->get($c->id, collect());
+            $indexedVideosByChannel[$c->id] = $this->buildVideoIndex($channelVideos);
+        }
 
         // 4. 开始逐条匹配并写入
         DB::disableQueryLog();
 
         $stats = [
-            'total'          => count($lines),
-            'matched'        => 0,
-            'exact_date'     => 0, // 同一天匹配
-            'offset_1_day'   => 0, // 前后1天匹配
-            'offset_multi'   => 0, // 前后2~3天匹配
-            'inserted'       => 0,
-            'updated'        => 0,
-            'skipped'        => 0,
-            'unmatched'      => 0,
-            'ambiguous'      => 0,
-            'invalid_format' => 0,
+            'total'           => count($lines),
+            'matched'         => 0,
+            'exact_date'      => 0, // 同一天匹配
+            'offset_1_day'    => 0, // 前后1天匹配
+            'offset_multi'    => 0, // 前后2~3天匹配
+            'inserted'        => 0,
+            'updated'         => 0,
+            'skipped'         => 0,
+            'unmatched'       => 0,
+            'ambiguous'       => 0,
+            'invalid_format'  => 0,
+            'unknown_channel' => 0,
         ];
 
         $unmatchedItems = [];
@@ -147,6 +183,7 @@ class ImportBlackedMagnetsCommand extends Command
                 $stats['invalid_format']++;
                 $unmatchedItems[] = [
                     'line'          => $lineIndex + 1,
+                    'channel'       => '-',
                     'dn'            => '(无法解析磁力链接格式)',
                     'date'          => '-',
                     'name_or_actor' => '-',
@@ -156,8 +193,47 @@ class ImportBlackedMagnetsCommand extends Command
                 continue;
             }
 
-            // 查找最匹配的视频
-            $matchResult = $this->findBestMatchingVideo($parsed, $indexedVideos, $dateWindow);
+            // 识别所属片商
+            $prefixNorm = $this->normalizeName($parsed['channel']);
+            $matchedChannel = $channelMap[$prefixNorm] ?? null;
+
+            if (!$matchedChannel) {
+                $stats['unknown_channel']++;
+                $stats['unmatched']++;
+                $unmatchedItems[] = [
+                    'line'          => $lineIndex + 1,
+                    'channel'       => $parsed['channel'],
+                    'dn'            => $parsed['dn'],
+                    'date'          => $parsed['date'],
+                    'name_or_actor' => $parsed['raw_section'],
+                    'magnet'        => $line,
+                    'reason'        => "片商前缀 [{$parsed['channel']}] 未识别或不在当前处理范围",
+                ];
+                continue;
+            }
+
+            $channelId = $matchedChannel->id;
+            if (isset($channelStats[$channelId])) {
+                $channelStats[$channelId]['total']++;
+            }
+
+            $channelIndexedVideos = $indexedVideosByChannel[$channelId] ?? [];
+            if (empty($channelIndexedVideos)) {
+                $stats['unmatched']++;
+                $unmatchedItems[] = [
+                    'line'          => $lineIndex + 1,
+                    'channel'       => $matchedChannel->name,
+                    'dn'            => $parsed['dn'],
+                    'date'          => $parsed['date'],
+                    'name_or_actor' => $parsed['raw_section'],
+                    'magnet'        => $line,
+                    'reason'        => "片商 [{$matchedChannel->name}] 暂无视频数据",
+                ];
+                continue;
+            }
+
+            // 在该片商对应的视频索引中查找最匹配的视频
+            $matchResult = $this->findBestMatchingVideo($parsed, $channelIndexedVideos, $dateWindow);
 
             if (!$matchResult['video']) {
                 if ($matchResult['reason'] === 'ambiguous') {
@@ -168,6 +244,7 @@ class ImportBlackedMagnetsCommand extends Command
 
                 $unmatchedItems[] = [
                     'line'          => $lineIndex + 1,
+                    'channel'       => $matchedChannel->name,
                     'dn'            => $parsed['dn'],
                     'date'          => $parsed['date'],
                     'name_or_actor' => $parsed['raw_section'],
@@ -181,6 +258,10 @@ class ImportBlackedMagnetsCommand extends Command
             $daysDiff = $matchResult['days_diff'];
 
             $stats['matched']++;
+            if (isset($channelStats[$channelId])) {
+                $channelStats[$channelId]['matched']++;
+            }
+
             if ($daysDiff === 0) {
                 $stats['exact_date']++;
             } elseif ($daysDiff === 1) {
@@ -191,6 +272,7 @@ class ImportBlackedMagnetsCommand extends Command
 
             if (count($matchedSamples) < 5) {
                 $matchedSamples[] = [
+                    'channel'    => $matchedChannel->name,
                     'dn'         => $parsed['dn'],
                     'video'      => $matchedVideo->name ?: $matchedVideo->video_code,
                     't_date'     => $parsed['date'],
@@ -258,15 +340,35 @@ class ImportBlackedMagnetsCommand extends Command
                 ['未匹配数量', $stats['unmatched']],
                 ['存在多部模糊歧义跳过', $stats['ambiguous']],
                 ['格式无效行', $stats['invalid_format']],
+                ['未识别片商行', $stats['unknown_channel']],
                 ['数据库新插入记录', $stats['inserted']],
                 ['数据库更新记录', $stats['updated']],
                 ['已存在跳过记录', $stats['skipped']],
             ]
         );
 
+        // 各片商统计明细
+        $channelTableRows = [];
+        foreach ($channelStats as $cId => $cStat) {
+            if ($cStat['total'] > 0) {
+                $rate = $cStat['total'] > 0 ? round(($cStat['matched'] / $cStat['total']) * 100, 1) . '%' : '0%';
+                $channelTableRows[] = [
+                    $cStat['name'],
+                    $cStat['total'],
+                    $cStat['matched'],
+                    $cStat['total'] - $cStat['matched'],
+                    $rate,
+                ];
+            }
+        }
+        if (!empty($channelTableRows)) {
+            $this->info("\n📊 各片商匹配明细:");
+            $this->table(['片商名称', '磁力总数', '成功匹配', '未匹配', '匹配率'], $channelTableRows);
+        }
+
         if (!empty($matchedSamples)) {
             $this->info("\n🎯 典型成功匹配示例 (前 5 组):");
-            $this->table(['磁力文件名 (dn)', '匹配到的视频', '磁力日期', '视频日期', '相差天数', '清晰度'], $matchedSamples);
+            $this->table(['片商', '磁力文件名 (dn)', '匹配到的视频', '磁力日期', '视频日期', '相差天数', '清晰度'], $matchedSamples);
         }
 
         // 7. 详细输出所有未匹配的数据
@@ -274,35 +376,34 @@ class ImportBlackedMagnetsCommand extends Command
             $this->newLine();
             $this->warn("⚠️  共检测到 " . count($unmatchedItems) . " 条未匹配的磁力链接，明细如下：");
 
-            // (1) 完整表格输出所有未匹配条目
+            // (1) 表格输出未匹配条目 (最多显示前 50 条，避免控制台刷屏)
+            $displayItems = array_slice($unmatchedItems, 0, 50);
             $tableRows = array_map(function ($item) {
                 return [
                     $item['line'],
+                    $item['channel'],
                     $item['dn'],
                     $item['date'],
                     $item['name_or_actor'],
                     $item['reason'],
                 ];
-            }, $unmatchedItems);
+            }, $displayItems);
 
-            $this->table(['行号', '磁力文件名 (dn)', '磁力日期', '演员/原片名 (识别文本)', '未匹配原因'], $tableRows);
-
-            // (2) 完整打印原始磁力链接，方便终端直接复制查看
-            $this->warn("\n📋 未匹配磁力链接明细 (直接复制):");
-            foreach ($unmatchedItems as $item) {
-                $this->line("[第 {$item['line']} 行] {$item['magnet']}");
+            $this->table(['行号', '片商', '磁力文件名 (dn)', '磁力日期', '演员/原片名 (识别文本)', '未匹配原因'], $tableRows);
+            if (count($unmatchedItems) > 50) {
+                $this->warn("... 其余 " . (count($unmatchedItems) - 50) . " 条未匹配条目请查阅导出的文件。");
             }
 
-            // (3) 自动保存到文件
+            // (2) 自动保存到文件
             $exportFile = $this->option('export-unmatched') ?: 'unmatched_magnets.txt';
             $exportLines = [
-                "# BlackedRaw 未匹配磁力链接记录",
+                "# Vixen 系列片商 (data_crawl_type=2) 未匹配磁力链接记录",
                 "# 生成时间: " . date('Y-m-d H:i:s'),
                 "# 总未匹配数: " . count($unmatchedItems),
                 "# ----------------------------------------------------",
             ];
             foreach ($unmatchedItems as $item) {
-                $exportLines[] = "# [行号: {$item['line']}] 日期: {$item['date']} | 演员/原片名: {$item['name_or_actor']} | 原因: {$item['reason']}";
+                $exportLines[] = "# [行号: {$item['line']}] 片商: {$item['channel']} | 日期: {$item['date']} | 演员/原片名: {$item['name_or_actor']} | 原因: {$item['reason']}";
                 $exportLines[] = $item['magnet'];
             }
             file_put_contents($exportFile, implode("\n", $exportLines) . "\n");
@@ -380,36 +481,69 @@ class ImportBlackedMagnetsCommand extends Command
         }
         $dn = urldecode($dnMatch[1]);
 
-        // 3. 正则解构 BlackedRaw 命名规范:
-        // 例: BlackedRaw.22.09.26.Ella.Reese.XXX.1080p.MP4-NBQ
-        // 例: BlackedRaw.17.10.31.Penny.Barber.And.Armani.Black.XXX.SD.MP4-KLEENEX
-        // 例: BlackedRaw.20.05.15.BBC.Beginners.Compilation.XXX.1080p.MP4-KTR
-        // 例: BlackedRaw.22.06.27.High.Gear.XXX.1080p.MP4-NBQ
-        if (!preg_match('/^([a-zA-Z0-9]+)\.(\d{2})\.(\d{2})\.(\d{2})\.(.*?)\.XXX\.(.*?)$/i', $dn, $parts)) {
+        // 3. 正则解构片商视频命名规范
+        // 支持多种命名变体:
+        // 变体 1: Prefix.YY.MM.DD.Title.XXX.Resolution.Ext (最常见，如 BlackedRaw.22.09.26.Ella.Reese.XXX.1080p.MP4-NBQ)
+        // 变体 2: Prefix.YY.MM.DD.Title.Resolution.XXX-Tag (如 Tushy.20.08.30.Cecilia.Lion.Next.1080p.XXX-C0R)
+        // 变体 3: Prefix.YY.MM.DD.Title.Ext (无 XXX 标签，如 Blacked.04.21.15.Tiffany.Brookes...mp4)
+        $channelPrefix = null;
+        $d1 = null;
+        $d2 = null;
+        $d3 = null;
+        $rawSection = null;
+        $tail = '';
+
+        if (preg_match('/^([a-zA-Z0-9]+)\.(\d{2})\.(\d{2})\.(\d{2})\.(.*?)\.XXX\.(.*?)$/i', $dn, $parts)) {
+            $channelPrefix = $parts[1];
+            $d1 = $parts[2];
+            $d2 = $parts[3];
+            $d3 = $parts[4];
+            $rawSection = $parts[5];
+            $tail = $parts[6];
+        } elseif (preg_match('/^([a-zA-Z0-9]+)\.(\d{2})\.(\d{2})\.(\d{2})\.(.*?)\.(2160p|1080p|720p|sd|4k|uhd|\d+p)\.XXX(.*)$/i', $dn, $parts)) {
+            $channelPrefix = $parts[1];
+            $d1 = $parts[2];
+            $d2 = $parts[3];
+            $d3 = $parts[4];
+            $rawSection = $parts[5];
+            $tail = $parts[6] . $parts[7];
+        } elseif (preg_match('/^([a-zA-Z0-9]+)\.(\d{2})\.(\d{2})\.(\d{2})\.(.*?)\.(mp4|mkv|avi|wmv)$/i', $dn, $parts)) {
+            $channelPrefix = $parts[1];
+            $d1 = $parts[2];
+            $d2 = $parts[3];
+            $d3 = $parts[4];
+            $rawSection = $parts[5];
+            $tail = $parts[6];
+        } else {
             return null;
         }
 
-        $channelPrefix = $parts[1];
-        $year = '20' . $parts[2];
-        $month = $parts[3];
-        $day = $parts[4];
+        // 智能解析日期：判断 YY.MM.DD 与 MM.DD.YY (若第二个数字>12，如 04.21.15，则为 MM.DD.YY)
+        if ((int) $d2 > 12) {
+            $year = '20' . $d3;
+            $month = $d1;
+            $day = $d2;
+        } else {
+            $year = '20' . $d1;
+            $month = $d2;
+            $day = $d3;
+        }
         $dateStr = "{$year}-{$month}-{$day}";
-        $rawSection = $parts[5];
-        $tail = $parts[6];
 
         // 4. 清晰度与排序权重判断
         $resolution = null;
         $sortOrder = 0;
-        if (preg_match('/2160p|4k|uhd/i', $tail)) {
+        $tailAndDn = $tail . ' ' . $dn;
+        if (preg_match('/2160p|4k|uhd/i', $tailAndDn)) {
             $resolution = '4K';
             $sortOrder = 10;
-        } elseif (preg_match('/1080p/i', $tail)) {
+        } elseif (preg_match('/1080p/i', $tailAndDn)) {
             $resolution = '1080P';
             $sortOrder = 5;
-        } elseif (preg_match('/720p/i', $tail)) {
+        } elseif (preg_match('/720p/i', $tailAndDn)) {
             $resolution = '720P';
             $sortOrder = 3;
-        } elseif (preg_match('/sd|480p|540p/i', $tail)) {
+        } elseif (preg_match('/sd|480p|540p/i', $tailAndDn)) {
             $resolution = 'SD';
             $sortOrder = 1;
         }
