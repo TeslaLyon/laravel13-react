@@ -84,7 +84,29 @@ class ImportBlackedMagnetsCommand extends Command
             return self::FAILURE;
         }
 
-        $this->info("✅ 成功加载 {$videos->count()} 部视频，准备开始逐条匹配...");
+        // 🎯 明确查询 2024 年以前的视频数据分布情况
+        $before2024Count = Video::where('channel_id', $channel->id)
+            ->where(function ($q) {
+                $q->where('release_at', '<', '2024-01-01 00:00:00')
+                  ->orWhere('video_code', 'LIKE', '%.17.%')
+                  ->orWhere('video_code', 'LIKE', '%.18.%')
+                  ->orWhere('video_code', 'LIKE', '%.19.%')
+                  ->orWhere('video_code', 'LIKE', '%.20.%')
+                  ->orWhere('video_code', 'LIKE', '%.21.%')
+                  ->orWhere('video_code', 'LIKE', '%.22.%')
+                  ->orWhere('video_code', 'LIKE', '%.23.%');
+            })
+            ->count();
+
+        $after2024Count = Video::where('channel_id', $channel->id)
+            ->where('release_at', '>=', '2024-01-01 00:00:00')
+            ->count();
+
+        $nullDateCount = Video::where('channel_id', $channel->id)
+            ->whereNull('release_at')
+            ->count();
+
+        $this->info("✅ 成功加载 {$videos->count()} 部视频 (其中 2024 年以前: {$before2024Count} 部, 2024 年及以后: {$after2024Count} 部, 无日期: {$nullDateCount} 部)，准备开始逐条匹配...");
 
         // 3. 构建内存索引加速比对
         $indexedVideos = $this->buildVideoIndex($videos);
@@ -414,7 +436,10 @@ class ImportBlackedMagnetsCommand extends Command
     }
 
     /**
-     * 核心打分匹配算法：演员为主 + 标题合集容错 + 容许日期前后 1~2 天时区差
+     * 多层级分步打分匹配算法：
+     * 第一优先级：精准匹配当天 (Exact Date Match, daysDiff === 0)
+     * 第二优先级：前后 1 天容错时区纠偏 (Offset Date Match, daysDiff <= dateWindow)
+     * 第三优先级：强特征跨日期宽限兜底 (Feature Fallback Match, 片名/合集全中或演员全中)
      */
     protected function findBestMatchingVideo(array $parsed, array $indexedVideos, int $maxAllowedWindow): array
     {
@@ -423,183 +448,361 @@ class ImportBlackedMagnetsCommand extends Command
         $torrentActorsNorm = $parsed['actor_normalized'];
         $torrentSectionNorm = $parsed['section_normalized'] ?? '';
 
-        $candidates = [];
+        // =========================================================
+        // 第一优先级：精准匹配发布日期当天 (daysDiff === 0)
+        // 用户核心诉求：优先精准匹配日期，当天匹配到时绝不考虑前后推移
+        // =========================================================
+        $exactDayCandidates = [];
 
         foreach ($indexedVideos as $item) {
-            $videoTimestamp = $item['timestamp'];
-            if (!$videoTimestamp) {
-                // 若视频无发布日期，尝试从 video_code 补救提取
-                if (preg_match('/\.(\d{2})\.(\d{2})\.(\d{2})\./', $item['model']->video_code ?? '', $m)) {
-                    $videoTimestamp = strtotime("20{$m[1]}-{$m[2]}-{$m[3]}");
-                }
-            }
-
+            $videoTimestamp = $this->resolveVideoTimestamp($item);
             if (!$videoTimestamp) {
                 continue;
             }
 
-            // 计算天数差异
             $daysDiff = (int) round(abs($torrentTimestamp - $videoTimestamp) / 86400);
-
-            // 允许的最大浮动天数：用户配置值(默认1天)，最大放宽到 max(2, $maxAllowedWindow) 寻找备选
-            $maxDays = max(2, $maxAllowedWindow);
-            if ($daysDiff > $maxDays) {
+            if ($daysDiff !== 0) {
                 continue;
             }
 
-            // 1. 演员匹配比对
-            $actorMatchCount = 0;
-            $videoActorsNorm = $item['actor_normalized'];
-            $videoCodeNorm = $item['code_normalized'];
+            $actorMatchCount = $this->countActorMatches($torrentActorsNorm, $torrentSectionNorm, $item);
+            $titleMatched = $this->isTitleMatched($torrentSectionNorm, $item);
 
-            foreach ($torrentActorsNorm as $tActorNorm) {
-                if (empty($tActorNorm)) {
-                    continue;
-                }
-
-                $isMatched = false;
-
-                // (1) 优先精准匹配演员标准名
-                foreach ($videoActorsNorm as $vActorNorm) {
-                    if ($tActorNorm === $vActorNorm) {
-                        $isMatched = true;
-                        break;
-                    }
-
-                    // (2) 容错拼写相近（如 Lana Rhodes 与 Lana Rhoades，编辑简写等）
-                    $lev = levenshtein($tActorNorm, $vActorNorm);
-                    if ($lev <= 2 && strlen($tActorNorm) >= 6) {
-                        $isMatched = true;
-                        break;
-                    }
-
-                    // (3) 包含关系 (如名字缩写或艺名全名)
-                    if (str_contains($vActorNorm, $tActorNorm) || str_contains($tActorNorm, $vActorNorm)) {
-                        $isMatched = true;
-                        break;
-                    }
-                }
-
-                // (4) 若关联演员表未命中，比对 video_code / 标题中的名称文本
-                if (!$isMatched && str_contains($videoCodeNorm, $tActorNorm)) {
-                    $isMatched = true;
-                }
-
-                if ($isMatched) {
-                    $actorMatchCount++;
-                }
-            }
-
-            // (5) 反向扫描：磁力串是否包含了该视频关联女演员的名字 (例如 Charlotte.Sins.Warm.Up 中包含 Charlotte Sins)
-            if ($actorMatchCount === 0 && !empty($torrentSectionNorm)) {
-                foreach ($videoActorsNorm as $vActorNorm) {
-                    if (strlen($vActorNorm) >= 4 && str_contains($torrentSectionNorm, $vActorNorm)) {
-                        $actorMatchCount++;
-                        break;
-                    }
-                }
-            }
-
-            // 2. 原片片名 / 标题 / Slug 匹配比对 (针对以原片片名命名的资源，如 High Gear、合集等)
-            $titleMatched = false;
-            if (!empty($torrentSectionNorm)) {
-                $nameNorm = $item['name_norm'] ?? '';
-                $slugNorm = $item['slug_norm'] ?? '';
-
-                if (!empty($nameNorm) && (
-                    $nameNorm === $torrentSectionNorm
-                    || (strlen($nameNorm) >= 4 && str_contains($torrentSectionNorm, $nameNorm))
-                    || (strlen($torrentSectionNorm) >= 4 && str_contains($nameNorm, $torrentSectionNorm))
-                )) {
-                    $titleMatched = true;
-                } elseif (!empty($slugNorm) && (
-                    $slugNorm === $torrentSectionNorm
-                    || (strlen($slugNorm) >= 4 && str_contains($torrentSectionNorm, $slugNorm))
-                    || (strlen($torrentSectionNorm) >= 4 && str_contains($slugNorm, $torrentSectionNorm))
-                )) {
-                    $titleMatched = true;
-                } elseif (!empty($item['code_normalized']) && str_contains($item['code_normalized'], $torrentSectionNorm)) {
-                    $titleMatched = true;
-                }
-            }
-
-            // 核心准则：必须满足以下条件之一才作为有效候选：
-            // 1. 命中至少 1 位演员
-            // 2. 命中原片片名 / slug / 合集名 (如 High Gear, BBC Beginners Compilation)
-            // 3. 严格同一天（daysDiff === 0）
-            $isSameDay = ($daysDiff === 0);
-
-            if ($actorMatchCount === 0 && !$titleMatched && !$isSameDay) {
-                continue;
-            }
-
-            // 计算综合打分
-            $score = 0;
-
-            // 特征得分 (最高 110 分)
+            // 当天得分：基础分 50 + 特征加分
+            $score = 50;
             if ($actorMatchCount > 0 && $titleMatched) {
-                $score += 110; // 演员与原片片名双重强特征命中（如 Charlotte.Sins.Warm.Up 同时命中演员和片名）
+                $score += 110; // 演员和片名双重命中
             } elseif ($actorMatchCount > 0) {
-                if ($actorMatchCount === count($torrentActorsNorm)) {
-                    $score += 100; // 演员全中 (如 Ella Reese)
-                } else {
-                    $score += 85;  // 部分演员命中（男女合拍中仅女演员在库的情形）
-                }
+                $score += ($actorMatchCount === count($torrentActorsNorm)) ? 100 : 85;
             } elseif ($titleMatched) {
-                $score += 95; // 纯原片片名 / slug 强特征命中 (如 High Gear, BBC Beginners Compilation)
+                $score += 95; // 片名命中
             } else {
-                // 演员与原片片名未直接比对出，但发布日期完全是同一天 (如特异元数据或合集无演员)
-                $score += 60;
+                $score += 60; // 当天唯一视频兜底保底分
             }
 
-            // 日期得分 (越近分越高，前后一天给极高分)
-            if ($daysDiff === 0) {
-                $score += 40; // 同一天
-            } elseif ($daysDiff === 1) {
-                $score += 35; // 前后一天 (时区差)
-            } elseif ($daysDiff === 2) {
-                $score += 20; // 前后两天
-            } else {
-                $score += 10;
+            $exactDayCandidates[] = [
+                'video'     => $item['model'],
+                'score'     => $score,
+                'days_diff' => 0,
+            ];
+        }
+
+        if (!empty($exactDayCandidates)) {
+            usort($exactDayCandidates, fn ($a, $b) => $b['score'] <=> $a['score']);
+            $top = $exactDayCandidates[0];
+
+            if (count($exactDayCandidates) > 1 && $exactDayCandidates[1]['score'] === $top['score']) {
+                if ($exactDayCandidates[1]['video']->id !== $top['video']->id) {
+                    return [
+                        'video'     => null,
+                        'days_diff' => null,
+                        'reason'    => '当天存在多部不同视频且同分模糊歧义',
+                    ];
+                }
             }
 
-            $candidates[] = [
+            return [
+                'video'     => $top['video'],
+                'days_diff' => 0,
+                'reason'    => null,
+            ];
+        }
+
+        // =========================================================
+        // 第二优先级：前后 1 天容错时区纠偏匹配 (1 <= daysDiff <= maxAllowedWindow)
+        // 仅在当天完全找不到任何视频时，才放宽考虑时区前后一天
+        // =========================================================
+        $offsetCandidates = [];
+        $allowedWindow = max(1, $maxAllowedWindow);
+
+        foreach ($indexedVideos as $item) {
+            $videoTimestamp = $this->resolveVideoTimestamp($item);
+            if (!$videoTimestamp) {
+                continue;
+            }
+
+            $daysDiff = (int) round(abs($torrentTimestamp - $videoTimestamp) / 86400);
+            if ($daysDiff < 1 || $daysDiff > $allowedWindow) {
+                continue;
+            }
+
+            $actorMatchCount = $this->countActorMatches($torrentActorsNorm, $torrentSectionNorm, $item);
+            $titleMatched = $this->isTitleMatched($torrentSectionNorm, $item);
+
+            // 前后一天容错必须满足：至少命中演员或片名
+            if ($actorMatchCount === 0 && !$titleMatched) {
+                continue;
+            }
+
+            $score = ($daysDiff === 1) ? 35 : 20;
+            if ($actorMatchCount > 0 && $titleMatched) {
+                $score += 110;
+            } elseif ($actorMatchCount > 0) {
+                $score += ($actorMatchCount === count($torrentActorsNorm)) ? 100 : 85;
+            } else {
+                $score += 95;
+            }
+
+            $offsetCandidates[] = [
                 'video'     => $item['model'],
                 'score'     => $score,
                 'days_diff' => $daysDiff,
             ];
         }
 
-        if (empty($candidates)) {
+        if (!empty($offsetCandidates)) {
+            usort($offsetCandidates, fn ($a, $b) => $b['score'] <=> $a['score']);
+            $top = $offsetCandidates[0];
+
+            if (count($offsetCandidates) > 1 && $offsetCandidates[1]['score'] === $top['score']) {
+                if ($offsetCandidates[1]['video']->id !== $top['video']->id) {
+                    return [
+                        'video'     => null,
+                        'days_diff' => null,
+                        'reason'    => '前后容错窗口内存在多部同分歧义视频',
+                    ];
+                }
+            }
+
             return [
-                'video'     => null,
-                'days_diff' => null,
-                'reason'    => '未在前后日期窗口内找到匹配演员或标题的视频',
+                'video'     => $top['video'],
+                'days_diff' => $top['days_diff'],
+                'reason'    => null,
             ];
         }
 
-        // 按得分倒序排序
-        usort($candidates, fn ($a, $b) => $b['score'] <=> $a['score']);
+        // =========================================================
+        // 第三优先级：强特征跨日期宽限兜底 (Feature Fallback Match)
+        // 针对原片片名全匹配(如 High Gear, BBC Beginners Compilation) 或演员全匹配，
+        // 允许放宽到 7 天窗口寻找唯一确切对应的视频
+        // =========================================================
+        $featureCandidates = [];
 
-        $top = $candidates[0];
+        foreach ($indexedVideos as $item) {
+            $videoTimestamp = $this->resolveVideoTimestamp($item);
+            $daysDiff = $videoTimestamp ? (int) round(abs($torrentTimestamp - $videoTimestamp) / 86400) : 999;
 
-        // 检查是否存在同分歧义 (排重保护)
-        if (count($candidates) > 1 && $candidates[1]['score'] === $top['score']) {
-            // 同一天若存在多部不同视频但特征相同，需要更细致甄别
-            if ($candidates[1]['video']->id !== $top['video']->id) {
-                return [
-                    'video'     => null,
-                    'days_diff' => null,
-                    'reason'    => 'ambiguous',
-                ];
+            $actorMatchCount = $this->countActorMatches($torrentActorsNorm, $torrentSectionNorm, $item);
+            $titleMatched = $this->isTitleMatched($torrentSectionNorm, $item);
+
+            // 强特征要求：原片片名全匹配，或者演员全匹配
+            if (!$titleMatched && ($actorMatchCount === 0 || $actorMatchCount < count($torrentActorsNorm))) {
+                continue;
+            }
+
+            // 宽限最大 7 天
+            if ($daysDiff > 7 && $videoTimestamp > 0) {
+                continue;
+            }
+
+            $score = $titleMatched ? 95 : 90;
+            $score -= min(40, $daysDiff * 4); // 距离越远适度扣分
+
+            $featureCandidates[] = [
+                'video'     => $item['model'],
+                'score'     => $score,
+                'days_diff' => ($daysDiff === 999) ? 0 : $daysDiff,
+            ];
+        }
+
+        if (!empty($featureCandidates)) {
+            usort($featureCandidates, fn ($a, $b) => $b['score'] <=> $a['score']);
+            $top = $featureCandidates[0];
+
+            if (count($featureCandidates) > 1 && $featureCandidates[1]['score'] === $top['score']) {
+                if ($featureCandidates[1]['video']->id !== $top['video']->id) {
+                    return [
+                        'video'     => null,
+                        'days_diff' => null,
+                        'reason'    => '特征匹配存在多部同名歧义视频',
+                    ];
+                }
+            }
+
+            return [
+                'video'     => $top['video'],
+                'days_diff' => $top['days_diff'],
+                'reason'    => null,
+            ];
+        }
+
+        // =========================================================
+        // 未匹配原因深度诊断 (为用户提供清晰的原因提示)
+        // =========================================================
+        $diagReason = $this->diagnoseFailureReason($parsed, $indexedVideos);
+
+        return [
+            'video'     => null,
+            'days_diff' => null,
+            'reason'    => $diagReason,
+        ];
+    }
+
+    /**
+     * 补救解析视频时间戳
+     */
+    protected function resolveVideoTimestamp(array $item): int
+    {
+        if (!empty($item['timestamp'])) {
+            return $item['timestamp'];
+        }
+
+        $code = $item['model']->video_code ?? '';
+        if (preg_match('/\.(\d{2})\.(\d{2})\.(\d{2})\./', $code, $m)) {
+            return strtotime("20{$m[1]}-{$m[2]}-{$m[3]}");
+        }
+
+        $slug = $item['model']->slug ?? '';
+        if (preg_match('/(?:^|-)(20\d{2}|\d{2})-(\d{2})-(\d{2})(?:-|$)/', $slug, $sm)) {
+            $y = strlen($sm[1]) === 4 ? $sm[1] : '20' . $sm[1];
+            return strtotime("{$y}-{$sm[2]}-{$sm[3]}");
+        }
+
+        return 0;
+    }
+
+    /**
+     * 计算女演员匹配数
+     */
+    protected function countActorMatches(array $torrentActorsNorm, string $torrentSectionNorm, array $item): int
+    {
+        $actorMatchCount = 0;
+        $videoActorsNorm = $item['actor_normalized'];
+        $videoCodeNorm = $item['code_normalized'];
+
+        foreach ($torrentActorsNorm as $tActorNorm) {
+            if (empty($tActorNorm)) {
+                continue;
+            }
+
+            $isMatched = false;
+
+            // 1. 精准全等
+            foreach ($videoActorsNorm as $vActorNorm) {
+                if ($tActorNorm === $vActorNorm) {
+                    $isMatched = true;
+                    break;
+                }
+
+                // 2. 拼写近义
+                $lev = levenshtein($tActorNorm, $vActorNorm);
+                if ($lev <= 2 && strlen($tActorNorm) >= 6) {
+                    $isMatched = true;
+                    break;
+                }
+
+                // 3. 包含关系
+                if (str_contains($vActorNorm, $tActorNorm) || str_contains($tActorNorm, $vActorNorm)) {
+                    $isMatched = true;
+                    break;
+                }
+            }
+
+            // 4. 比对 video_code / 标题
+            if (!$isMatched && str_contains($videoCodeNorm, $tActorNorm)) {
+                $isMatched = true;
+            }
+
+            if ($isMatched) {
+                $actorMatchCount++;
             }
         }
 
-        return [
-            'video'     => $top['video'],
-            'days_diff' => $top['days_diff'],
-            'reason'    => null,
-        ];
+        // 5. 反向扫描：磁力段是否包含了视频关联女演员 (如 Charlotte.Sins.Warm.Up 包含 Charlotte Sins)
+        if ($actorMatchCount === 0 && !empty($torrentSectionNorm)) {
+            foreach ($videoActorsNorm as $vActorNorm) {
+                if (strlen($vActorNorm) >= 4 && str_contains($torrentSectionNorm, $vActorNorm)) {
+                    $actorMatchCount++;
+                    break;
+                }
+            }
+        }
+
+        return $actorMatchCount;
+    }
+
+    /**
+     * 比对原片片名 / Slug / 编码
+     */
+    protected function isTitleMatched(string $torrentSectionNorm, array $item): bool
+    {
+        if (empty($torrentSectionNorm)) {
+            return false;
+        }
+
+        $nameNorm = $item['name_norm'] ?? '';
+        $slugNorm = $item['slug_norm'] ?? '';
+        $codeNorm = $item['code_normalized'] ?? '';
+
+        // 1. 原片名全等或包含
+        if (!empty($nameNorm)) {
+            if ($nameNorm === $torrentSectionNorm
+                || (strlen($nameNorm) >= 4 && str_contains($torrentSectionNorm, $nameNorm))
+                || (strlen($torrentSectionNorm) >= 4 && str_contains($nameNorm, $torrentSectionNorm))) {
+                return true;
+            }
+        }
+
+        // 2. Slug 全等或包含
+        if (!empty($slugNorm)) {
+            if ($slugNorm === $torrentSectionNorm
+                || (strlen($slugNorm) >= 4 && str_contains($torrentSectionNorm, $slugNorm))
+                || (strlen($torrentSectionNorm) >= 4 && str_contains($slugNorm, $torrentSectionNorm))) {
+                return true;
+            }
+        }
+
+        // 3. 完整编码包含
+        if (!empty($codeNorm) && str_contains($codeNorm, $torrentSectionNorm)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 诊断未匹配原因
+     */
+    protected function diagnoseFailureReason(array $parsed, array $indexedVideos): string
+    {
+        $torrentDate = $parsed['date'];
+        $torrentTimestamp = $parsed['timestamp'];
+        $sectionNorm = $parsed['section_normalized'] ?? '';
+
+        // 检查库中是否有当天的视频
+        $sameDayVideos = [];
+        $closestDiff = 999;
+        $closestVideo = null;
+
+        foreach ($indexedVideos as $item) {
+            $ts = $this->resolveVideoTimestamp($item);
+            if (!$ts) {
+                continue;
+            }
+
+            $diff = (int) round(abs($torrentTimestamp - $ts) / 86400);
+            if ($diff === 0) {
+                $sameDayVideos[] = $item['model'];
+            }
+
+            if ($diff < $closestDiff) {
+                $closestDiff = $diff;
+                $closestVideo = $item;
+            }
+        }
+
+        if (!empty($sameDayVideos)) {
+            $first = $sameDayVideos[0];
+            return "当天存在视频 [ID: {$first->id}, 标题: {$first->name}] 但演员与片名不匹配";
+        }
+
+        if ($closestVideo && $closestDiff <= 7) {
+            $v = $closestVideo['model'];
+            $vDate = substr((string) $v->release_at, 0, 10);
+            return "当天无视频 (最相近为 {$vDate}, 相差 {$closestDiff} 天, 标题: {$v->name})";
+        }
+
+        return "库中未找到前后 7 天内的相关视频或特征不匹配";
     }
 
     /**
