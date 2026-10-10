@@ -22,14 +22,15 @@ class ImportBlackedMagnetsCommand extends Command
                             {--channel=blackedraw : 目标片商 slug 或名称}
                             {--date-window=1 : 允许的发布日期前后浮动天数(默认前后1天)}
                             {--dry-run : 演练模式：仅匹配并输出统计报告，不实际写入数据库}
-                            {--force : 强制更新已存在的下载记录}';
+                            {--force : 强制更新已存在的下载记录}
+                            {--export-unmatched= : 将未匹配的磁力链接导出到指定文件(默认自动保存到 unmatched_magnets.txt)}';
 
     /**
      * 命令描述
      *
      * @var string
      */
-    protected $description = '根据女演员名称与发布日期（容许前后一天时区差），将 BlackedRaw 磁力链接匹配并导入到 video_downloads 表中';
+    protected $description = '根据女演员/原片片名与发布日期（容许前后一天时区差），将 BlackedRaw 磁力链接匹配并导入到 video_downloads 表中';
 
     /**
      * 执行命令
@@ -105,7 +106,7 @@ class ImportBlackedMagnetsCommand extends Command
             'invalid_format' => 0,
         ];
 
-        $unmatchedSamples = [];
+        $unmatchedItems = [];
         $matchedSamples = [];
 
         $progressBar = $this->output->createProgressBar(count($lines));
@@ -122,6 +123,14 @@ class ImportBlackedMagnetsCommand extends Command
             $parsed = $this->parseMagnetLine($line);
             if (!$parsed) {
                 $stats['invalid_format']++;
+                $unmatchedItems[] = [
+                    'line'          => $lineIndex + 1,
+                    'dn'            => '(无法解析磁力链接格式)',
+                    'date'          => '-',
+                    'name_or_actor' => '-',
+                    'magnet'        => $line,
+                    'reason'        => '磁力链接或 dn 命名格式不符合规范',
+                ];
                 continue;
             }
 
@@ -135,15 +144,14 @@ class ImportBlackedMagnetsCommand extends Command
                     $stats['unmatched']++;
                 }
 
-                if (count($unmatchedSamples) < 15) {
-                    $unmatchedSamples[] = [
-                        'line'    => $lineIndex + 1,
-                        'dn'      => $parsed['dn'],
-                        'date'    => $parsed['date'],
-                        'actors'  => implode(', ', $parsed['actors']),
-                        'reason'  => $matchResult['reason'],
-                    ];
-                }
+                $unmatchedItems[] = [
+                    'line'          => $lineIndex + 1,
+                    'dn'            => $parsed['dn'],
+                    'date'          => $parsed['date'],
+                    'name_or_actor' => $parsed['raw_section'],
+                    'magnet'        => $line,
+                    'reason'        => $matchResult['reason'],
+                ];
                 continue;
             }
 
@@ -170,11 +178,9 @@ class ImportBlackedMagnetsCommand extends Command
                 ];
             }
 
-            // 5. 写入 video_downloads 表
+            // 5. 写入 video_downloads 表 (按 hash 全局排重，确保绝对幂等不污染数据)
             if (!$isDryRun) {
-                $existing = VideoDownload::where('hash', $parsed['hash'])
-                    ->where('video_id', $matchedVideo->id)
-                    ->first();
+                $existing = VideoDownload::where('hash', $parsed['hash'])->first();
 
                 if ($existing && !$force) {
                     $stats['skipped']++;
@@ -236,9 +242,48 @@ class ImportBlackedMagnetsCommand extends Command
             $this->table(['磁力文件名 (dn)', '匹配到的视频', '磁力日期', '视频日期', '相差天数', '清晰度'], $matchedSamples);
         }
 
-        if (!empty($unmatchedSamples)) {
-            $this->warn("\n⚠️ 未匹配样本参考 (前 " . count($unmatchedSamples) . " 组):");
-            $this->table(['行号', '磁力文件名 (dn)', '磁力日期', '演员', '未匹配原因'], $unmatchedSamples);
+        // 7. 详细输出所有未匹配的数据
+        if (!empty($unmatchedItems)) {
+            $this->newLine();
+            $this->warn("⚠️  共检测到 " . count($unmatchedItems) . " 条未匹配的磁力链接，明细如下：");
+
+            // (1) 完整表格输出所有未匹配条目
+            $tableRows = array_map(function ($item) {
+                return [
+                    $item['line'],
+                    $item['dn'],
+                    $item['date'],
+                    $item['name_or_actor'],
+                    $item['reason'],
+                ];
+            }, $unmatchedItems);
+
+            $this->table(['行号', '磁力文件名 (dn)', '磁力日期', '演员/原片名 (识别文本)', '未匹配原因'], $tableRows);
+
+            // (2) 完整打印原始磁力链接，方便终端直接复制查看
+            $this->warn("\n📋 未匹配磁力链接明细 (直接复制):");
+            foreach ($unmatchedItems as $item) {
+                $this->line("[第 {$item['line']} 行] {$item['magnet']}");
+            }
+
+            // (3) 自动保存到文件
+            $exportFile = $this->option('export-unmatched') ?: 'unmatched_magnets.txt';
+            $exportLines = [
+                "# BlackedRaw 未匹配磁力链接记录",
+                "# 生成时间: " . date('Y-m-d H:i:s'),
+                "# 总未匹配数: " . count($unmatchedItems),
+                "# ----------------------------------------------------",
+            ];
+            foreach ($unmatchedItems as $item) {
+                $exportLines[] = "# [行号: {$item['line']}] 日期: {$item['date']} | 演员/原片名: {$item['name_or_actor']} | 原因: {$item['reason']}";
+                $exportLines[] = $item['magnet'];
+            }
+            file_put_contents($exportFile, implode("\n", $exportLines) . "\n");
+            $this->newLine();
+            $this->info("💾 已将未匹配的磁力链接全部导出至: [{$exportFile}] (共 " . count($unmatchedItems) . " 条)");
+        } else {
+            $this->newLine();
+            $this->info("🎉 完美！所有 " . count($lines) . " 条磁力链接已 100% 全部成功匹配，无任何未匹配项！");
         }
 
         $this->info("======================================================");
@@ -269,15 +314,21 @@ class ImportBlackedMagnetsCommand extends Command
                 }
             }
 
-            // 辅助：从 video_code 和 name 中抽取名字
-            $codeNormalized = $this->normalizeName($video->video_code . ' ' . $video->name . ' ' . $video->slug);
+            // 提取视频的规范化名称、slug 和编码
+            $nameNorm = $this->normalizeName($video->name ?? '');
+            $slugNorm = $this->normalizeName(str_replace('-', ' ', $video->slug ?? ''));
+            $videoCodeNorm = $this->normalizeName($video->video_code ?? '');
+            $codeNormalized = $this->normalizeName(($video->video_code ?? '') . ' ' . ($video->name ?? '') . ' ' . ($video->slug ?? ''));
 
             $indexed[] = [
                 'model'            => $video,
                 'release_date'     => $releaseDate,
                 'timestamp'        => $timestamp,
-                'actor_names'      => array_unique($actorNames),
-                'actor_normalized' => array_unique($actorNormalized),
+                'actor_names'      => array_unique(array_filter($actorNames)),
+                'actor_normalized' => array_unique(array_filter($actorNormalized)),
+                'name_norm'        => $nameNorm,
+                'slug_norm'        => $slugNorm,
+                'code_norm'        => $videoCodeNorm,
                 'code_normalized'  => $codeNormalized,
             ];
         }
@@ -305,6 +356,8 @@ class ImportBlackedMagnetsCommand extends Command
         // 3. 正则解构 BlackedRaw 命名规范:
         // 例: BlackedRaw.22.09.26.Ella.Reese.XXX.1080p.MP4-NBQ
         // 例: BlackedRaw.17.10.31.Penny.Barber.And.Armani.Black.XXX.SD.MP4-KLEENEX
+        // 例: BlackedRaw.20.05.15.BBC.Beginners.Compilation.XXX.1080p.MP4-KTR
+        // 例: BlackedRaw.22.06.27.High.Gear.XXX.1080p.MP4-NBQ
         if (!preg_match('/^([a-zA-Z0-9]+)\.(\d{2})\.(\d{2})\.(\d{2})\.(.*?)\.XXX\.(.*?)$/i', $dn, $parts)) {
             return null;
         }
@@ -314,7 +367,7 @@ class ImportBlackedMagnetsCommand extends Command
         $month = $parts[3];
         $day = $parts[4];
         $dateStr = "{$year}-{$month}-{$day}";
-        $actorSection = $parts[5];
+        $rawSection = $parts[5];
         $tail = $parts[6];
 
         // 4. 清晰度与排序权重判断
@@ -335,7 +388,7 @@ class ImportBlackedMagnetsCommand extends Command
         }
 
         // 5. 演员名称提取 (处理单人与 .And. 多人)
-        $cleanActorStr = preg_replace('/\.and\./i', ' & ', $actorSection);
+        $cleanActorStr = preg_replace('/\.and\./i', ' & ', $rawSection);
         $cleanActorStr = str_replace('.', ' ', $cleanActorStr);
         $rawActorParts = preg_split('/[&,]|(?:\s+and\s+)/i', $cleanActorStr);
         $actors = array_filter(array_map('trim', $rawActorParts));
@@ -346,26 +399,29 @@ class ImportBlackedMagnetsCommand extends Command
         }
 
         return [
-            'hash'             => $hash,
-            'dn'               => $dn,
-            'channel'          => $channelPrefix,
-            'date'             => $dateStr,
-            'timestamp'        => strtotime($dateStr),
-            'actors'           => $actors,
-            'actor_normalized' => $actorsNormalized,
-            'resolution'       => $resolution,
-            'sort_order'       => $sortOrder,
+            'hash'               => $hash,
+            'dn'                 => $dn,
+            'channel'            => $channelPrefix,
+            'date'               => $dateStr,
+            'timestamp'          => strtotime($dateStr),
+            'raw_section'        => $rawSection,
+            'section_normalized' => $this->normalizeName(str_replace('.', ' ', $rawSection)),
+            'actors'             => $actors,
+            'actor_normalized'   => $actorsNormalized,
+            'resolution'         => $resolution,
+            'sort_order'         => $sortOrder,
         ];
     }
 
     /**
-     * 核心打分匹配算法：演员为主 + 容许日期前后 1~2 天时区差
+     * 核心打分匹配算法：演员为主 + 标题合集容错 + 容许日期前后 1~2 天时区差
      */
     protected function findBestMatchingVideo(array $parsed, array $indexedVideos, int $maxAllowedWindow): array
     {
         $torrentDate = $parsed['date'];
         $torrentTimestamp = $parsed['timestamp'];
         $torrentActorsNorm = $parsed['actor_normalized'];
+        $torrentSectionNorm = $parsed['section_normalized'] ?? '';
 
         $candidates = [];
 
@@ -391,36 +447,40 @@ class ImportBlackedMagnetsCommand extends Command
                 continue;
             }
 
-            // 演员匹配比对
+            // 1. 演员匹配比对
             $actorMatchCount = 0;
             $videoActorsNorm = $item['actor_normalized'];
             $videoCodeNorm = $item['code_normalized'];
 
             foreach ($torrentActorsNorm as $tActorNorm) {
+                if (empty($tActorNorm)) {
+                    continue;
+                }
+
                 $isMatched = false;
 
-                // 1. 优先精准匹配演员标准名
+                // (1) 优先精准匹配演员标准名
                 foreach ($videoActorsNorm as $vActorNorm) {
                     if ($tActorNorm === $vActorNorm) {
                         $isMatched = true;
                         break;
                     }
 
-                    // 2. 容错拼写相近（如 Lana Rhodes 与 Lana Rhoades，编辑简写等）
+                    // (2) 容错拼写相近（如 Lana Rhodes 与 Lana Rhoades，编辑简写等）
                     $lev = levenshtein($tActorNorm, $vActorNorm);
                     if ($lev <= 2 && strlen($tActorNorm) >= 6) {
                         $isMatched = true;
                         break;
                     }
 
-                    // 3. 包含关系 (如名字缩写或艺名全名)
+                    // (3) 包含关系 (如名字缩写或艺名全名)
                     if (str_contains($vActorNorm, $tActorNorm) || str_contains($tActorNorm, $vActorNorm)) {
                         $isMatched = true;
                         break;
                     }
                 }
 
-                // 4. 若关联演员表未命中，比对 video_code / 标题中的名称文本
+                // (4) 若关联演员表未命中，比对 video_code / 标题中的名称文本
                 if (!$isMatched && str_contains($videoCodeNorm, $tActorNorm)) {
                     $isMatched = true;
                 }
@@ -430,19 +490,66 @@ class ImportBlackedMagnetsCommand extends Command
                 }
             }
 
-            // 核心准则：必须至少命中一个关键女演员名字
-            if ($actorMatchCount === 0) {
+            // (5) 反向扫描：磁力串是否包含了该视频关联女演员的名字 (例如 Charlotte.Sins.Warm.Up 中包含 Charlotte Sins)
+            if ($actorMatchCount === 0 && !empty($torrentSectionNorm)) {
+                foreach ($videoActorsNorm as $vActorNorm) {
+                    if (strlen($vActorNorm) >= 4 && str_contains($torrentSectionNorm, $vActorNorm)) {
+                        $actorMatchCount++;
+                        break;
+                    }
+                }
+            }
+
+            // 2. 原片片名 / 标题 / Slug 匹配比对 (针对以原片片名命名的资源，如 High Gear、合集等)
+            $titleMatched = false;
+            if (!empty($torrentSectionNorm)) {
+                $nameNorm = $item['name_norm'] ?? '';
+                $slugNorm = $item['slug_norm'] ?? '';
+
+                if (!empty($nameNorm) && (
+                    $nameNorm === $torrentSectionNorm
+                    || (strlen($nameNorm) >= 4 && str_contains($torrentSectionNorm, $nameNorm))
+                    || (strlen($torrentSectionNorm) >= 4 && str_contains($nameNorm, $torrentSectionNorm))
+                )) {
+                    $titleMatched = true;
+                } elseif (!empty($slugNorm) && (
+                    $slugNorm === $torrentSectionNorm
+                    || (strlen($slugNorm) >= 4 && str_contains($torrentSectionNorm, $slugNorm))
+                    || (strlen($torrentSectionNorm) >= 4 && str_contains($slugNorm, $torrentSectionNorm))
+                )) {
+                    $titleMatched = true;
+                } elseif (!empty($item['code_normalized']) && str_contains($item['code_normalized'], $torrentSectionNorm)) {
+                    $titleMatched = true;
+                }
+            }
+
+            // 核心准则：必须满足以下条件之一才作为有效候选：
+            // 1. 命中至少 1 位演员
+            // 2. 命中原片片名 / slug / 合集名 (如 High Gear, BBC Beginners Compilation)
+            // 3. 严格同一天（daysDiff === 0）
+            $isSameDay = ($daysDiff === 0);
+
+            if ($actorMatchCount === 0 && !$titleMatched && !$isSameDay) {
                 continue;
             }
 
             // 计算综合打分
             $score = 0;
 
-            // 演员得分 (最高 100 分)
-            if ($actorMatchCount === count($torrentActorsNorm)) {
-                $score += 100; // 演员全中
+            // 特征得分 (最高 110 分)
+            if ($actorMatchCount > 0 && $titleMatched) {
+                $score += 110; // 演员与原片片名双重强特征命中（如 Charlotte.Sins.Warm.Up 同时命中演员和片名）
+            } elseif ($actorMatchCount > 0) {
+                if ($actorMatchCount === count($torrentActorsNorm)) {
+                    $score += 100; // 演员全中 (如 Ella Reese)
+                } else {
+                    $score += 85;  // 部分演员命中（男女合拍中仅女演员在库的情形）
+                }
+            } elseif ($titleMatched) {
+                $score += 95; // 纯原片片名 / slug 强特征命中 (如 High Gear, BBC Beginners Compilation)
             } else {
-                $score += 80;  // 部分演员命中
+                // 演员与原片片名未直接比对出，但发布日期完全是同一天 (如特异元数据或合集无演员)
+                $score += 60;
             }
 
             // 日期得分 (越近分越高，前后一天给极高分)
@@ -467,7 +574,7 @@ class ImportBlackedMagnetsCommand extends Command
             return [
                 'video'     => null,
                 'days_diff' => null,
-                'reason'    => '未在前后日期窗口内找到匹配演员的视频',
+                'reason'    => '未在前后日期窗口内找到匹配演员或标题的视频',
             ];
         }
 
@@ -478,7 +585,7 @@ class ImportBlackedMagnetsCommand extends Command
 
         // 检查是否存在同分歧义 (排重保护)
         if (count($candidates) > 1 && $candidates[1]['score'] === $top['score']) {
-            // 同一天若存在多部不同视频但演员相同，需要更细致甄别
+            // 同一天若存在多部不同视频但特征相同，需要更细致甄别
             if ($candidates[1]['video']->id !== $top['video']->id) {
                 return [
                     'video'     => null,
