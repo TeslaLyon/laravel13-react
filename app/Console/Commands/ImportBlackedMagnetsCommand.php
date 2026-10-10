@@ -59,7 +59,19 @@ class ImportBlackedMagnetsCommand extends Command
             $this->warn("🔍 当前处于 --dry-run 演练模式，将只进行匹配分析，不执行数据库写入操作。");
         }
 
-        // 1. 查找目标片商（支持指定单个片商，或默认加载所有 data_crawl_type=2 的片商）
+        // 1. 若指定目标片商为 brazzers，自动转交专属命令处理
+        if (!empty($channelIdentifier) && strtolower($channelIdentifier) === 'brazzers') {
+            $this->info("💡 检测到目标片商为 [Brazzers]，Brazzers 拥有众多历史子站系列 (BrazzersExxtra, PornstarsLikeItBig 等)，正在自动转交专属命令 video:import-brazzers-magnets 执行...");
+            return $this->call('video:import-brazzers-magnets', [
+                'file'               => $filePath,
+                '--date-window'      => $this->option('date-window'),
+                '--dry-run'          => $this->option('dry-run'),
+                '--force'            => $this->option('force'),
+                '--export-unmatched' => $this->option('export-unmatched'),
+            ]);
+        }
+
+        // 2. 查找目标片商（支持指定单个片商，或默认加载所有 data_crawl_type=2 的片商）
         if (!empty($channelIdentifier) && strtolower($channelIdentifier) !== 'all') {
             $targetChannels = Channel::where('slug', $channelIdentifier)
                 ->orWhereRaw('LOWER(name) = ?', [strtolower($channelIdentifier)])
