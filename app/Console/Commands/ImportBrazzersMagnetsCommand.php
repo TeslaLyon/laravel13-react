@@ -20,6 +20,7 @@ class ImportBrazzersMagnetsCommand extends Command
     protected $signature = 'video:import-brazzers-magnets
                             {file=torrent.txt : 包含磁力链接的文件路径}
                             {--date-window=1 : 允许的发布日期前后浮动天数(默认前后1天)}
+                            {--sample-limit=20 : 终端输出的典型成功匹配示例数量上限(默认20条)}
                             {--dry-run : 演练模式：仅匹配并输出统计报告，不实际写入数据库}
                             {--force : 强制更新已存在的下载记录}
                             {--export-unmatched= : 将未匹配的磁力链接导出到指定文件(默认自动保存到 unmatched_magnets.txt)}';
@@ -38,6 +39,7 @@ class ImportBrazzersMagnetsCommand extends Command
     {
         $filePath = $this->argument('file');
         $dateWindow = max(0, (int) $this->option('date-window'));
+        $sampleLimit = max(1, (int) ($this->option('sample-limit') ?: 20));
         $isDryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
 
@@ -191,7 +193,7 @@ class ImportBrazzersMagnetsCommand extends Command
                 $stats['offset_multi']++;
             }
 
-            if (count($matchedSamples) < 5) {
+            if (count($matchedSamples) < $sampleLimit) {
                 $matchedSamples[] = [
                     'site'       => $site,
                     'dn'         => $parsed['dn'],
@@ -286,7 +288,7 @@ class ImportBrazzersMagnetsCommand extends Command
         }
 
         if (!empty($matchedSamples)) {
-            $this->info("\n🎯 典型成功匹配示例 (前 5 组):");
+            $this->info("\n🎯 典型成功匹配示例 (前 " . count($matchedSamples) . " 组):");
             $this->table(['子站', '磁力文件名 (dn)', '匹配到的视频', '磁力日期', '视频日期', '相差天数', '清晰度'], $matchedSamples);
         }
 
