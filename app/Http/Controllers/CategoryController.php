@@ -109,6 +109,9 @@ class CategoryController extends Controller
             'initisFollowed' => $isSubscribed,
             'subscribersCount' => $subscribersCount,
             'isSubscribed' => $isSubscribed,
+            'filters' => [
+                'search' => $searchKeyword,
+            ],
 
             // 🎯 3. 使用 Inertia::defer 延迟加载最新视频 (首页 Tab 场景)
             'latestVideos' => Inertia::defer(function () use ($category) {
@@ -134,8 +137,13 @@ class CategoryController extends Controller
                 return $category->videos()
                     ->when(method_exists($category->videos(), 'scopePublished'), fn($q) => $q->published())
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
-                    ->when($searchKeyword, fn($q) => $q->where('title', 'like', "%{$searchKeyword}%"))
-                    ->latest()
+                    ->when($searchKeyword, function ($query) use ($searchKeyword) {
+                        $query->where(function ($q) use ($searchKeyword) {
+                            $q->where('videos.name', 'ILIKE', "%{$searchKeyword}%")
+                              ->orWhere('videos.name_zh', 'ILIKE', "%{$searchKeyword}%");
+                        });
+                    })
+                    ->latest('videos.created_at')
                     ->paginate(12)
                     ->withQueryString();
             }),

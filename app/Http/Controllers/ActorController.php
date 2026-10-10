@@ -104,6 +104,8 @@ class ActorController extends Controller
             }
         }
 
+        $searchKeyword = trim($request->input('search', ''));
+
         // 5. 返回响应：使用 Inertia::defer 延迟加载大体积/慢查询数据
         return Inertia::render('actor/show', [
             'breadcrumbs' => [
@@ -115,6 +117,9 @@ class ActorController extends Controller
             'isSubscribed' => $isSubscribed,
             'subscribersCount' => $subscribersCount,
             'currentTab' => $tab,
+            'filters' => [
+                'search' => $searchKeyword,
+            ],
 
             // 🌟 首页需要显示的最新少量数据（使用 defer 延迟拉取）
             'latestVideos' => Inertia::defer(
@@ -125,6 +130,7 @@ class ActorController extends Controller
                     ->select([
                         'videos.id',
                         'videos.name',
+                        'videos.name_zh',
                         'videos.slug',
                         'videos.channel_id',
                         'videos.list_img',
@@ -145,11 +151,18 @@ class ActorController extends Controller
             // 🌟 视频 Tab & 图片 Tab 对应的分页数据（使用 defer 延迟拉取）
             'paginatedVideos' => Inertia::defer(
                 fn() => $actor->videos()
+                    ->when($searchKeyword, function ($query) use ($searchKeyword) {
+                        $query->where(function ($q) use ($searchKeyword) {
+                            $q->where('videos.name', 'ILIKE', "%{$searchKeyword}%")
+                              ->orWhere('videos.name_zh', 'ILIKE', "%{$searchKeyword}%");
+                        });
+                    })
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
                     ->latest('videos.created_at')
                     ->select([
                         'videos.id',
                         'videos.name',
+                        'videos.name_zh',
                         'videos.slug',
                         'videos.channel_id',
                         'videos.list_img',
@@ -165,8 +178,18 @@ class ActorController extends Controller
                     ->paginate(12)
                     ->withQueryString()
             ),
-            // 'paginatedPhotos' => Inertia::defer(fn() => $actor->images()->latest()->paginate(15)->withQueryString()),
-            'paginatedPhotos' => [],
+            'paginatedPhotos' => Inertia::defer(
+                fn() => $actor->photos()
+                    ->when($searchKeyword, function ($query) use ($searchKeyword) {
+                        $query->where(function ($q) use ($searchKeyword) {
+                            $q->where('photos.name', 'ILIKE', "%{$searchKeyword}%")
+                              ->orWhere('photos.name_zh', 'ILIKE', "%{$searchKeyword}%");
+                        });
+                    })
+                    ->latest('photos.created_at')
+                    ->paginate(15)
+                    ->withQueryString()
+            ),
         ]);
     }
 

@@ -70,6 +70,8 @@ class ChannelController extends Controller
 
         $channelData['notificationType'] = $subscriptionStatus['notification_type'];
 
+        $searchKeyword = trim($request->input('search', ''));
+
         // ==========================================
         // 5. 渲染前端 Inertia 组件并使用 defer 延迟加载大体积数据
         // ==========================================
@@ -83,6 +85,9 @@ class ChannelController extends Controller
             'subscribersCount' => $subscribersCount,
             'isSubscribed' => $isSubscribed,
             'currentTab' => $tab,
+            'filters' => [
+                'search' => $searchKeyword,
+            ],
 
             // 🌟 首页 Tab：最新视频（延迟加载，并关联预加载演员数据）
             'latestVideos' => Inertia::defer(function () use ($channel) {
@@ -104,8 +109,17 @@ class ChannelController extends Controller
             'latestPhotos' => [],
 
             // 🌟 视频 Tab：分页视频列表（延迟加载）
-            'paginatedVideos' => Inertia::defer(function () use ($channel) {
-                $paginator = $channel->videos()->latest()->paginate(12)->withQueryString();
+            'paginatedVideos' => Inertia::defer(function () use ($channel, $searchKeyword) {
+                $paginator = $channel->videos()
+                    ->when($searchKeyword, function ($query) use ($searchKeyword) {
+                        $query->where(function ($q) use ($searchKeyword) {
+                            $q->where('videos.name', 'ILIKE', "%{$searchKeyword}%")
+                              ->orWhere('videos.name_zh', 'ILIKE', "%{$searchKeyword}%");
+                        });
+                    })
+                    ->latest('created_at')
+                    ->paginate(12)
+                    ->withQueryString();
 
                 // 对分页数据集的当前页集合在内存中绑定 $channel
                 $paginator->getCollection()->each(fn($video) => $video->setRelation('channel', $channel));
@@ -114,13 +128,18 @@ class ChannelController extends Controller
             }),
 
             // 🌟 图片 Tab：分页图片列表（延迟加载）
-            // 'paginatedPhotos' => Inertia::defer(
-            //     fn() => $channel->images()
-            //         ->latest()
-            //         ->paginate(15)
-            //         ->withQueryString()
-            // ),
-            'paginatedPhotos' => [],
+            'paginatedPhotos' => Inertia::defer(function () use ($channel, $searchKeyword) {
+                return $channel->photos()
+                    ->when($searchKeyword, function ($query) use ($searchKeyword) {
+                        $query->where(function ($q) use ($searchKeyword) {
+                            $q->where('photos.name', 'ILIKE', "%{$searchKeyword}%")
+                              ->orWhere('photos.name_zh', 'ILIKE', "%{$searchKeyword}%");
+                        });
+                    })
+                    ->latest('created_at')
+                    ->paginate(15)
+                    ->withQueryString();
+            }),
         ]);
     }
 

@@ -9,6 +9,8 @@ interface CategoryShowPageProps {
     latestPhotos?: any[];
     paginatedVideos?: any;
     paginatedPhotos?: any;
+    filters?: { search?: string; [key: string]: any };
+    [key: string]: any;
 }
 
 export default function CategoryShowPage({
@@ -19,6 +21,8 @@ export default function CategoryShowPage({
     latestPhotos,
     paginatedVideos,
     paginatedPhotos,
+    filters,
+    ...props
 }: CategoryShowPageProps) {
 
     return (
@@ -31,6 +35,8 @@ export default function CategoryShowPage({
             latestPhotos={latestPhotos}
             paginatedVideos={paginatedVideos}
             paginatedPhotos={paginatedPhotos}
+            filters={filters}
+            {...props}
         />
     );
 }

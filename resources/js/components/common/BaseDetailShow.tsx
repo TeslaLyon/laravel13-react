@@ -49,17 +49,24 @@ export interface BaseDetailShowProps {
     paginatedVideos?: any;
     paginatedPhotos?: any;
     customAboutComponent?: React.ReactNode;
+    filters?: {
+        search?: string;
+        [key: string]: any;
+    };
+    [key: string]: any;
 }
 
 // 🎯 1. 统一的空状态占位组件 (EmptyState)
 function EmptyState({
     icon: Icon,
     title = "暂无内容",
-    description = "这里还没有发布任何相关内容哦"
+    description = "这里还没有发布任何相关内容哦",
+    action
 }: {
     icon: React.ElementType;
     title?: string;
     description?: string;
+    action?: React.ReactNode;
 }) {
     return (
         <div className="flex flex-col items-center justify-center py-12 px-4 text-center border border-dashed border-border/70 rounded-2xl bg-muted/20 my-2 transition-all">
@@ -68,6 +75,7 @@ function EmptyState({
             </div>
             <h4 className="text-sm font-semibold text-foreground mb-1">{title}</h4>
             <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">{description}</p>
+            {action && <div className="mt-4">{action}</div>}
         </div>
     );
 }
@@ -137,11 +145,20 @@ export default function BaseDetailShow({
     latestPhotos,
     paginatedVideos,
     paginatedPhotos,
-    customAboutComponent
+    customAboutComponent,
+    filters
 }: BaseDetailShowProps) {
-    const [isSearchOpen, setIsSearchOpen] = useState(false);
-    const [searchKeyword, setSearchKeyword] = useState('');
+    const activeSearch = (filters?.search || '').trim();
+    const [searchKeyword, setSearchKeyword] = useState(activeSearch);
+    const [isSearchOpen, setIsSearchOpen] = useState(Boolean(activeSearch));
+    const searchInputRef = React.useRef<HTMLInputElement>(null);
     const [subscribersCount, setSubscribersCount] = useState(entity.subscribersCount ?? entity.follow_num ?? 0);
+
+    // 只有在视频和图片 Tab 下才支持搜索功能
+    const isSearchableTab = currentTab === 'videos' || currentTab === 'photos';
+
+    // 路由前缀
+    const routePrefix = moduleType === 'category' ? '/categories' : `/${moduleType}s`;
 
     React.useEffect(() => {
         if (typeof entity.subscribersCount === 'number') {
@@ -151,8 +168,13 @@ export default function BaseDetailShow({
         }
     }, [entity.subscribersCount, entity.follow_num]);
 
-    // 路由前缀
-    const routePrefix = moduleType === 'category' ? '/categories' : `/${moduleType}s`;
+    // 当 filters.search 发生变化时同步输入框状态
+    useEffect(() => {
+        setSearchKeyword(activeSearch);
+        if (activeSearch) {
+            setIsSearchOpen(true);
+        }
+    }, [activeSearch]);
 
     // 动态根据 moduleType 构建 Tab 菜单项
     const tabs = [
@@ -173,7 +195,7 @@ export default function BaseDetailShow({
         const newUrl = value === 'home' ? baseUrl : `${baseUrl}/${value}`;
 
         // 2. 根据不同的 Tab 目标，指定只请求对应的增量数据键名
-        const onlyFields = ['currentTab'];
+        const onlyFields = ['currentTab', 'filters'];
         if (value === 'videos') {
             onlyFields.push('paginatedVideos');
         } else if (value === 'photos') {
@@ -182,24 +204,78 @@ export default function BaseDetailShow({
             onlyFields.push('latestVideos', 'latestPhotos');
         }
 
-        // 3. 执行无缝增量刷新
+        // 切换 Tab 时重置搜索关键词输入状态
+        setSearchKeyword('');
+        setIsSearchOpen(false);
+
+        // 3. 执行无缝增量刷新（不保留搜索等状态，展示目标 Tab 的完整全量列表）
         router.visit(newUrl, {
-            only: onlyFields,      // 🎯 核心优化：告诉 Inertia 只拉取指定的数据，其余数据不用重复查
-            preserveState: true,   // 保持当前组件状态
-            preserveScroll: true,  // 保持当前滚动条位置
-            replace: true,         // 不增加多余的历史记录
+            only: onlyFields,
+            preserveState: false,
+            preserveScroll: true,
+            replace: true,
         });
     };
 
+    // 提交搜索：仅在当前激活的视频或图片 Tab 中根据标题过滤
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!searchKeyword.trim()) return;
+        if (!isSearchableTab) return;
 
-        router.visit(`${routePrefix}/${entity.id}?search=${encodeURIComponent(searchKeyword)}`, {
+        const keyword = searchKeyword.trim();
+        if (!keyword) {
+            handleResetSearch();
+            return;
+        }
+
+        const baseUrl = `${routePrefix}/${entity.id}/${entity.slug || ''}`;
+        const targetUrl = `${baseUrl}/${currentTab}`;
+
+        router.visit(targetUrl, {
+            data: { search: keyword },
             preserveState: true,
             preserveScroll: true,
-            replace: true
+            replace: true,
         });
+    };
+
+    // 重置搜索：清空搜索词并恢复列表
+    const handleResetSearch = () => {
+        setSearchKeyword('');
+        const baseUrl = `${routePrefix}/${entity.id}/${entity.slug || ''}`;
+        const targetUrl = `${baseUrl}/${currentTab}`;
+
+        router.visit(targetUrl, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    // 渲染当前激活搜索词提示栏组件
+    const renderActiveSearchBanner = () => {
+        if (!activeSearch) return null;
+
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 px-4 py-2.5 rounded-xl bg-muted/40 border border-border/70 text-sm animate-in fade-in duration-300">
+                <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-muted-foreground text-xs sm:text-sm">当前搜索标题：</span>
+                    <Badge variant="secondary" className="px-2.5 py-0.5 font-semibold text-xs sm:text-sm bg-primary/10 text-primary border-primary/20">
+                        "{activeSearch}"
+                    </Badge>
+                </div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetSearch}
+                    className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    重置搜索
+                </Button>
+            </div>
+        );
     };
 
     const nicknamesList = entity.nicknames || ["热门", "推荐"];
@@ -317,27 +393,72 @@ export default function BaseDetailShow({
                                 ))}
                             </TabsList>
 
-                            {/* 搜索框 */}
-                            <form onSubmit={handleSearchSubmit} className="flex items-center justify-end w-full sm:w-auto ml-auto">
-                                <div className={`flex items-center transition-all duration-300 ease-in-out overflow-hidden ${isSearchOpen ? 'w-full sm:w-64 opacity-100 mr-2' : 'w-0 opacity-0 mr-0'}`}>
-                                    <input
-                                        type="text"
-                                        value={searchKeyword}
-                                        onChange={(e) => setSearchKeyword(e.target.value)}
-                                        placeholder="搜索作品..."
-                                        className="w-full h-10 px-4 rounded-full border border-border bg-muted/30 text-sm text-foreground transition-shadow focus:border-foreground focus:outline-none"
-                                    />
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setIsSearchOpen(!isSearchOpen)}
-                                    className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-                                >
-                                    {isSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-                                </Button>
-                            </form>
+                            {/* 搜索框：仅在 tab 为视频或图片时才可以使用搜索功能 */}
+                            {isSearchableTab && (
+                                <form onSubmit={handleSearchSubmit} className="flex items-center justify-end w-full sm:w-auto ml-auto">
+                                    <div className={`flex items-center transition-all duration-300 ease-in-out overflow-hidden ${isSearchOpen ? 'w-full sm:w-72 opacity-100 mr-2' : 'w-0 opacity-0 mr-0'}`}>
+                                        <div className="relative w-full flex items-center">
+                                            <input
+                                                ref={searchInputRef}
+                                                type="text"
+                                                value={searchKeyword}
+                                                onChange={(e) => setSearchKeyword(e.target.value)}
+                                                placeholder={currentTab === 'videos' ? '搜索视频标题...' : '搜索图片标题...'}
+                                                className="w-full h-10 pl-4 pr-8 rounded-full border border-border bg-muted/30 text-sm text-foreground transition-shadow focus:border-foreground focus:outline-none"
+                                            />
+                                            {searchKeyword && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSearchKeyword('');
+                                                        if (activeSearch) {
+                                                            handleResetSearch();
+                                                        }
+                                                    }}
+                                                    className="absolute right-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded-full"
+                                                    title="清空并重置"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type={isSearchOpen ? 'submit' : 'button'}
+                                        variant={isSearchOpen ? 'secondary' : 'ghost'}
+                                        size="icon"
+                                        onClick={() => {
+                                            if (!isSearchOpen) {
+                                                setIsSearchOpen(true);
+                                                setTimeout(() => searchInputRef.current?.focus(), 50);
+                                            }
+                                        }}
+                                        className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+                                        title={isSearchOpen ? '执行搜索' : '展开搜索'}
+                                    >
+                                        <Search className="h-5 w-5" />
+                                    </Button>
+                                    {isSearchOpen && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                                setIsSearchOpen(false);
+                                                if (activeSearch) {
+                                                    handleResetSearch();
+                                                } else {
+                                                    setSearchKeyword('');
+                                                }
+                                            }}
+                                            className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted shrink-0 ml-1"
+                                            title="关闭搜索"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </form>
+                            )}
                         </div>
 
                         {/* Tabs 内容区 */}
@@ -403,6 +524,7 @@ export default function BaseDetailShow({
 
                             {/* 🎯 视频 Tab */}
                             <TabsContent value="videos" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {renderActiveSearchBanner()}
                                 <Deferred data="paginatedVideos" fallback={<VideoSkeletonGrid count={12} />}>
                                     {paginatedVideos?.data && paginatedVideos.data.length > 0 ? (
                                         <>
@@ -416,15 +538,26 @@ export default function BaseDetailShow({
 
                                             {paginatedVideos?.links && (
                                                 <div className="flex flex-col items-center justify-center mt-10 mb-12 gap-2">
-                                                    <VideoPagination links={paginatedVideos.links} />
+                                                    <VideoPagination links={paginatedVideos.links} only={['paginatedVideos']} />
                                                 </div>
                                             )}
                                         </>
                                     ) : (
                                         <EmptyState
                                             icon={VideoOff}
-                                            title="未找到相关视频"
-                                            description="该列表中暂无符合条件的视频资源"
+                                            title={activeSearch ? "未找到匹配视频" : "未找到相关视频"}
+                                            description={
+                                                activeSearch
+                                                    ? `未找到标题包含 "${activeSearch}" 的视频作品，请尝试更换关键词或重置搜索`
+                                                    : "该列表中暂无符合条件的视频资源"
+                                            }
+                                            action={
+                                                activeSearch ? (
+                                                    <Button variant="outline" size="sm" onClick={handleResetSearch} className="text-xs">
+                                                        <X className="w-3.5 h-3.5 mr-1" /> 重置搜索
+                                                    </Button>
+                                                ) : undefined
+                                            }
                                         />
                                     )}
                                 </Deferred>
@@ -432,18 +565,38 @@ export default function BaseDetailShow({
 
                             {/* 🎯 图片 Tab */}
                             <TabsContent value="photos" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                {renderActiveSearchBanner()}
                                 <Deferred data="paginatedPhotos" fallback={<ImageSkeletonGrid count={10} />}>
                                     {paginatedPhotos?.data && paginatedPhotos.data.length > 0 ? (
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                            {paginatedPhotos.data.map((img: any, idx: number) => (
-                                                <PhotoCard key={img.id || idx} photo={img} />
-                                            ))}
-                                        </div>
+                                        <>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                                {paginatedPhotos.data.map((img: any, idx: number) => (
+                                                    <PhotoCard key={img.id || idx} photo={img} />
+                                                ))}
+                                            </div>
+
+                                            {paginatedPhotos?.links && (
+                                                <div className="flex flex-col items-center justify-center mt-10 mb-12 gap-2">
+                                                    <VideoPagination links={paginatedPhotos.links} only={['paginatedPhotos']} />
+                                                </div>
+                                            )}
+                                        </>
                                     ) : (
                                         <EmptyState
                                             icon={ImageOff}
-                                            title="未找到相关图片"
-                                            description="该列表中暂无符合条件的图片资源"
+                                            title={activeSearch ? "未找到匹配图片" : "未找到相关图片"}
+                                            description={
+                                                activeSearch
+                                                    ? `未找到标题包含 "${activeSearch}" 的图片资源，请尝试更换关键词或重置搜索`
+                                                    : "该列表中暂无符合条件的图片资源"
+                                            }
+                                            action={
+                                                activeSearch ? (
+                                                    <Button variant="outline" size="sm" onClick={handleResetSearch} className="text-xs">
+                                                        <X className="w-3.5 h-3.5 mr-1" /> 重置搜索
+                                                    </Button>
+                                                ) : undefined
+                                            }
                                         />
                                     )}
                                 </Deferred>
