@@ -22,6 +22,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--flaresolverr= : 指定 FlareSolverr 服务的 URL 地址 (默认自动读取配置或 http://flaresolverr:8191/v1)}
                             {--no-flaresolverr : 禁用 FlareSolverr，仅使用常规 HTTP 直连}
                             {--delay=2 : 每次网络请求间隔延迟秒数 (默认2秒，避免频繁请求被风控)}
+                            {--only-released : 仅筛选已到发布日期的视频 (release_at <= now()，自动跳过未上映预售片)}
+                            {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--force : 强制覆盖更新已存在的下载项}
                             {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}';
 
@@ -43,6 +45,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         $flaresolverrUrl = $this->option('flaresolverr');
         $noFlareSolverr = (bool) $this->option('no-flaresolverr');
         $delay = max(0, (int) $this->option('delay'));
+        $onlyReleased = (bool) $this->option('only-released');
+        $exportUnmatched = $this->option('export-unmatched');
         $force = (bool) $this->option('force');
         $isDryRun = (bool) $this->option('dry-run');
 
@@ -67,7 +71,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $this->info("🔍 正在筛选目标视频（无下载资源，或为 4K 片源但缺失 4K 下载项）...");
 
         try {
-            $query = $crawlerService->getTargetVideosQuery($channel, $videoId);
+            $query = $crawlerService->getTargetVideosQuery($channel, $videoId, $onlyReleased);
             $totalAvailable = $query->count();
         } catch (Throwable $e) {
             $this->error("❌ 查询数据库失败: " . $e->getMessage());
@@ -102,11 +106,14 @@ class CrawlXxxclubMagnetsCommand extends Command
             'skipped_magnets'     => 0,
         ];
 
+        $unmatchedVideos = [];
+
         $progressBar = $this->output->createProgressBar($videos->count());
         $progressBar->start();
 
         foreach ($videos as $video) {
             $stats['processed_videos']++;
+            $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
 
             // 1. 智能生成搜索关键词
             $keyword = $crawlerService->buildSearchKeyword($video);
@@ -146,6 +153,16 @@ class CrawlXxxclubMagnetsCommand extends Command
 
             if (empty($items)) {
                 $stats['empty_videos']++;
+                $reason = '未检索到种子资源 (Search Empty)';
+                $unmatchedVideos[] = [
+                    'id'         => $video->id,
+                    'video_code' => $videoCode,
+                    'keyword'    => $keyword,
+                    'reason'     => $reason,
+                ];
+                $this->newLine();
+                $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>");
+                Log::info("xxxclub 磁力未匹配: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]");
             } else {
                 // 4. 精确匹配并入库
                 $importResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
@@ -158,7 +175,6 @@ class CrawlXxxclubMagnetsCommand extends Command
                     $stats['skipped_magnets'] += $importResult['skipped'];
 
                     // 💡 单行输出匹配成功明细：视频code ➔ 磁力链接名称
-                    $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
                     $this->newLine();
                     foreach ($importResult['matched_items'] ?? [] as $mItem) {
                         $resTag = !empty($mItem['resolution']) ? "[{$mItem['resolution']}] " : '';
@@ -168,6 +184,16 @@ class CrawlXxxclubMagnetsCommand extends Command
                     }
                 } else {
                     $stats['empty_videos']++;
+                    $reason = '搜索结果未通过精准校验 (Unmatched)';
+                    $unmatchedVideos[] = [
+                        'id'         => $video->id,
+                        'video_code' => $videoCode,
+                        'keyword'    => $keyword,
+                        'reason'     => $reason,
+                    ];
+                    $this->newLine();
+                    $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>");
+                    Log::info("xxxclub 磁力未匹配: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]");
                 }
             }
 
@@ -200,6 +226,24 @@ class CrawlXxxclubMagnetsCommand extends Command
                 ['跳过重复项 (Skipped)', $stats['skipped_magnets']],
             ]
         );
+
+        // 💡 打印未匹配的视频 Code 列表，方便用户直接复制到官网手动搜索
+        if (!empty($unmatchedVideos)) {
+            $this->newLine();
+            $this->warn("================================================================================");
+            $this->warn("📋 未匹配的视频 Code 列表（共 " . count($unmatchedVideos) . " 部，可复制至官网手动排查）：");
+            $this->warn("================================================================================");
+            foreach ($unmatchedVideos as $idx => $u) {
+                $this->line(sprintf("  %2d. <fg=yellow>%s</>", $idx + 1, $u['video_code']));
+            }
+            $this->newLine();
+
+            if (!empty($exportUnmatched)) {
+                $lines = array_column($unmatchedVideos, 'video_code');
+                file_put_contents($exportUnmatched, implode(PHP_EOL, $lines) . PHP_EOL);
+                $this->info("💾 未匹配视频 Code 列表已保存至文件: {$exportUnmatched}");
+            }
+        }
 
         if ($stats['cf_blocked'] > 0) {
             $this->warn("💡 提示：检测到有 {$stats['cf_blocked']} 次请求被 Cloudflare 拦截。");

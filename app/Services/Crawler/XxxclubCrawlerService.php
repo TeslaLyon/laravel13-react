@@ -39,13 +39,17 @@ class XxxclubCrawlerService
      * 1. 没有有效下载信息（has_downloads 为 false，或没有有效 video_downloads 记录）的视频；
      * 2. 标记为 4K（is_4k=true 或 max_quality=2160p），但现有有效 video_downloads 中缺失 4K/2160p 版本的视频。
      */
-    public function getTargetVideosQuery(?string $channel = null, ?int $videoId = null): Builder
+    public function getTargetVideosQuery(?string $channel = null, ?int $videoId = null, bool $onlyReleased = false): Builder
     {
         $query = Video::query()
             ->with(['actors:id,name,slug', 'channel:id,name,slug', 'downloads']);
 
         if ($videoId) {
             return $query->where('id', $videoId);
+        }
+
+        if ($onlyReleased) {
+            $query->where('release_at', '<=', now());
         }
 
         if ($channel) {
