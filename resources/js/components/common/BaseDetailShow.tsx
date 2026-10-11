@@ -217,14 +217,13 @@ export default function BaseDetailShow({
         });
     };
 
-    // 提交搜索：仅在当前激活的视频或图片 Tab 中根据标题过滤
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    // 执行搜索：仅在当前激活的视频或图片 Tab 中根据标题过滤，且必须有输入内容
+    const handleSearch = () => {
         if (!isSearchableTab) return;
 
         const keyword = searchKeyword.trim();
+        // 未输入内容时绝不发送网络请求
         if (!keyword) {
-            handleResetSearch();
             return;
         }
 
@@ -237,6 +236,12 @@ export default function BaseDetailShow({
             preserveScroll: true,
             replace: true,
         });
+    };
+
+    // 表单提交事件（支持在 input 中按下回车触发搜索）
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        handleSearch();
     };
 
     // 重置搜索：清空搜索词并恢复列表
@@ -406,17 +411,20 @@ export default function BaseDetailShow({
                                                 placeholder={currentTab === 'videos' ? '搜索视频标题...' : '搜索图片标题...'}
                                                 className="w-full h-10 pl-4 pr-8 rounded-full border border-border bg-muted/30 text-sm text-foreground transition-shadow focus:border-foreground focus:outline-none"
                                             />
-                                            {searchKeyword && (
+                                             {searchKeyword && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => {
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
                                                         setSearchKeyword('');
                                                         if (activeSearch) {
                                                             handleResetSearch();
+                                                        } else {
+                                                            searchInputRef.current?.focus();
                                                         }
                                                     }}
                                                     className="absolute right-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded-full"
-                                                    title="清空并重置"
+                                                    title="清空"
                                                 >
                                                     <X className="h-3.5 w-3.5" />
                                                 </button>
@@ -424,13 +432,22 @@ export default function BaseDetailShow({
                                         </div>
                                     </div>
                                     <Button
-                                        type={isSearchOpen ? 'submit' : 'button'}
+                                        type="button"
                                         variant={isSearchOpen ? 'secondary' : 'ghost'}
                                         size="icon"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                            e.preventDefault();
                                             if (!isSearchOpen) {
+                                                // 仅展开并聚焦，绝不触发网络请求
                                                 setIsSearchOpen(true);
                                                 setTimeout(() => searchInputRef.current?.focus(), 50);
+                                            } else {
+                                                // 展开状态下：只有输入了内容才发送搜索请求，否则重新聚焦
+                                                if (searchKeyword.trim()) {
+                                                    handleSearch();
+                                                } else {
+                                                    searchInputRef.current?.focus();
+                                                }
                                             }
                                         }}
                                         className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
@@ -443,7 +460,8 @@ export default function BaseDetailShow({
                                             type="button"
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => {
+                                            onClick={(e) => {
+                                                e.preventDefault();
                                                 setIsSearchOpen(false);
                                                 if (activeSearch) {
                                                     handleResetSearch();
