@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Video;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -134,6 +135,19 @@ class CategoryController extends Controller
 
             // 🎯 5. 使用 Inertia::defer 延迟加载视频分页列表 (视频 Tab 场景)
             'paginatedVideos' => Inertia::defer(function () use ($category, $searchKeyword) {
+                if (!empty($searchKeyword)) {
+                    try {
+                        return Video::search($searchKeyword)
+                            ->where('category_ids', (int) $category->id)
+                            ->query(fn($q) => $q->when(method_exists($category->videos(), 'scopePublished'), fn($sq) => $sq->published())
+                                               ->with('channel:id,name,slug,avatar,data_crawl_type'))
+                            ->paginate(12)
+                            ->withQueryString();
+                    } catch (\Throwable) {
+                        // 异常或未连接 Meilisearch 时降级回数据库 ILIKE
+                    }
+                }
+
                 return $category->videos()
                     ->when(method_exists($category->videos(), 'scopePublished'), fn($q) => $q->published())
                     ->with('channel:id,name,slug,avatar,data_crawl_type')

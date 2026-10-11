@@ -230,8 +230,17 @@ export default function BaseDetailShow({
         const baseUrl = `${routePrefix}/${entity.id}/${entity.slug || ''}`;
         const targetUrl = `${baseUrl}/${currentTab}`;
 
+        // 🎯 局部精准刷新：仅拉取当前 Tab 的分页数据和筛选条件，避免重复执行首页及详情的大量查询
+        const onlyFields = ['currentTab', 'filters'];
+        if (currentTab === 'videos') {
+            onlyFields.push('paginatedVideos');
+        } else if (currentTab === 'photos') {
+            onlyFields.push('paginatedPhotos');
+        }
+
         router.visit(targetUrl, {
             data: { search: keyword },
+            only: onlyFields,
             preserveState: true,
             preserveScroll: true,
             replace: true,
@@ -250,7 +259,15 @@ export default function BaseDetailShow({
         const baseUrl = `${routePrefix}/${entity.id}/${entity.slug || ''}`;
         const targetUrl = `${baseUrl}/${currentTab}`;
 
+        const onlyFields = ['currentTab', 'filters'];
+        if (currentTab === 'videos') {
+            onlyFields.push('paginatedVideos');
+        } else if (currentTab === 'photos') {
+            onlyFields.push('paginatedPhotos');
+        }
+
         router.visit(targetUrl, {
+            only: onlyFields,
             preserveState: true,
             preserveScroll: true,
             replace: true,

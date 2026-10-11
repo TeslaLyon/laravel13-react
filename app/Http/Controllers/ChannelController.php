@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use App\Models\Channel;
+use App\Models\Video;
 use Illuminate\Support\Sleep;
 use App\Models\User;
 use App\Services\ChannelSubscriptionService;
@@ -110,6 +111,22 @@ class ChannelController extends Controller
 
             // 🌟 视频 Tab：分页视频列表（延迟加载）
             'paginatedVideos' => Inertia::defer(function () use ($channel, $searchKeyword) {
+                if (!empty($searchKeyword)) {
+                    try {
+                        $paginator = Video::search($searchKeyword)
+                            ->where('channel_id', (int) $channel->id)
+                            ->paginate(12)
+                            ->withQueryString();
+
+                        // 对分页数据集在内存中绑定 $channel 避免重复查
+                        $paginator->getCollection()->each(fn($video) => $video->setRelation('channel', $channel));
+
+                        return $paginator;
+                    } catch (\Throwable) {
+                        // 异常或未连接 Meilisearch 时降级回数据库 ILIKE
+                    }
+                }
+
                 $paginator = $channel->videos()
                     ->when($searchKeyword, function ($query) use ($searchKeyword) {
                         $query->where(function ($q) use ($searchKeyword) {

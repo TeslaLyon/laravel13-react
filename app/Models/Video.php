@@ -77,6 +77,12 @@ class Video extends Model implements ReactableInterface
             'video_code' => $this->video_code,
             'slug' => $this->slug,
             'channel_id' => (int) $this->channel_id,
+            'actor_ids' => $this->relationLoaded('actors')
+                ? $this->actors->pluck('id')->map(fn($id) => (int) $id)->values()->all()
+                : $this->actors()->pluck('actors.id')->map(fn($id) => (int) $id)->values()->all(),
+            'category_ids' => $this->relationLoaded('categories')
+                ? $this->categories->pluck('id')->map(fn($id) => (int) $id)->values()->all()
+                : $this->categories()->pluck('categories.id')->map(fn($id) => (int) $id)->values()->all(),
             'is_4k' => (bool) $this->is_4k,
             'is_vr' => (bool) $this->is_vr,
             'sexual_orientation' => (int) $this->sexual_orientation,
@@ -93,6 +99,14 @@ class Video extends Model implements ReactableInterface
                 ? $this->downloads->pluck('hash')->filter()->values()->all()
                 : $this->downloads()->limit(20)->pluck('hash')->filter()->values()->all(),
         ];
+    }
+
+    /**
+     * 批量导入 Meilisearch 时的关联预加载优化，避免 N+1 查询
+     */
+    protected function makeAllSearchableUsing(Builder $query): Builder
+    {
+        return $query->with(['actors:id', 'categories:id', 'downloads:id,video_id,title,hash']);
     }
 
     protected function casts(): array

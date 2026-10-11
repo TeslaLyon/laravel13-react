@@ -179,6 +179,8 @@ return [
                 'filterableAttributes' => [
                     'id',
                     'channel_id',
+                    'actor_ids',
+                    'category_ids',
                     'is_4k',
                     'is_vr',
                     'sexual_orientation',

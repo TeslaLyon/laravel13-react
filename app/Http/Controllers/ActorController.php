@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Actor;
+use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Support\Sleep;
 use App\Models\User;
@@ -149,8 +150,37 @@ class ActorController extends Controller
             'latestPhotos' => [],
 
             // 🌟 视频 Tab & 图片 Tab 对应的分页数据（使用 defer 延迟拉取）
-            'paginatedVideos' => Inertia::defer(
-                fn() => $actor->videos()
+            'paginatedVideos' => Inertia::defer(function () use ($actor, $searchKeyword) {
+                $selectFields = [
+                    'videos.id',
+                    'videos.name',
+                    'videos.name_zh',
+                    'videos.slug',
+                    'videos.channel_id',
+                    'videos.list_img',
+                    'videos.preview',
+                    'videos.release_at',
+                    'videos.is_4k',
+                    'videos.is_vr',
+                    'videos.likes_count',
+                    'videos.favorites_count',
+                    'videos.created_at',
+                    'videos.country'
+                ];
+
+                if (!empty($searchKeyword)) {
+                    try {
+                        return Video::search($searchKeyword)
+                            ->where('actor_ids', (int) $actor->id)
+                            ->query(fn($q) => $q->with('channel:id,name,slug,avatar,data_crawl_type')->select($selectFields))
+                            ->paginate(12)
+                            ->withQueryString();
+                    } catch (\Throwable) {
+                        // 异常或未连接 Meilisearch 时优雅降级回数据库 ILIKE
+                    }
+                }
+
+                return $actor->videos()
                     ->when($searchKeyword, function ($query) use ($searchKeyword) {
                         $query->where(function ($q) use ($searchKeyword) {
                             $q->where('videos.name', 'ILIKE', "%{$searchKeyword}%")
@@ -159,25 +189,10 @@ class ActorController extends Controller
                     })
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
                     ->latest('videos.created_at')
-                    ->select([
-                        'videos.id',
-                        'videos.name',
-                        'videos.name_zh',
-                        'videos.slug',
-                        'videos.channel_id',
-                        'videos.list_img',
-                        'videos.preview',
-                        'videos.release_at',
-                        'videos.is_4k',
-                        'videos.is_vr',
-                        'videos.likes_count',
-                        'videos.favorites_count',
-                        'videos.created_at',
-                        'videos.country'
-                    ])
+                    ->select($selectFields)
                     ->paginate(12)
-                    ->withQueryString()
-            ),
+                    ->withQueryString();
+            }),
             'paginatedPhotos' => Inertia::defer(
                 fn() => $actor->photos()
                     ->when($searchKeyword, function ($query) use ($searchKeyword) {
