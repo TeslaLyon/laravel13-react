@@ -42,6 +42,11 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     public ?string $proxy;
 
     /**
+     * FlareSolverr URL
+     */
+    public ?string $flaresolverrUrl;
+
+    /**
      * 任务描述（Horizon 展示）
      */
     public string $task_name = 'xxxclub 磁力资源增量爬取与补充';
@@ -54,12 +59,18 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(int $limit = 50, ?string $channel = null, int $requestDelay = 2, ?string $proxy = null)
-    {
+    public function __construct(
+        int $limit = 50,
+        ?string $channel = null,
+        int $requestDelay = 2,
+        ?string $proxy = null,
+        ?string $flaresolverrUrl = null
+    ) {
         $this->limit = $limit;
         $this->channel = $channel;
         $this->requestDelay = $requestDelay;
         $this->proxy = $proxy;
+        $this->flaresolverrUrl = $flaresolverrUrl;
         $this->dispatched_at = now()->toDateTimeString();
     }
 
@@ -97,6 +108,10 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
 
         if ($this->proxy) {
             $params['--proxy'] = $this->proxy;
+        }
+
+        if ($this->flaresolverrUrl) {
+            $params['--flaresolverr'] = $this->flaresolverrUrl;
         }
 
         Artisan::call('video:crawl-xxxclub-magnets', $params);

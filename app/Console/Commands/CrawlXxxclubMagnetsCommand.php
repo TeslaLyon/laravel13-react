@@ -18,6 +18,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--channel= : 按片商筛选 (slug 或名称，如 brazzers)}
                             {--file= : 指定本地HTML文件进行离线解析与匹配测试 (如 Untitled-1.html)}
                             {--proxy= : 指定HTTP/SOCKS5代理 (例如 http://127.0.0.1:7890)}
+                            {--flaresolverr= : 指定 FlareSolverr 服务的 URL 地址 (默认自动读取配置或 http://flaresolverr:8191/v1)}
+                            {--no-flaresolverr : 禁用 FlareSolverr，仅使用常规 HTTP 直连}
                             {--delay=2 : 每次网络请求间隔延迟秒数 (默认2秒，避免频繁请求被风控)}
                             {--force : 强制覆盖更新已存在的下载项}
                             {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}';
@@ -37,6 +39,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         $channel = $this->option('channel');
         $localFile = $this->option('file');
         $proxy = $this->option('proxy');
+        $flaresolverrUrl = $this->option('flaresolverr');
+        $noFlareSolverr = (bool) $this->option('no-flaresolverr');
         $delay = max(0, (int) $this->option('delay'));
         $force = (bool) $this->option('force');
         $isDryRun = (bool) $this->option('dry-run');
@@ -84,16 +88,17 @@ class CrawlXxxclubMagnetsCommand extends Command
         }
 
         $stats = [
-            'total_videos'     => $videos->count(),
-            'processed_videos' => 0,
-            'success_videos'   => 0,
-            'empty_videos'     => 0,
-            'cf_blocked'       => 0,
-            'error_videos'     => 0,
-            'total_magnets'    => 0,
-            'inserted_magnets' => 0,
-            'updated_magnets'  => 0,
-            'skipped_magnets'  => 0,
+            'total_videos'        => $videos->count(),
+            'processed_videos'    => 0,
+            'success_videos'      => 0,
+            'empty_videos'        => 0,
+            'flaresolverr_solved' => 0,
+            'cf_blocked'          => 0,
+            'error_videos'        => 0,
+            'total_magnets'       => 0,
+            'inserted_magnets'    => 0,
+            'updated_magnets'     => 0,
+            'skipped_magnets'     => 0,
         ];
 
         $progressBar = $this->output->createProgressBar($videos->count());
@@ -105,13 +110,23 @@ class CrawlXxxclubMagnetsCommand extends Command
             // 1. 智能生成搜索关键词
             $keyword = $crawlerService->buildSearchKeyword($video);
 
-            // 2. 发起 HTTP 抓取请求
-            $fetchResult = $crawlerService->fetchSearchHtml($keyword, $proxy);
+            // 2. 发起 HTTP / FlareSolverr 抓取请求
+            $fetchResult = $crawlerService->fetchSearchHtml(
+                $keyword,
+                $proxy,
+                [],
+                $flaresolverrUrl,
+                !$noFlareSolverr
+            );
+
+            if (!empty($fetchResult['via_flaresolverr']) && $fetchResult['success']) {
+                $stats['flaresolverr_solved']++;
+            }
 
             if ($fetchResult['is_cf']) {
                 $stats['cf_blocked']++;
                 $this->newLine();
-                $this->warn("⚠️  [视频 ID: {$video->id}] 关键词 [{$keyword}] 触发了 Cloudflare 防护！");
+                $this->warn("⚠️  [视频 ID: {$video->id}] 关键词 [{$keyword}] " . ($fetchResult['message'] ?? '触发了 Cloudflare 防护！'));
                 if ($delay > 0) {
                     sleep($delay);
                 }
@@ -165,6 +180,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                 ['实际处理视频', $stats['processed_videos']],
                 ['成功补充视频', $stats['success_videos']],
                 ['未搜到资源/无匹配', $stats['empty_videos']],
+                ['FlareSolverr 成功穿透', $stats['flaresolverr_solved']],
                 ['Cloudflare 拦截拦截次数', $stats['cf_blocked']],
                 ['请求异常次数', $stats['error_videos']],
                 ['匹配下载项总数', $stats['total_magnets']],
