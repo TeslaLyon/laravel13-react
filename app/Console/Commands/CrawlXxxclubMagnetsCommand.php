@@ -22,7 +22,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--flaresolverr= : 指定 FlareSolverr 服务的 URL 地址 (默认自动读取配置或 http://flaresolverr:8191/v1)}
                             {--no-flaresolverr : 禁用 FlareSolverr，仅使用常规 HTTP 直连}
                             {--delay=2 : 每次网络请求间隔延迟秒数 (默认2秒，避免频繁请求被风控)}
-                            {--only-released : 仅筛选已到发布日期的视频 (release_at <= now()，自动跳过未上映预售片)}
+                            {--include-unreleased : 包含尚未到排期日期的未来预售视频 (默认排除未来片，避免无效请求)}
+                            {--only-released : 仅筛选已到发布日期的视频 (默认即为开启状态)}
                             {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
                             {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
                             {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
@@ -50,7 +51,9 @@ class CrawlXxxclubMagnetsCommand extends Command
         $flaresolverrUrl = $this->option('flaresolverr');
         $noFlareSolverr = (bool) $this->option('no-flaresolverr');
         $delay = max(0, (int) $this->option('delay'));
-        $onlyReleased = (bool) $this->option('only-released');
+        // 默认自动排除未来排期未上映视频；只有显式指定 --include-unreleased 时才允许处理未来片
+        $includeUnreleased = (bool) $this->option('include-unreleased');
+        $onlyReleased = !$includeUnreleased;
         $cooldownDays = max(0, (int) $this->option('cooldown-days'));
         $ignoreCooldown = (bool) $this->option('ignore-cooldown');
         $order = strtolower((string) $this->option('order')) === 'asc' ? 'asc' : 'desc';
@@ -97,6 +100,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $stats = [
             'total_videos'        => $totalAvailable,
             'processed_videos'    => 0,
+            'future_skipped'      => 0,
             'cooldown_skipped'    => 0,
             'success_videos'      => 0,
             'empty_videos'        => 0,
@@ -116,7 +120,17 @@ class CrawlXxxclubMagnetsCommand extends Command
         $progressBar->start();
 
         foreach ($query->cursor() as $video) {
-            // 冷却期检查：未指定具体视频ID且未忽略冷却时，若在冷却期内则直接跳过并顺延
+            $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
+
+            // 0. 未上映未来排期片检测（双重校验：release_at 或 video_code 中的未来日期）
+            if ($onlyReleased && !$videoId && $crawlerService->isFutureVideo($video)) {
+                $stats['future_skipped']++;
+                $this->newLine();
+                $this->line("⏭️  跳过未上映视频: <fg=gray>{$videoCode}</> <fg=yellow>[排期在未来，暂无种子]</>");
+                continue;
+            }
+
+            // 1. 冷却期检查：未指定具体视频ID且未忽略冷却时，若在冷却期内则直接跳过并顺延
             $shouldCheckCooldown = !$ignoreCooldown && !$videoId;
             if ($shouldCheckCooldown && $crawlerService->isCoolingDown($video->id)) {
                 $stats['cooldown_skipped']++;
@@ -124,7 +138,6 @@ class CrawlXxxclubMagnetsCommand extends Command
             }
 
             $stats['processed_videos']++;
-            $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
 
             // 1. 智能生成搜索关键词
             $keyword = $crawlerService->buildSearchKeyword($video);
@@ -257,6 +270,7 @@ class CrawlXxxclubMagnetsCommand extends Command
             ['指标项', '统计数值'],
             [
                 ['目标视频总数', $stats['total_videos']],
+                ['⏭️ 跳过未上映未来片', $stats['future_skipped']],
                 ['❄️ 冷却期跳过 (Cool-down)', $stats['cooldown_skipped']],
                 ['实际处理视频', $stats['processed_videos']],
                 ['成功补充视频', $stats['success_videos']],

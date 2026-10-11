@@ -42,7 +42,7 @@ class XxxclubCrawlerService
     public function getTargetVideosQuery(
         ?string $channel = null,
         ?int $videoId = null,
-        bool $onlyReleased = false,
+        bool $onlyReleased = true,
         string $order = 'desc'
     ): Builder {
         $query = Video::query()
@@ -53,7 +53,11 @@ class XxxclubCrawlerService
         }
 
         if ($onlyReleased) {
-            $query->where('release_at', '<=', now());
+            // 排除明确排期在未来的视频 (release_at > now())
+            $query->where(function (Builder $rq) {
+                $rq->whereNull('release_at')
+                   ->orWhere('release_at', '<=', now());
+            });
         }
 
         if ($channel) {
@@ -87,6 +91,39 @@ class XxxclubCrawlerService
         });
 
         return strtolower($order) === 'asc' ? $query->orderBy('id') : $query->orderByDesc('id');
+    }
+
+    /**
+     * 判断视频是否属于未来尚未上映/发售的片源（双重校验，从 release_at 及 video_code 中识别未来排期）
+     */
+    public function isFutureVideo(Video $video): bool
+    {
+        // 1. 检查 release_at 字段
+        if (!empty($video->release_at)) {
+            try {
+                if (Carbon::parse($video->release_at)->isFuture()) {
+                    return true;
+                }
+            } catch (Throwable) {}
+        }
+
+        // 2. 从 video_code 或 name 中提取 YY.MM.DD 格式（例如 Milfy.26.10.15...）
+        $raw = $video->video_code ?: ($video->name ?: '');
+        if (preg_match('/(?:\.|\b)(\d{2})\.(\d{2})\.(\d{2})(?:\.|\b)/', $raw, $matches)) {
+            try {
+                $year = (int) $matches[1] + 2000;
+                $month = (int) $matches[2];
+                $day = (int) $matches[3];
+                if (checkdate($month, $day, $year)) {
+                    $dt = Carbon::create($year, $month, $day)->startOfDay();
+                    if ($dt->isFuture()) {
+                        return true;
+                    }
+                }
+            } catch (Throwable) {}
+        }
+
+        return false;
     }
 
     /**
