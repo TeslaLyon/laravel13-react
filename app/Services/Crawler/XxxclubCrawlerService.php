@@ -39,8 +39,12 @@ class XxxclubCrawlerService
      * 1. 没有有效下载信息（has_downloads 为 false，或没有有效 video_downloads 记录）的视频；
      * 2. 标记为 4K（is_4k=true 或 max_quality=2160p），但现有有效 video_downloads 中缺失 4K/2160p 版本的视频。
      */
-    public function getTargetVideosQuery(?string $channel = null, ?int $videoId = null, bool $onlyReleased = false): Builder
-    {
+    public function getTargetVideosQuery(
+        ?string $channel = null,
+        ?int $videoId = null,
+        bool $onlyReleased = false,
+        string $order = 'desc'
+    ): Builder {
         $query = Video::query()
             ->with(['actors:id,name,slug', 'channel:id,name,slug', 'downloads']);
 
@@ -82,7 +86,57 @@ class XxxclubCrawlerService
             });
         });
 
-        return $query->orderByDesc('id');
+        return strtolower($order) === 'asc' ? $query->orderBy('id') : $query->orderByDesc('id');
+    }
+
+    /**
+     * 判断指定视频是否处于 xxxclub 失败冷却期内（近期未搜到资源，避免重复请求陷入死循环）
+     */
+    public function isCoolingDown(int $videoId): bool
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                $exists = Redis::exists("crawler:xxxclub:cooldown:{$videoId}");
+                if ($exists) {
+                    return true;
+                }
+            }
+        } catch (Throwable) {}
+
+        return Cache::has("crawler:xxxclub:cooldown:{$videoId}");
+    }
+
+    /**
+     * 将搜索未匹配/无资源的视频加入冷却期（默认 7 天）
+     */
+    public function markCoolingDown(int $videoId, int $days = 7): void
+    {
+        if ($days <= 0) {
+            return;
+        }
+
+        $ttlSeconds = $days * 86400;
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::setex("crawler:xxxclub:cooldown:{$videoId}", $ttlSeconds, '1');
+            }
+        } catch (Throwable) {}
+
+        Cache::put("crawler:xxxclub:cooldown:{$videoId}", '1', $ttlSeconds);
+    }
+
+    /**
+     * 清除指定视频的冷却期标记（例如匹配成功或手动重新测试时）
+     */
+    public function clearCoolingDown(int $videoId): void
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::del("crawler:xxxclub:cooldown:{$videoId}");
+            }
+        } catch (Throwable) {}
+
+        Cache::forget("crawler:xxxclub:cooldown:{$videoId}");
     }
 
     /**

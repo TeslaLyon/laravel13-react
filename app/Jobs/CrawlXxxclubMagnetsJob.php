@@ -47,6 +47,21 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     public ?string $flaresolverrUrl;
 
     /**
+     * 是否仅处理已上映视频（默认 true，自动排除未到排期的未来预售片）
+     */
+    public bool $onlyReleased;
+
+    /**
+     * 未搜到/未匹配视频的冷却天数（默认 7 天）
+     */
+    public int $cooldownDays;
+
+    /**
+     * 排序方式（desc 为最新片源优先，asc 为历史老片优先）
+     */
+    public string $order;
+
+    /**
      * 任务描述（Horizon 展示）
      */
     public string $task_name = 'xxxclub 磁力资源增量爬取与补充';
@@ -64,13 +79,19 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
         ?string $channel = null,
         int $requestDelay = 2,
         ?string $proxy = null,
-        ?string $flaresolverrUrl = null
+        ?string $flaresolverrUrl = null,
+        bool $onlyReleased = true,
+        int $cooldownDays = 7,
+        string $order = 'desc'
     ) {
         $this->limit = $limit;
         $this->channel = $channel;
         $this->requestDelay = $requestDelay;
         $this->proxy = $proxy;
         $this->flaresolverrUrl = $flaresolverrUrl;
+        $this->onlyReleased = $onlyReleased;
+        $this->cooldownDays = $cooldownDays;
+        $this->order = $order;
         $this->dispatched_at = now()->toDateTimeString();
     }
 
@@ -85,6 +106,8 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
             'magnet-sync',
             $this->channel ?: 'all-channels',
             "limit:{$this->limit}",
+            $this->onlyReleased ? 'only-released' : null,
+            "cooldown:{$this->cooldownDays}d",
         ]);
     }
 
@@ -95,12 +118,18 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     {
         Log::info("🚀 Horizon 队列开始执行 xxxclub 磁力爬取任务 [CrawlXxxclubMagnetsJob]"
             . ($this->channel ? " [片商: {$this->channel}]" : " [全部片商]")
-            . " [上限: {$this->limit} 部, 延迟: {$this->requestDelay}s]");
+            . " [上限: {$this->limit} 部, 延迟: {$this->requestDelay}s, 冷却: {$this->cooldownDays}天, 仅已上映: " . ($this->onlyReleased ? '是' : '否') . "]");
 
         $params = [
-            '--limit' => $this->limit,
-            '--delay' => $this->requestDelay,
+            '--limit'         => $this->limit,
+            '--delay'         => $this->requestDelay,
+            '--cooldown-days' => $this->cooldownDays,
+            '--order'         => $this->order,
         ];
+
+        if ($this->onlyReleased) {
+            $params['--only-released'] = true;
+        }
 
         if ($this->channel) {
             $params['--channel'] = $this->channel;

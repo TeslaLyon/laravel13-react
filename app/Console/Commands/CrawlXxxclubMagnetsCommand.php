@@ -23,6 +23,9 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--no-flaresolverr : 禁用 FlareSolverr，仅使用常规 HTTP 直连}
                             {--delay=2 : 每次网络请求间隔延迟秒数 (默认2秒，避免频繁请求被风控)}
                             {--only-released : 仅筛选已到发布日期的视频 (release_at <= now()，自动跳过未上映预售片)}
+                            {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
+                            {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
+                            {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--force : 强制覆盖更新已存在的下载项}
                             {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}';
@@ -37,6 +40,8 @@ class CrawlXxxclubMagnetsCommand extends Command
      */
     public function handle(XxxclubCrawlerService $crawlerService): int
     {
+        $startTime = microtime(true);
+
         $limit = max(0, (int) $this->option('limit'));
         $videoId = $this->option('video-id') ? (int) $this->option('video-id') : null;
         $channel = $this->option('channel');
@@ -46,6 +51,9 @@ class CrawlXxxclubMagnetsCommand extends Command
         $noFlareSolverr = (bool) $this->option('no-flaresolverr');
         $delay = max(0, (int) $this->option('delay'));
         $onlyReleased = (bool) $this->option('only-released');
+        $cooldownDays = max(0, (int) $this->option('cooldown-days'));
+        $ignoreCooldown = (bool) $this->option('ignore-cooldown');
+        $order = strtolower((string) $this->option('order')) === 'asc' ? 'asc' : 'desc';
         $exportUnmatched = $this->option('export-unmatched');
         $force = (bool) $this->option('force');
         $isDryRun = (bool) $this->option('dry-run');
@@ -62,7 +70,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         // 模式 A：本地 HTML 文件离线解析导入（--file=path/to/file.html）
         // =========================================================================
         if (!empty($localFile)) {
-            return $this->handleLocalFileMode($crawlerService, $localFile, $videoId, $isDryRun, $force);
+            return $this->handleLocalFileMode($crawlerService, $localFile, $videoId, $isDryRun, $force, $startTime);
         }
 
         // =========================================================================
@@ -71,7 +79,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $this->info("🔍 正在筛选目标视频（无下载资源，或为 4K 片源但缺失 4K 下载项）...");
 
         try {
-            $query = $crawlerService->getTargetVideosQuery($channel, $videoId, $onlyReleased);
+            $query = $crawlerService->getTargetVideosQuery($channel, $videoId, $onlyReleased, $order);
             $totalAvailable = $query->count();
         } catch (Throwable $e) {
             $this->error("❌ 查询数据库失败: " . $e->getMessage());
@@ -84,17 +92,12 @@ class CrawlXxxclubMagnetsCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info("📊 符合筛选条件的目标视频总量: {$totalAvailable} 部" . ($limit > 0 ? "，本次计划处理前 {$limit} 部" : "，本次全量处理"));
-
-        if ($limit > 0) {
-            $videos = $query->limit($limit)->get();
-        } else {
-            $videos = $query->get();
-        }
+        $this->info("📊 符合筛选条件的目标视频总量: {$totalAvailable} 部" . ($limit > 0 ? "，本次计划处理前 {$limit} 部有效目标" : "，本次全量处理"));
 
         $stats = [
-            'total_videos'        => $videos->count(),
+            'total_videos'        => $totalAvailable,
             'processed_videos'    => 0,
+            'cooldown_skipped'    => 0,
             'success_videos'      => 0,
             'empty_videos'        => 0,
             'flaresolverr_solved' => 0,
@@ -108,10 +111,18 @@ class CrawlXxxclubMagnetsCommand extends Command
 
         $unmatchedVideos = [];
 
-        $progressBar = $this->output->createProgressBar($videos->count());
+        $planCount = $limit > 0 ? min($limit, $totalAvailable) : $totalAvailable;
+        $progressBar = $this->output->createProgressBar($planCount);
         $progressBar->start();
 
-        foreach ($videos as $video) {
+        foreach ($query->cursor() as $video) {
+            // 冷却期检查：未指定具体视频ID且未忽略冷却时，若在冷却期内则直接跳过并顺延
+            $shouldCheckCooldown = !$ignoreCooldown && !$videoId;
+            if ($shouldCheckCooldown && $crawlerService->isCoolingDown($video->id)) {
+                $stats['cooldown_skipped']++;
+                continue;
+            }
+
             $stats['processed_videos']++;
             $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
 
@@ -139,12 +150,18 @@ class CrawlXxxclubMagnetsCommand extends Command
                     sleep($delay);
                 }
                 $progressBar->advance();
+                if ($limit > 0 && $stats['processed_videos'] >= $limit) {
+                    break;
+                }
                 continue;
             }
 
             if (!$fetchResult['success']) {
                 $stats['error_videos']++;
                 $progressBar->advance();
+                if ($limit > 0 && $stats['processed_videos'] >= $limit) {
+                    break;
+                }
                 continue;
             }
 
@@ -160,9 +177,15 @@ class CrawlXxxclubMagnetsCommand extends Command
                     'keyword'    => $keyword,
                     'reason'     => $reason,
                 ];
+
+                // 标记进入冷却期
+                if ($cooldownDays > 0 && !$videoId) {
+                    $crawlerService->markCoolingDown($video->id, $cooldownDays);
+                }
+
                 $this->newLine();
-                $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>");
-                Log::info("xxxclub 磁力未匹配: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]");
+                $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>" . ($cooldownDays > 0 ? " <fg=blue>[进入 {$cooldownDays} 天冷却]</>" : ""));
+                Log::info("xxxclub 磁力未检索到资源: 视频Code [{$videoCode}], 搜索词 [{$keyword}]" . ($cooldownDays > 0 ? ", 已进入 {$cooldownDays} 天冷却期" : ""));
             } else {
                 // 4. 精确匹配并入库
                 $importResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
@@ -173,6 +196,9 @@ class CrawlXxxclubMagnetsCommand extends Command
                     $stats['inserted_magnets'] += $importResult['inserted'];
                     $stats['updated_magnets'] += $importResult['updated'];
                     $stats['skipped_magnets'] += $importResult['skipped'];
+
+                    // 成功获取，清除可能存在的历史冷却标记
+                    $crawlerService->clearCoolingDown($video->id);
 
                     // 💡 单行输出匹配成功明细：视频code ➔ 磁力链接名称
                     $this->newLine();
@@ -191,9 +217,15 @@ class CrawlXxxclubMagnetsCommand extends Command
                         'keyword'    => $keyword,
                         'reason'     => $reason,
                     ];
+
+                    // 标记进入冷却期
+                    if ($cooldownDays > 0 && !$videoId) {
+                        $crawlerService->markCoolingDown($video->id, $cooldownDays);
+                    }
+
                     $this->newLine();
-                    $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>");
-                    Log::info("xxxclub 磁力未匹配: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]");
+                    $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>" . ($cooldownDays > 0 ? " <fg=blue>[进入 {$cooldownDays} 天冷却]</>" : ""));
+                    Log::info("xxxclub 磁力未匹配: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]" . ($cooldownDays > 0 ? ", 已进入 {$cooldownDays} 天冷却期" : ""));
                 }
             }
 
@@ -203,10 +235,21 @@ class CrawlXxxclubMagnetsCommand extends Command
             }
 
             $progressBar->advance();
+
+            // 达到计划处理配额则退出循环
+            if ($limit > 0 && $stats['processed_videos'] >= $limit) {
+                break;
+            }
         }
 
         $progressBar->finish();
         $this->newLine(2);
+
+        $elapsedSeconds = round(microtime(true) - $startTime, 2);
+        $formattedDuration = $this->formatDuration($elapsedSeconds);
+        $avgPerVideo = $stats['processed_videos'] > 0
+            ? round($elapsedSeconds / $stats['processed_videos'], 2) . ' 秒/部'
+            : '-';
 
         // 输出执行汇总表
         $this->info("📋 执行结果汇总统计：");
@@ -214,6 +257,7 @@ class CrawlXxxclubMagnetsCommand extends Command
             ['指标项', '统计数值'],
             [
                 ['目标视频总数', $stats['total_videos']],
+                ['❄️ 冷却期跳过 (Cool-down)', $stats['cooldown_skipped']],
                 ['实际处理视频', $stats['processed_videos']],
                 ['成功补充视频', $stats['success_videos']],
                 ['未搜到资源/无匹配', $stats['empty_videos']],
@@ -224,6 +268,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                 ['新增下载项 (Inserted)', $stats['inserted_magnets']],
                 ['覆盖更新下载项 (Updated)', $stats['updated_magnets']],
                 ['跳过重复项 (Skipped)', $stats['skipped_magnets']],
+                ['⏱️ 运行总耗时 (Duration)', $formattedDuration . " ({$elapsedSeconds}s)"],
+                ['⚡ 平均每部耗时 (Avg Speed)', $avgPerVideo],
             ]
         );
 
@@ -261,7 +307,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         string $filePath,
         ?int $videoId,
         bool $isDryRun,
-        bool $force
+        bool $force,
+        float $startTime = 0.0
     ): int {
         if (!file_exists($filePath)) {
             $this->error("❌ 本地 HTML 文件不存在: {$filePath}");
@@ -341,17 +388,43 @@ class CrawlXxxclubMagnetsCommand extends Command
             $this->newLine();
         }
 
-        $this->table(
-            ['指标', '数值'],
-            [
-                ['解析条数', $importStats['total']],
-                ['匹配条数', $importStats['matched']],
-                ['成功新增 (Inserted)', $importStats['inserted']],
-                ['覆盖更新 (Updated)', $importStats['updated']],
-                ['跳过重复 (Skipped)', $importStats['skipped']],
-            ]
-        );
+        $elapsedSeconds = $startTime > 0 ? round(microtime(true) - $startTime, 2) : 0;
+        $tableData = [
+            ['解析条数', $importStats['total']],
+            ['匹配条数', $importStats['matched']],
+            ['成功新增 (Inserted)', $importStats['inserted']],
+            ['覆盖更新 (Updated)', $importStats['updated']],
+            ['跳过重复 (Skipped)', $importStats['skipped']],
+        ];
+
+        if ($startTime > 0) {
+            $tableData[] = ['⏱️ 运行总耗时 (Duration)', $this->formatDuration($elapsedSeconds) . " ({$elapsedSeconds}s)"];
+        }
+
+        $this->table(['指标', '数值'], $tableData);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 将秒数格式化为人类易读的时间字符串（如 1 小时 23 分 45 秒 / 2 分 15 秒 / 12.34 秒）
+     */
+    protected function formatDuration(float $seconds): string
+    {
+        if ($seconds < 60) {
+            return round($seconds, 2) . ' 秒';
+        }
+
+        $minutes = (int) floor($seconds / 60);
+        $remSeconds = round($seconds - ($minutes * 60), 1);
+
+        if ($minutes < 60) {
+            return "{$minutes} 分 {$remSeconds} 秒";
+        }
+
+        $hours = (int) floor($minutes / 60);
+        $remMinutes = $minutes % 60;
+
+        return "{$hours} 小时 {$remMinutes} 分 {$remSeconds} 秒";
     }
 }
