@@ -434,14 +434,10 @@ export default function BaseDetailShow({
                                                     onClick={(e) => {
                                                         e.preventDefault();
                                                         setSearchKeyword('');
-                                                        if (activeSearch) {
-                                                            handleResetSearch();
-                                                        } else {
-                                                            searchInputRef.current?.focus();
-                                                        }
+                                                        searchInputRef.current?.focus();
                                                     }}
                                                     className="absolute right-2.5 text-muted-foreground hover:text-foreground p-0.5 rounded-full"
-                                                    title="清空"
+                                                    title="清空输入"
                                                 >
                                                     <X className="h-3.5 w-3.5" />
                                                 </button>
