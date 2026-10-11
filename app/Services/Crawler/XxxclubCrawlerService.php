@@ -875,17 +875,25 @@ class XxxclubCrawlerService
     public function importDownloads(Video $video, array $items, bool $dryRun = false, bool $force = false): array
     {
         $stats = [
-            'total'    => count($items),
-            'matched'  => 0,
-            'inserted' => 0,
-            'updated'  => 0,
-            'skipped'  => 0,
+            'total'         => count($items),
+            'matched'       => 0,
+            'inserted'      => 0,
+            'updated'       => 0,
+            'skipped'       => 0,
+            'matched_items' => [],
         ];
 
         $matchedItems = [];
         foreach ($items as $item) {
             if ($this->isMatch($video, $item)) {
                 $matchedItems[] = $item;
+                $stats['matched_items'][] = [
+                    'title'       => $item['title'],
+                    'resolution'  => $item['resolution'],
+                    'size_str'    => $item['size_str'],
+                    'hash'        => $item['hash'],
+                    'magnet_link' => $item['magnet_link'] ?? '',
+                ];
             }
         }
 

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Video;
 use App\Services\Crawler\XxxclubCrawlerService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CrawlXxxclubMagnetsCommand extends Command
@@ -155,6 +156,16 @@ class CrawlXxxclubMagnetsCommand extends Command
                     $stats['inserted_magnets'] += $importResult['inserted'];
                     $stats['updated_magnets'] += $importResult['updated'];
                     $stats['skipped_magnets'] += $importResult['skipped'];
+
+                    // 💡 单行输出匹配成功明细：视频code ➔ 磁力链接名称
+                    $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
+                    $this->newLine();
+                    foreach ($importResult['matched_items'] ?? [] as $mItem) {
+                        $resTag = !empty($mItem['resolution']) ? "[{$mItem['resolution']}] " : '';
+                        $sizeTag = !empty($mItem['size_str']) ? " ({$mItem['size_str']})" : '';
+                        $this->line("🎯 匹配成功: <fg=cyan>{$videoCode}</> ➔ <fg=green>{$resTag}{$mItem['title']}</><fg=gray>{$sizeTag}</>");
+                        Log::info("xxxclub 磁力匹配成功: 视频Code [{$videoCode}] ➔ 磁力名称 [{$mItem['title']}]");
+                    }
                 } else {
                     $stats['empty_videos']++;
                 }
@@ -273,6 +284,18 @@ class CrawlXxxclubMagnetsCommand extends Command
         $this->info("🎬 目标关联视频: [ID: {$video->id}] {$video->name} (编码: {$video->video_code})");
 
         $importStats = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
+
+        if (!empty($importStats['matched_items'])) {
+            $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
+            $this->newLine();
+            foreach ($importStats['matched_items'] as $mItem) {
+                $resTag = !empty($mItem['resolution']) ? "[{$mItem['resolution']}] " : '';
+                $sizeTag = !empty($mItem['size_str']) ? " ({$mItem['size_str']})" : '';
+                $this->line("🎯 匹配成功: <fg=cyan>{$videoCode}</> ➔ <fg=green>{$resTag}{$mItem['title']}</><fg=gray>{$sizeTag}</>");
+                Log::info("xxxclub 磁力匹配成功: 视频Code [{$videoCode}] ➔ 磁力名称 [{$mItem['title']}]");
+            }
+            $this->newLine();
+        }
 
         $this->table(
             ['指标', '数值'],
