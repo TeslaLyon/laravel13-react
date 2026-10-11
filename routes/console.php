@@ -5,6 +5,7 @@ use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
 use App\Jobs\SyncVideoViewsToDatabaseJob;
 use App\Jobs\SyncChannelSubscribersToDatabaseJob;
+use App\Jobs\CrawlXxxclubMagnetsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -73,6 +74,16 @@ Schedule::command('channel:sync-subscribers')
     ->dailyAt('03:40')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
+
+/**
+ * xxxclub 视频磁力下载资源定时抓取与自动补充任务
+ * 每天凌晨 04:30 自动投递任务至 Horizon 队列，每次增量处理 50 部目标视频
+ */
+Schedule::job(new CrawlXxxclubMagnetsJob(50))
+    ->dailyAt('04:30')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
 
 
 
