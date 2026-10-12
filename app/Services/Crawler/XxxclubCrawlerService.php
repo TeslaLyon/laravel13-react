@@ -894,6 +894,11 @@ class XxxclubCrawlerService
      */
     public function isMatch(Video $video, array $item): bool
     {
+        // 0. 如果条目来自已完成严格日期/标题比对的外部搜索引擎（如 Ciligou）
+        if (!empty($item['source']) && $item['source'] === 'ciligou') {
+            return true;
+        }
+
         $torrentTitle = $item['title'] ?? '';
         if (empty($torrentTitle)) {
             return false;
