@@ -7,6 +7,9 @@ use Carbon\Carbon;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
+use GuzzleHttp\Client;
+use GuzzleHttp\Cookie\CookieJar;
+use GuzzleHttp\Cookie\SetCookie;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -15,9 +18,27 @@ use Throwable;
 class CiligouCrawlerService
 {
     /**
-     * 磁力狗基础域名与搜索端点
+     * 磁力狗基础入口域名（门户网关）
      */
-    protected string $baseUrl = 'http://clg88.me';
+    protected string $baseUrl = 'https://ciligou.net';
+
+    /**
+     * 磁力狗实际生效的目标节点域名（经过网关跳转与验证后）
+     */
+    protected ?string $activeBaseUrl = null;
+
+    /**
+     * 磁力狗会话 Cookies（通过 challenge 验证后保留）
+     */
+    protected array $cookies = [];
+
+    /**
+     * 获取当前生效的基础域名
+     */
+    public function getActiveBaseUrl(): string
+    {
+        return $this->activeBaseUrl ?: $this->baseUrl;
+    }
 
     /**
      * 公共 Trackers 列表（附加在磁力链接后以便 BT 客户端更迅速寻轨做种）
@@ -47,6 +68,88 @@ class CiligouCrawlerService
         11 => ['november', 'nov'],
         12 => ['december', 'dec'],
     ];
+
+    /**
+     * 构建多策略搜索候选词列表（按置信度优先级排列）
+     * 策略 1：片名/日期后部全称（例如 Faye.Reagan.Eye.On.The.Balls、Sindy.Youre.All.Grown.Up.So.Lets.Fuck）
+     * 策略 2：演员全名 + 英文发布日期（例如 Sindy.Lange 28.october.2011，常见于海外 RARBG / Webrip 种子命名格式）
+     * 策略 3：首个演员代号 + 英文发布日期（例如 Sindy 28.october.2011）
+     * 策略 4：厂牌频道名 + 英文发布日期（例如 MommyGotBoobs 28.october.2011）
+     */
+    public function buildSearchWords(Video $video): array
+    {
+        $words = [];
+        $rawCode = trim($video->video_code ?? '');
+        $dateInfo = $this->extractDateFromVideo($video);
+
+        // 1. 优先从 video_code 截取日期后部（片名/标题全称）
+        $primaryWord = $this->buildSearchWord($video);
+        if (!empty($primaryWord)) {
+            $words[] = $primaryWord;
+        }
+
+        // 2. 备选方案：英文日期组合方案（海外成人种子极常用格式：[演员/厂牌] [日].[英文月份].[完整年份]）
+        if (!empty($dateInfo) && !empty($dateInfo['day_int']) && !empty($dateInfo['month_int']) && !empty($dateInfo['year'])) {
+            $monthName = $this->englishMonthNames[$dateInfo['month_int']][0] ?? '';
+            if (!empty($monthName)) {
+                $day = $dateInfo['day_int'];
+                $year = $dateInfo['year'];
+                $datePart = "{$day}.{$monthName}.{$year}";
+
+                // 2.1 从已关联演员构建（例如 Sindy Lange ➔ Sindy.Lange 28.october.2011）
+                $actors = null;
+                if ($video->relationLoaded('actors')) {
+                    $actors = $video->actors;
+                } elseif ($video->exists) {
+                    try {
+                        $actors = $video->actors()->get();
+                    } catch (Throwable) {}
+                }
+
+                if ($actors && $actors->isNotEmpty()) {
+                    foreach ($actors->take(2) as $actor) {
+                        $cleanActor = preg_replace('/[_\s]+/', '.', trim($actor->name));
+                        $cleanActor = preg_replace('/[^a-zA-Z0-9.]+/', '', $cleanActor);
+                        $cleanActor = trim(preg_replace('/\.+/', '.', $cleanActor), '.');
+                        if (!empty($cleanActor) && strlen($cleanActor) >= 3) {
+                            $words[] = "{$cleanActor} {$datePart}";
+                        }
+                    }
+                }
+
+                // 2.2 从 video_code 截取首个演员代号（例如 Sindy.Youre... 中的 Sindy）
+                if (!empty($rawCode) && preg_match('/(?:\.|\b)(?:20)?\d{2}[._-]\d{2}[._-]\d{2}[._-]([a-zA-Z0-9]+)/i', $rawCode, $am)) {
+                    $firstToken = trim($am[1]);
+                    if (strlen($firstToken) >= 3 && !in_array(strtolower($firstToken), ['the', 'and', 'part', 'scene'])) {
+                        $codeActorWord = "{$firstToken} {$datePart}";
+                        if (!in_array($codeActorWord, $words)) {
+                            $words[] = $codeActorWord;
+                        }
+                    }
+                }
+
+                // 2.3 从频道/厂牌名构建（例如 MommyGotBoobs ➔ MommyGotBoobs 28.october.2011）
+                $channelName = null;
+                if ($video->relationLoaded('channel') && $video->channel) {
+                    $channelName = $video->channel->name ?: $video->channel->slug;
+                } elseif (!empty($rawCode) && preg_match('/^([a-zA-Z0-9]+)[._-](?:20)?\d{2}[._-]\d{2}[._-]\d{2}/i', $rawCode, $cm)) {
+                    $channelName = trim($cm[1]);
+                }
+
+                if (!empty($channelName)) {
+                    $cleanChannel = preg_replace('/[^a-zA-Z0-9]+/', '', $channelName);
+                    if (strlen($cleanChannel) >= 3) {
+                        $chWord = "{$cleanChannel} {$datePart}";
+                        if (!in_array($chWord, $words)) {
+                            $words[] = $chWord;
+                        }
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($words)));
+    }
 
     /**
      * 从视频提取用于磁力狗搜索的关键词
@@ -271,38 +374,91 @@ class CiligouCrawlerService
 
     /**
      * 发送网络请求抓取磁力狗页面 HTML
+     * 支持 ciligou.net 门户网关的 JavaScript 跳转解析与反爬验证页（Challenge Page）自动通行
      */
     public function fetchHtml(string $url, ?string $proxy = null): array
     {
         try {
-            $req = Http::timeout(12)
-                ->connectTimeout(6)
-                ->withHeaders([
+            $options = [
+                'headers' => [
                     'User-Agent'      => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                     'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language' => 'zh-CN,zh;q=0.9,en;q=0.8',
-                    'Referer'         => $this->baseUrl . '/',
-                ]);
+                    'Referer'         => $this->getActiveBaseUrl() . '/',
+                ],
+                'timeout'         => 15,
+                'connect_timeout' => 8,
+                'allow_redirects' => true,
+            ];
 
             if (!empty($proxy)) {
-                $req = $req->withOptions(['proxy' => $proxy]);
+                $options['proxy'] = $proxy;
             }
 
-            $response = $req->get($url);
+            // 使用 CookieJar 保持会话
+            $jar = new CookieJar();
+            if (!empty($this->cookies)) {
+                $host = parse_url($this->getActiveBaseUrl(), PHP_URL_HOST);
+                foreach ($this->cookies as $name => $val) {
+                    $jar->setCookie(new SetCookie([
+                        'Name'   => $name,
+                        'Value'  => $val,
+                        'Domain' => $host,
+                        'Path'   => '/',
+                    ]));
+                }
+            }
+            $options['cookies'] = $jar;
 
-            if ($response->successful()) {
-                return [
-                    'success' => true,
-                    'html'    => $response->body(),
-                    'status'  => $response->status(),
-                ];
+            $client = new Client($options);
+
+            // 1. 发起初始请求
+            $targetUrl = $url;
+            $response = $client->get($targetUrl);
+            $html = (string) $response->getBody();
+
+            // 2. 检测并处理 ciligou.net 门户网关的 JavaScript 跳转（Base64 或 location.href）
+            $jumpUrl = null;
+            if (preg_match('/window\.atob\([\'"]([A-Za-z0-9+\/=]+)[\'"]\)/', $html, $m)) {
+                $decoded = urldecode(base64_decode($m[1]));
+                if (preg_match('/location\.href\s*=\s*[\'"](https?:\/\/[^\'"]+)[\'"]/i', $decoded, $jm)) {
+                    $jumpUrl = $jm[1];
+                }
+            } elseif (preg_match('/location\.href\s*=\s*[\'"](https?:\/\/[^\'"]+)[\'"]/i', $html, $jm)) {
+                $jumpUrl = $jm[1];
+            }
+
+            if (!empty($jumpUrl)) {
+                $parsedHost = parse_url($jumpUrl, PHP_URL_SCHEME) . '://' . parse_url($jumpUrl, PHP_URL_HOST);
+                $this->activeBaseUrl = $parsedHost;
+                $targetUrl = $jumpUrl;
+                $response = $client->get($targetUrl);
+                $html = (string) $response->getBody();
+            }
+
+            // 3. 检测并自动完成反爬验证页（Challenge Page: POST act=challenge）
+            if (str_contains($html, 'act=challenge') || str_contains($html, 'challenge-c')) {
+                Log::info("CiligouCrawlerService 触发验证页，自动提交 act=challenge 验证通过...");
+                $client->post($targetUrl, [
+                    'form_params' => ['act' => 'challenge'],
+                ]);
+
+                // 提取 Set-Cookie 保留复用
+                foreach ($jar->toArray() as $c) {
+                    if (!empty($c['Name']) && isset($c['Value'])) {
+                        $this->cookies[$c['Name']] = $c['Value'];
+                    }
+                }
+
+                // 重新拉取目标页面
+                $response = $client->get($targetUrl);
+                $html = (string) $response->getBody();
             }
 
             return [
-                'success' => false,
-                'html'    => '',
-                'status'  => $response->status(),
-                'message' => "HTTP 请求失败，状态码: {$response->status()}",
+                'success' => true,
+                'html'    => $html,
+                'status'  => $response->getStatusCode(),
             ];
         } catch (Throwable $e) {
             return [
@@ -479,80 +635,86 @@ class CiligouCrawlerService
      */
     public function searchAndMatch(Video $video, ?string $proxy = null): array
     {
-        // 1. 构建搜索关键词
-        $word = $this->buildSearchWord($video);
-        if (empty($word)) {
+        // 1. 构建多策略搜索候选词列表（按优先级排列尝试）
+        $searchWords = $this->buildSearchWords($video);
+        if (empty($searchWords)) {
             return [];
         }
 
         // 2. 提取视频的发布日期信息用于比对
         $dateInfo = $this->extractDateFromVideo($video);
 
-        // 3. 构造搜索 URL 并请求 HTML
-        $searchUrl = $this->buildSearchUrl($word);
-        $fetchRes = $this->fetchHtml($searchUrl, $proxy);
+        // 3. 逐个策略词尝试搜索，首个命中且成功匹配后即刻返回
+        foreach ($searchWords as $idx => $word) {
+            $searchUrl = $this->buildSearchUrl($word);
+            $fetchRes = $this->fetchHtml($searchUrl, $proxy);
 
-        if (!$fetchRes['success'] || empty($fetchRes['html'])) {
-            return [];
-        }
-
-        // 4. 解析搜索结果列表
-        $candidates = $this->parseSearchHtml($fetchRes['html']);
-        if (empty($candidates)) {
-            return [];
-        }
-
-        // 5. 遍历候选列表，精准比对
-        $matchedItems = [];
-        foreach ($candidates as $cand) {
-            $title = $cand['title'];
-
-            // 核心匹配：精准比对种子标题与目标视频（支持日期吻合、排除冲突日期、关键词/词元高置信度匹配）
-            $isMatched = $this->isCandidateMatch($video, $title, $word, $dateInfo);
-
-            if (!$isMatched) {
+            if (!$fetchRes['success'] || empty($fetchRes['html'])) {
                 continue;
             }
 
-            // 6. 匹配成功，请求详情页拉取真实的 magnet 磁链与 Hash
-            $detailUrl = $cand['detail_url'];
-            if (empty($detailUrl)) {
+            // 4. 解析搜索结果列表
+            $candidates = $this->parseSearchHtml($fetchRes['html']);
+            if (empty($candidates)) {
                 continue;
             }
 
-            $detailRes = $this->fetchDetailMagnet($detailUrl, $proxy);
-            if (empty($detailRes) || empty($detailRes['hash'])) {
-                continue;
+            // 5. 遍历候选列表，精准比对
+            $matchedItems = [];
+            foreach ($candidates as $cand) {
+                $title = $cand['title'];
+
+                // 核心匹配：精准比对种子标题与目标视频（支持日期吻合、排除冲突日期、关键词/词元高置信度匹配）
+                $isMatched = $this->isCandidateMatch($video, $title, $word, $dateInfo);
+
+                if (!$isMatched) {
+                    continue;
+                }
+
+                // 6. 匹配成功，请求详情页拉取真实的 magnet 磁链与 Hash
+                $detailUrl = $cand['detail_url'];
+                if (empty($detailUrl)) {
+                    continue;
+                }
+
+                $detailRes = $this->fetchDetailMagnet($detailUrl, $proxy);
+                if (empty($detailRes) || empty($detailRes['hash'])) {
+                    continue;
+                }
+
+                $hash = $detailRes['hash'];
+                $cleanTitle = !empty($detailRes['title']) ? $detailRes['title'] : $title;
+                $sizeStr = !empty($detailRes['size_str']) ? $detailRes['size_str'] : $cand['size_str'];
+                $fileSizeBytes = !empty($detailRes['file_size']) ? $detailRes['file_size'] : $this->parseSizeToBytes($sizeStr);
+
+                $resInfo = $this->detectResolution($cleanTitle, $fileSizeBytes);
+
+                // 组装标准 Magnet 链接（附加公网 Trackers）
+                $magnetWithTrackers = $this->buildMagnetLink($hash, $cleanTitle);
+
+                $matchedItems[] = [
+                    'source'      => 'ciligou',
+                    'hash'        => $hash,
+                    'title'       => $cleanTitle,
+                    'cat'         => 'XXX',
+                    'resolution'  => $resInfo['resolution'],
+                    'sort_order'  => $resInfo['sort_order'],
+                    'size_str'    => $sizeStr,
+                    'file_size'   => $fileSizeBytes,
+                    'date_str'    => $cand['date_str'] ?? '',
+                    'seeders'     => 1,
+                    'leechers'    => 0,
+                    'uploader'    => 'ciligou',
+                    'magnet_link' => $magnetWithTrackers,
+                ];
             }
 
-            $hash = $detailRes['hash'];
-            $cleanTitle = !empty($detailRes['title']) ? $detailRes['title'] : $title;
-            $sizeStr = !empty($detailRes['size_str']) ? $detailRes['size_str'] : $cand['size_str'];
-            $fileSizeBytes = !empty($detailRes['file_size']) ? $detailRes['file_size'] : $this->parseSizeToBytes($sizeStr);
-
-            $resInfo = $this->detectResolution($cleanTitle, $fileSizeBytes);
-
-            // 组装标准 Magnet 链接（附加公网 Trackers）
-            $magnetWithTrackers = $this->buildMagnetLink($hash, $cleanTitle);
-
-            $matchedItems[] = [
-                'source'      => 'ciligou',
-                'hash'        => $hash,
-                'title'       => $cleanTitle,
-                'cat'         => 'XXX',
-                'resolution'  => $resInfo['resolution'],
-                'sort_order'  => $resInfo['sort_order'],
-                'size_str'    => $sizeStr,
-                'file_size'   => $fileSizeBytes,
-                'date_str'    => $cand['date_str'] ?? '',
-                'seeders'     => 1,
-                'leechers'    => 0,
-                'uploader'    => 'ciligou',
-                'magnet_link' => $magnetWithTrackers,
-            ];
+            if (!empty($matchedItems)) {
+                return $matchedItems;
+            }
         }
 
-        return $matchedItems;
+        return [];
     }
 
     /**
@@ -571,25 +733,38 @@ class CiligouCrawlerService
         if (!empty($dateInfo)) {
             // A. 标题中的日期与视频日期直接匹配
             if ($this->matchDateInTitle($torrentTitle, $dateInfo)) {
-                // 如果搜索词非空，进一步确保不是同天上映的其他完全无关影片
-                if (strlen($wordNorm) >= 4) {
-                    if (str_contains($titleNorm, $wordNorm) || str_contains($wordNorm, $titleNorm)) {
-                        return true;
-                    }
-                    $tokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
-                    if (!empty($tokens)) {
-                        $matchedCount = 0;
-                        foreach ($tokens as $tk) {
-                            if (str_contains(strtolower($torrentTitle), strtolower($tk))) {
-                                $matchedCount++;
-                            }
-                        }
-                        if (($matchedCount / count($tokens)) >= 0.3) {
-                            return true;
-                        }
+                // 排除年、月、日等日期词，提取搜索词中的非日期内容特征词（如演员、厂牌、片名）
+                $dateTokens = [
+                    strtolower((string) ($dateInfo['year'] ?? '')),
+                    strtolower((string) ($dateInfo['short_year'] ?? '')),
+                    strtolower((string) ($dateInfo['month'] ?? '')),
+                    strtolower((string) ($dateInfo['day'] ?? '')),
+                    (string) ($dateInfo['day_int'] ?? ''),
+                    (string) ($dateInfo['month_int'] ?? ''),
+                ];
+                if (isset($this->englishMonthNames[$dateInfo['month_int']])) {
+                    foreach ($this->englishMonthNames[$dateInfo['month_int']] as $mn) {
+                        $dateTokens[] = strtolower($mn);
                     }
                 }
-                return true;
+
+                $allTokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
+                $contentTokens = array_filter($allTokens, fn($w) => !in_array(strtolower($w), $dateTokens));
+
+                // 如果搜索词中含有非日期特征词（如演员/厂牌/片名），要求种子标题中至少命中 1 个，防止串入同天上映的其他演员作品
+                if (!empty($contentTokens)) {
+                    $matchedCount = 0;
+                    foreach ($contentTokens as $ct) {
+                        if (str_contains(strtolower($torrentTitle), strtolower($ct))) {
+                            $matchedCount++;
+                        }
+                    }
+                    if ($matchedCount > 0) {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
             }
 
             // B. 检查种子标题中是否包含显式的“冲突日期”
@@ -732,7 +907,7 @@ class CiligouCrawlerService
             return $path;
         }
 
-        return rtrim($this->baseUrl, '/') . '/' . ltrim($path, '/');
+        return rtrim($this->getActiveBaseUrl(), '/') . '/' . ltrim($path, '/');
     }
 
     /**

@@ -36,7 +36,7 @@ class CrawlXxxclubMagnetsCommand extends Command
     /**
      * 命令描述
      */
-    protected $description = '爬取 xxxclub.to (及磁力狗 clg88.me 备选兜底) 精确补充缺失下载项或缺失 4K(2160p) 清晰度的视频磁力资源';
+    protected $description = '爬取 xxxclub.to (及磁力狗 ciligou.net 备选兜底) 精确补充缺失下载项或缺失 4K(2160p) 清晰度的视频磁力资源';
 
     /**
      * 执行命令
@@ -65,7 +65,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $isDryRun = (bool) $this->option('dry-run');
 
         $this->info("================================================================================");
-        $this->info("🎬 xxxclub.to 磁力下载资源自动爬取与精准补充工具 (集成磁力狗 clg88.me 自动兜底)");
+        $this->info("🎬 xxxclub.to 磁力下载资源自动爬取与精准补充工具 (集成磁力狗 ciligou.net 自动兜底)");
         $this->info("================================================================================");
 
         if ($isDryRun) {
@@ -202,7 +202,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                 }
             }
 
-            // 4. 💡 备选搜索引擎兜底：如果 xxxclub 未搜到或未匹配到，调用磁力狗 (clg88.me) 进行二次检索与日期精准比对
+            // 4. 💡 备选搜索引擎兜底：如果 xxxclub 未搜到或未匹配到，调用磁力狗 (ciligou.net) 进行二次检索与日期精准比对
             if (empty($matchedSource)) {
                 $ciligouItems = $ciligouService->searchAndMatch($video, $proxy);
                 if (!empty($ciligouItems)) {
