@@ -28,6 +28,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--only-released : 仅筛选已到发布日期的视频 (默认即为开启状态)}
                             {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
                             {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
+                            {--clear-cooldown : 一键清空所有已记录的冷却期标记，使其立即重新具备候选资格}
                             {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--force : 强制覆盖更新已存在的下载项}
@@ -59,6 +60,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $onlyReleased = !$includeUnreleased;
         $cooldownDays = max(0, (int) $this->option('cooldown-days'));
         $ignoreCooldown = (bool) $this->option('ignore-cooldown');
+        $clearCooldown = (bool) $this->option('clear-cooldown');
         $order = strtolower((string) $this->option('order')) === 'asc' ? 'asc' : 'desc';
         $exportUnmatched = $this->option('export-unmatched');
         $force = (bool) $this->option('force');
@@ -67,6 +69,11 @@ class CrawlXxxclubMagnetsCommand extends Command
         $this->info("================================================================================");
         $this->info("🎬 xxxclub.to 磁力下载资源自动爬取与精准补充工具 (集成磁力狗 ciligou.net 自动兜底)");
         $this->info("================================================================================");
+
+        if ($clearCooldown) {
+            $cleared = $crawlerService->clearAllCoolingDown();
+            $this->info("🧹 已清空所有现存的冷却期标记" . ($cleared > 0 ? " (共清除 {$cleared} 条记录)" : "") . "，所有视频已恢复可抓取状态！");
+        }
 
         if ($isDryRun) {
             $this->warn("⚠️  当前处于【--dry-run 演练模式】，仅执行检索、抓取与匹配分析，不写入数据库！");

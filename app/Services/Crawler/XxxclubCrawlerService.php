@@ -177,6 +177,27 @@ class XxxclubCrawlerService
     }
 
     /**
+     * 一键清空所有视频的冷却期标记（支持 Redis 与 Cache）
+     */
+    public function clearAllCoolingDown(): int
+    {
+        $count = 0;
+        try {
+            if (class_exists(Redis::class)) {
+                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                if (!empty($keys)) {
+                    foreach ($keys as $k) {
+                        Redis::del($k);
+                        $count++;
+                    }
+                }
+            }
+        } catch (Throwable) {}
+
+        return $count;
+    }
+
+    /**
      * 根据视频元数据智能构建用于 xxxclub 的精确搜索关键词
      * xxxclub 最多取前 10 个词，以点号（.）分隔
      */
