@@ -220,6 +220,56 @@ class CiligouCrawlerService
     }
 
     /**
+     * 从种子标题中提取显式的发布日期信息（年、月、日）
+     * 支持多种常见格式：
+     * 1. 英文月份: "August 27, 2010", "27th August 2010"
+     * 2. 国际标准与欧洲数字: YYYY-MM-DD, YYYY.MM.DD, DD.MM.YYYY
+     * 3. 常见缩写数字: YY.MM.DD, YY-MM-DD, YY_MM_DD
+     */
+    public function extractTitleDate(string $title): ?array
+    {
+        $monthMap = [];
+        foreach ($this->englishMonthNames as $mInt => $names) {
+            foreach ($names as $n) {
+                $monthMap[$n] = $mInt;
+            }
+        }
+        $monthRegex = implode('|', array_keys($monthMap));
+
+        // 1. "August 27, 2010" 或 "August 27th, 2010"
+        if (preg_match('/\b(' . $monthRegex . ')\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+((?:19|20)\d{2})\b/i', $title, $m)) {
+            return ['year' => (int) $m[3], 'month' => $monthMap[strtolower($m[1])], 'day' => (int) $m[2]];
+        }
+
+        // 2. "27 August 2010" 或 "27th August 2010"
+        if (preg_match('/\b(\d{1,2})(?:st|nd|rd|th)?\s+(' . $monthRegex . '),?\s+((?:19|20)\d{2})\b/i', $title, $m)) {
+            return ['year' => (int) $m[3], 'month' => $monthMap[strtolower($m[2])], 'day' => (int) $m[1]];
+        }
+
+        // 3. DD.MM.YYYY (欧洲格式)
+        if (preg_match('/\b(\d{1,2})[._-](\d{1,2})[._-]((?:19|20)\d{2})\b/', $title, $m)) {
+            $day = (int) $m[1];
+            $month = (int) $m[2];
+            $year = (int) $m[3];
+            if (checkdate($month, $day, $year)) {
+                return ['year' => $year, 'month' => $month, 'day' => $day];
+            }
+        }
+
+        // 4. YY.MM.DD / YYYY.MM.DD / YYYY-MM-DD
+        if (preg_match('/\b(?:(19\d{2}|20\d{2})|(\d{2}))[._-](\d{2})[._-](\d{2})\b/', $title, $m)) {
+            $year = !empty($m[1]) ? (int) $m[1] : (int) $m[2] + ((int) $m[2] > 70 ? 1900 : 2000);
+            $month = (int) $m[3];
+            $day = (int) $m[4];
+            if (checkdate($month, $day, $year)) {
+                return ['year' => $year, 'month' => $month, 'day' => $day];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * 发送网络请求抓取磁力狗页面 HTML
      */
     public function fetchHtml(string $url, ?string $proxy = null): array
@@ -452,19 +502,13 @@ class CiligouCrawlerService
             return [];
         }
 
-        // 5. 遍历候选列表，精准比对日期
+        // 5. 遍历候选列表，精准比对
         $matchedItems = [];
         foreach ($candidates as $cand) {
             $title = $cand['title'];
 
-            // 核心匹配：标题中的日期与视频的日期相匹配
-            $isMatched = false;
-            if (!empty($dateInfo) && $this->matchDateInTitle($title, $dateInfo)) {
-                $isMatched = true;
-            } else {
-                // 如果视频无具体日期，备选按主要演员与片名匹配
-                $isMatched = $this->isTitleActorsMatch($video, $title);
-            }
+            // 核心匹配：精准比对种子标题与目标视频（支持日期吻合、排除冲突日期、关键词/词元高置信度匹配）
+            $isMatched = $this->isCandidateMatch($video, $title, $word, $dateInfo);
 
             if (!$isMatched) {
                 continue;
@@ -512,16 +556,102 @@ class CiligouCrawlerService
     }
 
     /**
+     * 智能判定搜索结果中的种子是否与目标视频相匹配
+     * 支持两层逻辑：
+     * 1. 日期匹配层：若种子标题包含日期，必须与视频日期严格一致；若包含冲突的不同日期，则坚决排除；
+     * 2. 内容匹配层：若种子标题无日期（或视频无日期），通过关键词完全子串、词元重合率(>=70%)或演员片名匹配。
+     */
+    public function isCandidateMatch(Video $video, string $torrentTitle, string $searchWord, ?array $dateInfo): bool
+    {
+        $normalize = fn($s) => strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $s));
+        $titleNorm = $normalize($torrentTitle);
+        $wordNorm = $normalize($searchWord);
+
+        // 1. 如果视频具备日期信息
+        if (!empty($dateInfo)) {
+            // A. 标题中的日期与视频日期直接匹配
+            if ($this->matchDateInTitle($torrentTitle, $dateInfo)) {
+                // 如果搜索词非空，进一步确保不是同天上映的其他完全无关影片
+                if (strlen($wordNorm) >= 4) {
+                    if (str_contains($titleNorm, $wordNorm) || str_contains($wordNorm, $titleNorm)) {
+                        return true;
+                    }
+                    $tokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
+                    if (!empty($tokens)) {
+                        $matchedCount = 0;
+                        foreach ($tokens as $tk) {
+                            if (str_contains(strtolower($torrentTitle), strtolower($tk))) {
+                                $matchedCount++;
+                            }
+                        }
+                        if (($matchedCount / count($tokens)) >= 0.3) {
+                            return true;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            // B. 检查种子标题中是否包含显式的“冲突日期”
+            $titleDate = $this->extractTitleDate($torrentTitle);
+            if ($titleDate !== null) {
+                if ($titleDate['year'] != (int) $dateInfo['year']
+                    || $titleDate['month'] != (int) $dateInfo['month_int']
+                    || $titleDate['day'] != (int) $dateInfo['day_int']) {
+                    // 种子标题含有明确的不同日期，属于同演员或频道的其他期视频，排除！
+                    return false;
+                }
+            }
+        }
+
+        // 2. 种子标题无日期（如 "DoctorAdventures - Nikki Sexx - You Cant Leave Til You Nut On My Beav"）
+        //    或目标视频无日期：依据搜索关键词与标题内容进行高置信度比对
+        if (strlen($wordNorm) >= 6) {
+            // A. 直接子串完全包含
+            if (str_contains($titleNorm, $wordNorm) || str_contains($wordNorm, $titleNorm)) {
+                return true;
+            }
+
+            // B. 词元匹配度 (Token Overlap >= 70%)
+            $tokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
+            if (!empty($tokens)) {
+                $matchedTokens = 0;
+                foreach ($tokens as $tk) {
+                    if (str_contains(strtolower($torrentTitle), strtolower($tk))) {
+                        $matchedTokens++;
+                    }
+                }
+                $ratio = $matchedTokens / count($tokens);
+                if ($ratio >= 0.70 && $matchedTokens >= 2) {
+                    return true;
+                }
+            }
+        }
+
+        // 3. 兜底方案：通过已关联演员与片名组合校验
+        return $this->isTitleActorsMatch($video, $torrentTitle);
+    }
+
+    /**
      * 辅助匹配：备选标题与演员特征相似度比对
      */
-    protected function isTitleActorsMatch(Video $video, string $torrentTitle): bool
+    public function isTitleActorsMatch(Video $video, string $torrentTitle): bool
     {
         $normalize = fn($s) => strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $s));
         $titleNorm = $normalize($torrentTitle);
 
         $hasActor = false;
-        if ($video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
-            foreach ($video->actors as $actor) {
+        $actors = null;
+        if ($video->relationLoaded('actors')) {
+            $actors = $video->actors;
+        } elseif ($video->exists) {
+            try {
+                $actors = $video->actors()->get();
+            } catch (Throwable) {}
+        }
+
+        if ($actors && $actors->isNotEmpty()) {
+            foreach ($actors as $actor) {
                 $aNorm = $normalize($actor->name);
                 if (strlen($aNorm) >= 4 && str_contains($titleNorm, $aNorm)) {
                     $hasActor = true;
