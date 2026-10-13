@@ -483,6 +483,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                     {/* 1. 磁力链接 */}
                                     {submitType === 'magnet' && (
                                         <textarea
+                                            autoFocus
                                             className="w-full min-h-[90px] p-3.5 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y leading-relaxed"
                                             placeholder="请在此粘贴磁力链接 (magnet:?xt=urn:btih:...)"
                                             value={submitContent}
@@ -493,6 +494,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                     {/* 2. 第三方下载链接 */}
                                     {submitType === 'link' && (
                                         <Input
+                                            autoFocus
                                             className="h-10 text-sm rounded-lg"
                                             placeholder="请输入网盘或第三方下载链接 (例: https://pan.baidu.com/s/...)"
                                             value={submitContent}

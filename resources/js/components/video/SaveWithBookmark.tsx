@@ -114,6 +114,7 @@ export default function Save({ videoId, initialPlaylists = [] }: PlaylistManager
                                         <div className="relative border-2 border-gray-200 rounded-xl focus-within:border-blue-600 transition-all p-2">
                                             <label className="text-xs text-gray-500 px-1">标题</label>
                                             <Input
+                                                autoFocus
                                                 placeholder="选择一个标题"
                                                 value={data.title}
                                                 onChange={e => setData('title', e.target.value)}

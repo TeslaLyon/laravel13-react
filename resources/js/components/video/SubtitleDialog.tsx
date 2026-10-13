@@ -457,6 +457,7 @@ export function SubtitleDialog({ video }: SubtitleDialogProps) {
                                 ) : (
                                     <div className="flex flex-col gap-2 p-0.5">
                                         <input
+                                            autoFocus
                                             type="url"
                                             placeholder="请输入字幕文件的下载/网盘链接..."
                                             value={uploadForm.data.url}
@@ -505,6 +506,7 @@ export function SubtitleDialog({ video }: SubtitleDialogProps) {
 
                     <div className="py-2">
                         <Textarea
+                            autoFocus
                             className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[100px] resize-none"
                             placeholder="请简要描述您遇到的问题..."
                             value={feedbackForm.data.content}

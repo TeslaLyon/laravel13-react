@@ -32,6 +32,7 @@ interface EntitySuggestInputProps {
     selected: SuggestOption[];
     onChange: (items: SuggestOption[]) => void;
     showAvatar?: boolean;
+    autoFocus?: boolean;
 }
 
 function areArraysEqual(arr1: (string | number)[], arr2: (string | number)[]) {
@@ -45,7 +46,8 @@ function EntitySuggestInput({
     searchUrl,
     selected = [],
     onChange,
-    showAvatar = false
+    showAvatar = false,
+    autoFocus = false,
 }: EntitySuggestInputProps) {
     const [query, setQuery] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -123,6 +125,7 @@ function EntitySuggestInput({
                         <Search className="absolute left-3 w-4 h-4 text-muted-foreground pointer-events-none transition-opacity" />
                     )}
                     <Input
+                        autoFocus={autoFocus}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onFocus={() => {
@@ -427,6 +430,7 @@ export default function VideoCorrectionDialog({
                                         视频中文译名
                                     </label>
                                     <Input
+                                        autoFocus
                                         value={nameZh}
                                         onChange={(e) => setNameZh(e.target.value)}
                                         placeholder="请输入准确的中文译名..."
@@ -441,6 +445,7 @@ export default function VideoCorrectionDialog({
                                         演员信息
                                     </label>
                                     <EntitySuggestInput
+                                        autoFocus={!showNameZh}
                                         placeholder="输入演员姓名或别名搜索..."
                                         searchUrl="/search/actors"
                                         selected={selectedActors}
@@ -456,6 +461,7 @@ export default function VideoCorrectionDialog({
                                         视频分类
                                     </label>
                                     <EntitySuggestInput
+                                        autoFocus={!showNameZh && !showActors}
                                         placeholder="输入分类名称搜索..."
                                         searchUrl="/search/categories"
                                         selected={selectedCategories}
@@ -471,6 +477,7 @@ export default function VideoCorrectionDialog({
                                         视频标签
                                     </label>
                                     <EntitySuggestInput
+                                        autoFocus={!showNameZh && !showActors && !showCategories}
                                         placeholder="输入标签名称搜索..."
                                         searchUrl="/search/tags"
                                         selected={selectedTags}
