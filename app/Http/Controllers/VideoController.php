@@ -197,7 +197,7 @@ class VideoController extends Controller
         // 4. 获取侧边栏推荐视频
         $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
             ->latestPublished()
-            ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at')
+            ->select('id', 'name', 'name_zh', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at', 'country')
             ->take(10)
             ->get();
 
@@ -211,7 +211,7 @@ class VideoController extends Controller
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
                 ['title' => '推荐视频', 'href' => route('videos.index')],
-                ['title' => $video->name, 'href' => null],
+                ['title' => $video->name_zh ?: $video->name, 'href' => null],
             ],
             // 使用 Inertia::defer 优化首屏加载速度
             'video' => Inertia::defer(fn() => Video::with([

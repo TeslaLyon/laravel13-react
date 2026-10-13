@@ -260,7 +260,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                         <VideoHeader
                             imgMetaList={headerImgMeta}
                             videoUrl={video?.video_detail?.video_urls}
-                            title={video?.name}
+                            title={video?.name_zh || video?.name}
                             dataCrawlType={video?.channel?.data_crawl_type}
                         />
                     </Deferred>
@@ -289,6 +289,8 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                             video?.max_quality ||
                                             video?.is_vr
                                         );
+                                        const hasValidNameZh = Boolean(video?.name_zh && video.name_zh.trim());
+                                        const mainTitle = hasValidNameZh ? video.name_zh : (video?.name || '');
 
                                         return (
                                             <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug sm:leading-snug line-clamp-2">
@@ -317,16 +319,16 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                                         )}
                                                     </span>
                                                 )}
-                                                {video?.name}
+                                                {mainTitle}
                                             </h1>
                                         );
                                     })()}
 
-                                    {/* 中文名及修正按钮布局 */}
+                                    {/* 原片名及修正按钮布局 */}
                                     <div className="flex items-center gap-2">
                                         {video?.name_zh ? (
-                                            <span className="text-sm sm:text-base text-muted-foreground font-medium">
-                                                {video.name_zh}
+                                            <span className="text-sm sm:text-base font-mono text-muted-foreground/80 break-all select-all">
+                                                {video.name}
                                             </span>
                                         ) : (
                                             <span className="text-sm text-muted-foreground/60 italic">
