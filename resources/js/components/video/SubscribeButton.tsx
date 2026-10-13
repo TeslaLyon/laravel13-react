@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useRequireAuth } from '@/components/require-auth-provider';
 import ChannelController from "@/actions/App/Http/Controllers/ChannelController";
+import { cn } from "@/lib/utils";
 
 interface SubscribeResponse {
     is_subscribed: boolean;
@@ -61,7 +62,7 @@ export function SubscribeButton({ subscribed, channelId, setSubscribed, channelS
                 <TooltipTrigger asChild>
                     <Button
                         variant={subscribed ? "secondary" : "default"}
-                        className="rounded-full shadow-none ml-2 px-5 h-9"
+                        className={cn("rounded-full shadow-none ml-2 px-5 h-9", subscribed ? "w-[128px]" : "w-[72px]")}
                         onClick={handleSubscribeToggle}
                         disabled={processing}
                     >

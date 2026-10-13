@@ -32,7 +32,7 @@ import { VideoHeader } from '@/components/video/VideoHeader';
 import type { ImageMeta } from '@/components/video/VideoHeader';
 import { VideoPreviews } from '@/components/video/VideoPreviews';
 import { VideoSkeleton } from "@/components/video/VideoSkeleton";
-import { formatChineseUnit } from '@/lib/utils';
+import { formatChineseUnit, cn } from '@/lib/utils';
 import { show } from '@/routes/videos';
 import type { Actor } from '@/types/actor';
 import type { Video, Category, Tag } from "@/types/video";
@@ -60,6 +60,13 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
     const [subscribed, setSubscribed] = useState(isSubscribed);
+    const [prevIsSubscribed, setPrevIsSubscribed] = useState(isSubscribed);
+
+    if (isSubscribed !== prevIsSubscribed) {
+        setPrevIsSubscribed(isSubscribed);
+        setSubscribed(isSubscribed);
+    }
+
     const targetSubscribersCount = channelSubscribersCount ?? video?.channel?.follow_num ?? 0;
     const [subscribersCount, setSubscribersCount] = useState<number>(targetSubscribersCount);
     const [prevSubscribersCount, setPrevSubscribersCount] = useState<number>(targetSubscribersCount);
@@ -379,13 +386,19 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                     )}
                                 </Deferred>
 
-                                <SubscribeButton
-                                    subscribed={subscribed}
-                                    channelId={video?.channel?.id}
-                                    setSubscribed={setSubscribed}
-                                    channelSlug={video?.channel?.slug}
-                                    onCountChange={setSubscribersCount}
-                                />
+                                <Deferred data="video" fallback={
+                                    <Skeleton className={cn("h-9 rounded-full shrink-0 ml-2", subscribed ? "w-[128px]" : "w-[72px]")} />
+                                }>
+                                    {video?.channel && (
+                                        <SubscribeButton
+                                            subscribed={subscribed}
+                                            channelId={video.channel.id}
+                                            setSubscribed={setSubscribed}
+                                            channelSlug={video.channel.slug}
+                                            onCountChange={setSubscribersCount}
+                                        />
+                                    )}
+                                </Deferred>
                             </div>
 
                             <div className="flex items-center gap-2 overflow-x-auto flex-nowrap pb-2 sm:pb-0 scrollbar-none w-full sm:w-auto -mx-4 px-4 sm:mx-0 sm:px-0">
