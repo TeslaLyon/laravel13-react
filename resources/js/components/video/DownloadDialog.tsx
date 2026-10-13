@@ -11,7 +11,8 @@ import {
     Link as LinkIcon,
     FileUp,
     Plus,
-    ArrowLeft
+    ArrowLeft,
+    HardDrive
 } from "lucide-react";
 import {
     Dialog,
@@ -41,6 +42,7 @@ export interface DownloadItem {
     resolution?: string;
     price?: string;
     link: string;
+    fileSize?: number | null;
 }
 
 interface DownloadDialogProps {
@@ -72,6 +74,25 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         remark: null as string | null,
     });
 
+    // 字节大小转换显示 (KB / MB / GB)
+    const formatFileSize = (bytes?: number | null): string | null => {
+        if (!bytes || bytes <= 0) return null;
+        const gb = 1024 * 1024 * 1024;
+        const mb = 1024 * 1024;
+        const kb = 1024;
+
+        if (bytes >= gb) {
+            return (bytes / gb).toFixed(2) + ' GB';
+        }
+        if (bytes >= mb) {
+            return (bytes / mb).toFixed(2) + ' MB';
+        }
+        if (bytes >= kb) {
+            return (bytes / kb).toFixed(1) + ' KB';
+        }
+        return bytes + ' B';
+    };
+
     const downloads = useMemo<DownloadItem[]>(() => {
         const tableDownloads = video?.active_downloads ?? video?.downloads;
         if (Array.isArray(tableDownloads) && tableDownloads.length > 0) {
@@ -84,12 +105,23 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                 resolution: item.resolution || undefined,
                 price: item.price || undefined,
                 link: item.link,
+                fileSize: item.file_size,
             }));
         }
 
         const rawInfo = video?.video_detail?.download_info;
         if (Array.isArray(rawInfo)) {
-            return rawInfo as unknown as DownloadItem[];
+            return (rawInfo as any[]).map((item, idx) => ({
+                id: item.id ?? idx,
+                type: item.type || 'magnet',
+                costType: item.costType || item.cost_type || 'free',
+                title: item.title,
+                description: item.description || '',
+                resolution: item.resolution,
+                price: item.price,
+                link: item.link,
+                fileSize: item.fileSize ?? item.file_size ?? null,
+            }));
         }
         return [];
     }, [video?.active_downloads, video?.downloads, video?.video_detail?.download_info]);
@@ -298,9 +330,19 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                             </div>
 
                                             <div className="flex flex-col min-w-0 flex-1 justify-center gap-1.5">
-                                                {/* 1. 状态与标签行 (清晰度、类型) */}
+                                                {/* 1. 状态与标签行 (清晰度、文件大小、类型) */}
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {getResolutionBadge(item.resolution)}
+
+                                                    {formatFileSize(item.fileSize) && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-slate-600 dark:text-slate-300 bg-muted/60 dark:bg-muted/40 border-border/70 px-2 py-0.5 text-xs font-mono font-medium shrink-0 inline-flex items-center gap-1"
+                                                        >
+                                                            <HardDrive className="w-3 h-3 text-muted-foreground" />
+                                                            <span>{formatFileSize(item.fileSize)}</span>
+                                                        </Badge>
+                                                    )}
 
                                                     {item.costType === 'free' ? (
                                                         <Badge variant="outline" className="text-emerald-600 bg-emerald-500/10 border-emerald-500/20 px-2 py-0.5 text-xs font-medium shrink-0">
