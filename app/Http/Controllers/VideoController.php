@@ -78,7 +78,7 @@ class VideoController extends Controller
             }
         }
 
-        $videos = $query->orderByDesc('created_at')
+        $videos = $query->latestPublished()
             ->paginate(12)
             ->withQueryString();
 
@@ -196,7 +196,7 @@ class VideoController extends Controller
 
         // 4. 获取侧边栏推荐视频
         $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
-            ->orderByDesc('created_at')
+            ->latestPublished()
             ->select('id', 'name', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at')
             ->take(10)
             ->get();

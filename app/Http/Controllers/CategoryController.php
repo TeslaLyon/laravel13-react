@@ -157,7 +157,7 @@ class CategoryController extends Controller
                               ->orWhere('videos.name_zh', 'ILIKE', "%{$searchKeyword}%");
                         });
                     })
-                    ->latest('videos.created_at')
+                    ->latestPublished()
                     ->paginate(12)
                     ->withQueryString();
             }),

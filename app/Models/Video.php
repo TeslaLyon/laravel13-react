@@ -235,6 +235,15 @@ class Video extends Model implements ReactableInterface
     }
 
     /**
+     * 🌟 本地作用域：按视频真实发布时间倒序排序（若无发布时间则回退到创建时间）
+     */
+    public function scopeLatestPublished(Builder $query): Builder
+    {
+        return $query->orderByRaw('COALESCE(videos.release_at, videos.created_at) DESC')
+            ->orderByDesc('videos.id');
+    }
+
+    /**
      * 🌟 本地作用域：按指定用户的交互时间倒序拉取视频
      *
      * 必须命名为 scopeWhereReactedBy，第一个参数必须是 Builder $query

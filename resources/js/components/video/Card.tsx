@@ -101,7 +101,7 @@ export function VideoCard({ video }: { video: Video }) {
                         </p>
                     )}
                     <p className="text-sm text-muted-foreground truncate">
-                        {formatChineseUnit(video.views_count)}次观看 • {dayjs(video.created_at).fromNow()}
+                        {formatChineseUnit(video.views_count)}次观看 • {dayjs(video.release_at || video.created_at).fromNow()}
                     </p>
                 </div>
             </div>

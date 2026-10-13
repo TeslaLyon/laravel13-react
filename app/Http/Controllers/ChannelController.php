@@ -92,7 +92,7 @@ class ChannelController extends Controller
 
             // 🌟 首页 Tab：最新视频（延迟加载，并关联预加载演员数据）
             'latestVideos' => Inertia::defer(function () use ($channel) {
-                $videos = $channel->videos()->latest()->take(3)->get();
+                $videos = $channel->videos()->latestPublished()->take(3)->get();
 
                 // 在内存中将现有 $channel 挂载到每个 video 上
                 $videos->each(fn($video) => $video->setRelation('channel', $channel));
@@ -134,7 +134,7 @@ class ChannelController extends Controller
                               ->orWhere('videos.name_zh', 'ILIKE', "%{$searchKeyword}%");
                         });
                     })
-                    ->latest('created_at')
+                    ->latestPublished()
                     ->paginate(12)
                     ->withQueryString();
 

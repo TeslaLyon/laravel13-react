@@ -126,7 +126,7 @@ class ActorController extends Controller
             'latestVideos' => Inertia::defer(
                 fn() => $actor->videos()
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
-                    ->latest('videos.created_at')
+                    ->latestPublished()
                     ->take(3)
                     ->select([
                         'videos.id',
@@ -188,7 +188,7 @@ class ActorController extends Controller
                         });
                     })
                     ->with('channel:id,name,slug,avatar,data_crawl_type')
-                    ->latest('videos.created_at')
+                    ->latestPublished()
                     ->select($selectFields)
                     ->paginate(12)
                     ->withQueryString();
