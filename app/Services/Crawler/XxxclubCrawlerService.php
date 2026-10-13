@@ -1029,18 +1029,51 @@ class XxxclubCrawlerService
     }
 
     /**
+     * 判断种子标题是否属于图片集/写真集（iMAGESET、Photoset、Picset等非视频资源）
+     * 注意：如果视频本身的片名或演员名确实包含 "image"（例如 "Image Of Love" 或演员 "Nikki Image"），则予以保留
+     */
+    public function isImageSetTorrent(string $title, Video $video): bool
+    {
+        $t = trim($title);
+
+        // 1. 匹配最常见的图集专属 release 标签（通常在结尾或特定标示处，例如 iMAGESET-P2P, .imageset, [photoset] 等）
+        $imageSetPattern = '/(?:\b|[._\-\[\(])(?:imagesets?|picsets?|photosets?|wallpapers?|photo[._\s-]?set|pic[._\s-]?set)(?:[._\-\]\)\s]|\b)/i';
+
+        if (preg_match($imageSetPattern, $t)) {
+            // 如果原片名中本身就含有 "imageset" 这一词汇，则避免误杀
+            $videoName = (string) ($video->name ?: $video->slug);
+            if (!empty($videoName) && str_contains(strtolower($videoName), 'imageset')) {
+                return false;
+            }
+            return true;
+        }
+
+        // 2. 匹配结尾处的图片合集发布组标记（例如 .pics-xxx, _pics, -photos 等）
+        if (preg_match('/[._\-\s](?:pics?|photos?)(?:-[a-z0-9]+)?$/i', $t)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * 判断解析出的种子项是否精确匹配目标视频
      */
     public function isMatch(Video $video, array $item): bool
     {
-        // 0. 如果条目来自已完成严格日期/标题比对的外部搜索引擎（如 Ciligou）
-        if (!empty($item['source']) && $item['source'] === 'ciligou') {
-            return true;
-        }
-
         $torrentTitle = $item['title'] ?? '';
         if (empty($torrentTitle)) {
             return false;
+        }
+
+        // 排除非视频资源（图片集/写真集 iMAGESET 等）
+        if ($this->isImageSetTorrent($torrentTitle, $video)) {
+            return false;
+        }
+
+        // 0. 如果条目来自已完成严格日期/标题比对的外部搜索引擎（如 Ciligou）
+        if (!empty($item['source']) && $item['source'] === 'ciligou') {
+            return true;
         }
 
         $normalize = fn($s) => strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $s));
