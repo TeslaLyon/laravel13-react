@@ -262,39 +262,78 @@ class XxxclubCrawlerService
     }
 
     /**
-     * 根据视频元数据智能构建用于 xxxclub 的精确搜索关键词
-     * xxxclub 最多取前 10 个词，以点号（.）分隔
+     * 根据视频元数据智能构建用于 xxxclub 的多策略候选搜索关键词列表（按置信度排序）
+     * 策略 1: 原始/清洗后的完整 video_code（例如 Deeper.26.10.09.Violet.Voss.And.Alex.Jones.Absolution）
+     * 策略 2: 容差时差候选词：厂牌 + 前一天日期 + 标题（解决欧美发行时区偏差1天的情况，例如 Deeper.26.10.08.Violet.Voss.And.Alex.Jones.Absolution）
+     * 策略 3: 容差时差候选词：厂牌 + 后一天日期 + 标题（例如 Deeper.26.10.10.Violet.Voss.And.Alex.Jones.Absolution）
+     * 策略 4: 厂牌 + 日期（例如 Deeper.26.10.09）
+     * 策略 5: 厂牌 + 前一天日期（例如 Deeper.26.10.08）
+     * 策略 6: 厂牌 + 主要演员（例如 Deeper.Violet.Voss）
+     * 策略 7: 片商 + 发布日期 + 演员 + 片名 组合（当无规范 video_code 时的兜底）
+     *
+     * @return array<int, string>
      */
-    public function buildSearchKeyword(Video $video): string
+    public function buildSearchKeywords(Video $video): array
     {
-        // 1. 如果已有 video_code，且包含点号或者标准结构（如 BrazzersExxtra.26.10.08...）
-        if (!empty($video->video_code)) {
-            $code = trim($video->video_code);
-            // 清理多余非打印或特殊符号，将空格与下划线统一为点号
-            $code = preg_replace('/[_\s]+/', '.', $code);
-            $code = preg_replace('/[^a-zA-Z0-9.]+/', '', $code);
-            $code = trim(preg_replace('/\.+/', '.', $code), '.');
+        $keywords = [];
 
-            // 如果 code 的点号段落 >= 3，说明是完整编码，精确度极高
-            if (substr_count($code, '.') >= 2 && strlen($code) >= 10) {
-                return $this->limitKeywordWords($code, 10);
+        // 1. 如果已有 video_code
+        $rawCode = trim($video->video_code ?? '');
+        if (!empty($rawCode)) {
+            $cleanCode = preg_replace('/[_\s]+/', '.', $rawCode);
+            $cleanCode = preg_replace('/[^a-zA-Z0-9.]+/', '', $cleanCode);
+            $cleanCode = trim(preg_replace('/\.+/', '.', $cleanCode), '.');
+
+            if (!empty($cleanCode)) {
+                $keywords[] = $this->limitKeywordWords($cleanCode, 10);
+            }
+
+            // 识别标准结构：[厂牌].[YY].[MM].[DD].[后续内容]
+            if (preg_match('/^([a-zA-Z0-9]+)[._-](\d{2})[._-](\d{2})[._-](\d{2})[._-](.+)$/i', $rawCode, $m)) {
+                $channel = trim($m[1]);
+                $yy = (int) $m[2];
+                $mm = (int) $m[3];
+                $dd = (int) $m[4];
+                $afterDate = trim(preg_replace('/\.+/', '.', preg_replace('/[^a-zA-Z0-9.]+/', '', preg_replace('/[_\s]+/', '.', $m[5]))), '.');
+
+                $fullYear = $yy > 70 ? 1900 + $yy : 2000 + $yy;
+                if (checkdate($mm, $dd, $fullYear)) {
+                    $dt = Carbon::create($fullYear, $mm, $dd);
+                    $prevDate = $dt->copy()->subDay()->format('y.m.d');
+                    $nextDate = $dt->copy()->addDay()->format('y.m.d');
+
+                    // 容差 +-1 天完整词 (欧美发片时区偏差)
+                    if (!empty($afterDate)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
+                        $keywords[] = $this->limitKeywordWords("{$channel}.{$nextDate}.{$afterDate}", 10);
+                    }
+
+                    // 厂牌 + 日期 (如 Deeper.26.10.09 / Deeper.26.10.08)
+                    $origDate = sprintf('%02d.%02d.%02d', $yy, $mm, $dd);
+                    $keywords[] = "{$channel}.{$origDate}";
+                    $keywords[] = "{$channel}.{$prevDate}";
+
+                    // 厂牌 + 女演员 (如 Deeper.Violet.Voss)
+                    $afterTokens = array_values(array_filter(explode('.', $afterDate), fn($t) => strlen($t) >= 2));
+                    if (count($afterTokens) >= 2) {
+                        $keywords[] = "{$channel}.{$afterTokens[0]}.{$afterTokens[1]}";
+                    } elseif (count($afterTokens) === 1) {
+                        $keywords[] = "{$channel}.{$afterTokens[0]}";
+                    }
+                }
             }
         }
 
         // 2. 备选方案：通过 [片商] + [发布日期(YY.MM.DD)] + [主要女演员] + [片名] 组合构建
         $parts = [];
-
-        // 片商标识
-        if ($video->channel) {
+        if ($video->relationLoaded('channel') && $video->channel) {
             $parts[] = Str::studly($video->channel->slug ?: $video->channel->name);
         }
-
-        // 发布日期（如 26.10.08）
         if ($video->release_at) {
-            $parts[] = Carbon::parse($video->release_at)->format('y.m.d');
+            try {
+                $parts[] = Carbon::parse($video->release_at)->format('y.m.d');
+            } catch (Throwable) {}
         }
-
-        // 演员（取前 2 位）
         if ($video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
             foreach ($video->actors->take(2) as $actor) {
                 $cleanActor = preg_replace('/[^a-zA-Z0-9]+/', '.', trim($actor->name));
@@ -303,18 +342,33 @@ class XxxclubCrawlerService
                 }
             }
         }
-
-        // 原片片名（去除标点并点号连接）
         $rawName = $video->name ?: $video->slug;
         if (!empty($rawName)) {
             $cleanName = preg_replace('/[^a-zA-Z0-9]+/', '.', trim($rawName));
-            $parts[] = trim($cleanName, '.');
+            if (!empty($cleanName)) {
+                $parts[] = trim($cleanName, '.');
+            }
         }
 
-        $combined = implode('.', array_filter($parts));
-        $combined = trim(preg_replace('/\.+/', '.', $combined), '.');
+        if (!empty($parts)) {
+            $combined = implode('.', array_filter($parts));
+            $combined = trim(preg_replace('/\.+/', '.', $combined), '.');
+            if (strlen($combined) >= 3) {
+                $keywords[] = $this->limitKeywordWords($combined, 10);
+            }
+        }
 
-        return $this->limitKeywordWords($combined, 10);
+        return array_values(array_unique(array_filter($keywords)));
+    }
+
+    /**
+     * 根据视频元数据智能构建用于 xxxclub 的精确搜索关键词（首选关键词）
+     * xxxclub 最多取前 10 个词，以点号（.）分隔
+     */
+    public function buildSearchKeyword(Video $video): string
+    {
+        $keywords = $this->buildSearchKeywords($video);
+        return $keywords[0] ?? '';
     }
 
     /**
@@ -1006,13 +1060,32 @@ class XxxclubCrawlerService
         // 2. 复合特征打分验证
         $score = 0;
 
-        // 特征 A: 发布日期吻合（YY.MM.DD 或 YYYY.MM.DD）
-        if ($video->release_at) {
-            $dt = Carbon::parse($video->release_at);
-            $shortDate = $dt->format('ymd');     // 如 261008
-            $fullDate = $dt->format('Ymd');      // 如 20261008
+        // 特征 A: 发布日期吻合（YY.MM.DD 或 YYYY.MM.DD，支持时差偏差 +-1 天）
+        $videoDate = null;
+        if (!empty($video->video_code) && preg_match('/(?:\.|\b)(?:20)?(\d{2})[._-](\d{2})[._-](\d{2})(?:\.|\b)/', (string) $video->video_code, $dm)) {
+            $y = (int) $dm[1] > 70 ? 1900 + (int) $dm[1] : 2000 + (int) $dm[1];
+            if (checkdate((int) $dm[2], (int) $dm[3], $y)) {
+                $videoDate = Carbon::create($y, (int) $dm[2], (int) $dm[3]);
+            }
+        } elseif ($video->release_at) {
+            try {
+                $videoDate = Carbon::parse($video->release_at);
+            } catch (Throwable) {}
+        }
+
+        if ($videoDate !== null) {
+            $shortDate = $videoDate->format('ymd');     // 如 261009
+            $fullDate = $videoDate->format('Ymd');      // 如 20261009
+            $prevDate = $videoDate->copy()->subDay()->format('ymd'); // 如 261008
+            $nextDate = $videoDate->copy()->addDay()->format('ymd'); // 如 261010
+            $prevFull = $videoDate->copy()->subDay()->format('Ymd');
+            $nextFull = $videoDate->copy()->addDay()->format('Ymd');
+
             if (str_contains($titleNorm, $shortDate) || str_contains($titleNorm, $fullDate)) {
                 $score += 50;
+            } elseif (str_contains($titleNorm, $prevDate) || str_contains($titleNorm, $nextDate) || str_contains($titleNorm, $prevFull) || str_contains($titleNorm, $nextFull)) {
+                // 欧美发行时差偏差 1 天：赋予 40 分
+                $score += 40;
             }
         }
 
@@ -1046,6 +1119,23 @@ class XxxclubCrawlerService
                 if (!empty($actorNorm) && strlen($actorNorm) >= 4 && str_contains($titleNorm, $actorNorm)) {
                     $score += 40;
                     break;
+                }
+            }
+        }
+
+        // 特征 D: 从 video_code 提取的词元重合率验证（补充当 actors 未预加载或片名简短时的置信度）
+        if (!empty($video->video_code)) {
+            $codeWords = array_values(array_filter(explode('.', preg_replace('/[_\s-]+/', '.', (string) $video->video_code)), fn($w) => strlen($w) >= 3 && !preg_match('/^\d+$/', $w)));
+            if (!empty($codeWords)) {
+                $matchedCodeWords = 0;
+                foreach ($codeWords as $cw) {
+                    if (str_contains($titleNorm, strtolower($cw))) {
+                        $matchedCodeWords++;
+                    }
+                }
+                $ratio = $matchedCodeWords / count($codeWords);
+                if ($ratio >= 0.5 && $matchedCodeWords >= 2) {
+                    $score += 45;
                 }
             }
         }

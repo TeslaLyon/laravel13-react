@@ -183,55 +183,52 @@ class CrawlXxxclubMagnetsCommand extends Command
 
             $stats['processed_videos']++;
 
-            // 1. 智能生成搜索关键词
-            $keyword = $crawlerService->buildSearchKeyword($video);
+            // 1. 智能生成 xxxclub 多策略搜索候选词列表
+            $keywords = $crawlerService->buildSearchKeywords($video);
+            $primaryKeyword = $keywords[0] ?? $crawlerService->buildSearchKeyword($video);
 
-            // 2. 发起 HTTP / FlareSolverr 抓取请求 (xxxclub)
-            $fetchResult = $crawlerService->fetchSearchHtml(
-                $keyword,
-                $proxy,
-                [],
-                $flaresolverrUrl,
-                !$noFlareSolverr
-            );
-
-            if (!empty($fetchResult['via_flaresolverr']) && $fetchResult['success']) {
-                $stats['flaresolverr_solved']++;
-            }
-
-            if ($fetchResult['is_cf']) {
-                $stats['cf_blocked']++;
-                $this->newLine();
-                $this->warn("⚠️  [视频 ID: {$video->id}] 关键词 [{$keyword}] " . ($fetchResult['message'] ?? '触发了 Cloudflare 防护！'));
-                if ($delay > 0) {
-                    sleep($delay);
-                }
-                $progressBar->advance();
-                if ($limit > 0 && $stats['processed_videos'] >= $limit) {
-                    break;
-                }
-                continue;
-            }
-
-            if (!$fetchResult['success']) {
-                $stats['error_videos']++;
-                $progressBar->advance();
-                if ($limit > 0 && $stats['processed_videos'] >= $limit) {
-                    break;
-                }
-                continue;
-            }
-
-            // 3. 解析 xxxclub 搜索结果 HTML 并尝试匹配入库
+            // 2. 逐个候选关键词请求 xxxclub，首个匹配即停
             $matchedSource = null;
             $importResult = ['matched' => 0, 'inserted' => 0, 'updated' => 0, 'skipped' => 0, 'matched_items' => []];
 
-            $items = $crawlerService->parseSearchHtml($fetchResult['html']);
-            if (!empty($items)) {
-                $xxxResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
-                if ($xxxResult['matched'] > 0) {
-                    $matchedSource = 'xxxclub';
-                    $importResult = $xxxResult;
+            foreach ($keywords as $kwIdx => $kw) {
+                // 仅首个关键词失败后，如果继续尝试备选词，增加短延迟
+                if ($kwIdx > 0 && $delay > 0) {
+                    sleep(min(2, $delay));
+                }
+
+                $fetchResult = $crawlerService->fetchSearchHtml(
+                    $kw,
+                    $proxy,
+                    [],
+                    $flaresolverrUrl,
+                    !$noFlareSolverr
+                );
+
+                if (!empty($fetchResult['via_flaresolverr']) && $fetchResult['success']) {
+                    $stats['flaresolverr_solved']++;
+                }
+
+                if ($fetchResult['is_cf']) {
+                    $stats['cf_blocked']++;
+                    $this->newLine();
+                    $this->warn("⚠️  [视频 ID: {$video->id}] 关键词 [{$kw}] " . ($fetchResult['message'] ?? '触发了 Cloudflare 防护！'));
+                    continue;
+                }
+
+                if (!$fetchResult['success'] || empty($fetchResult['html'])) {
+                    continue;
+                }
+
+                // 解析当前候选词的搜索结果 HTML
+                $items = $crawlerService->parseSearchHtml($fetchResult['html']);
+                if (!empty($items)) {
+                    $xxxResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
+                    if ($xxxResult['matched'] > 0) {
+                        $matchedSource = 'xxxclub';
+                        $importResult = $xxxResult;
+                        break;
+                    }
                 }
             }
 
@@ -273,7 +270,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                 $unmatchedVideos[] = [
                     'id'         => $video->id,
                     'video_code' => $videoCode,
-                    'keyword'    => $keyword,
+                    'keyword'    => $primaryKeyword,
                     'reason'     => $reason,
                 ];
 
@@ -284,7 +281,7 @@ class CrawlXxxclubMagnetsCommand extends Command
 
                 $this->newLine();
                 $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>" . ($cooldownDays > 0 ? " <fg=blue>[进入 {$cooldownDays} 天冷却]</>" : ""));
-                Log::info("磁力未检索到资源: 视频Code [{$videoCode}], 搜索词 [{$keyword}], 原因 [{$reason}]" . ($cooldownDays > 0 ? ", 已进入 {$cooldownDays} 天冷却期" : ""));
+                Log::info("磁力未检索到资源: 视频Code [{$videoCode}], 候选搜索词数 [" . count($keywords) . "], 首选词 [{$primaryKeyword}], 原因 [{$reason}]" . ($cooldownDays > 0 ? ", 已进入 {$cooldownDays} 天冷却期" : ""));
             }
 
             // 遵守请求延迟避免过频触发限流

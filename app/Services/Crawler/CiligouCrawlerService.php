@@ -128,23 +128,50 @@ class CiligouCrawlerService
                     }
                 }
 
-                // 2.3 从频道/厂牌名构建（例如 MommyGotBoobs ➔ MommyGotBoobs 28.october.2011）
-                $channelName = null;
+                // 2.3 补充：厂牌 + 主要演员（例如 Deeper Violet Voss，解决搜索无果时的宽泛命中）
+                $cleanChannel = null;
                 if ($video->relationLoaded('channel') && $video->channel) {
-                    $channelName = $video->channel->name ?: $video->channel->slug;
+                    $cleanChannel = preg_replace('/[^a-zA-Z0-9]+/', '', $video->channel->name ?: $video->channel->slug);
                 } elseif (!empty($rawCode) && preg_match('/^([a-zA-Z0-9]+)[._-](?:20)?\d{2}[._-]\d{2}[._-]\d{2}/i', $rawCode, $cm)) {
-                    $channelName = trim($cm[1]);
+                    $cleanChannel = preg_replace('/[^a-zA-Z0-9]+/', '', trim($cm[1]));
                 }
 
-                if (!empty($channelName)) {
-                    $cleanChannel = preg_replace('/[^a-zA-Z0-9]+/', '', $channelName);
-                    if (strlen($cleanChannel) >= 3) {
-                        $chWord = "{$cleanChannel} {$datePart}";
-                        if (!in_array($chWord, $words)) {
-                            $words[] = $chWord;
+                if (!empty($cleanChannel)) {
+                    // 尝试从 video_code 提取前两位演员名
+                    if (preg_match('/(?:\.|\b)(?:20)?\d{2}[._-]\d{2}[._-]\d{2}[._-]([a-zA-Z0-9]+)[._-]([a-zA-Z0-9]+)/i', $rawCode, $actm)) {
+                        $chActWord = "{$cleanChannel} {$actm[1]} {$actm[2]}";
+                        if (!in_array($chActWord, $words)) {
+                            $words[] = $chActWord;
+                        }
+                    } elseif ($actors && $actors->isNotEmpty()) {
+                        $firstActor = $actors->first();
+                        $chActWord = "{$cleanChannel} {$firstActor->name}";
+                        if (!in_array($chActWord, $words)) {
+                            $words[] = $chActWord;
                         }
                     }
+
+                    // 厂牌 + 英文发布日期 (如 MommyGotBoobs 28.october.2011)
+                    $chWord = "{$cleanChannel} {$datePart}";
+                    if (!in_array($chWord, $words)) {
+                        $words[] = $chWord;
+                    }
                 }
+
+                // 2.4 欧美发行时差容差：前一天日期（例如 8.october.2026）
+                try {
+                    $dtObj = Carbon::create((int) $dateInfo['year'], (int) $dateInfo['month_int'], (int) $dateInfo['day_int']);
+                    $prevDt = $dtObj->subDay();
+                    $prevMonthName = $this->englishMonthNames[$prevDt->month][0] ?? $monthName;
+                    $prevDatePart = "{$prevDt->day}.{$prevMonthName}.{$prevDt->year}";
+
+                    if (!empty($codeActorWord ?? null)) {
+                        $prevActorWord = str_replace($datePart, $prevDatePart, $codeActorWord);
+                        if (!in_array($prevActorWord, $words)) {
+                            $words[] = $prevActorWord;
+                        }
+                    }
+                } catch (Throwable) {}
             }
         }
 
@@ -281,14 +308,18 @@ class CiligouCrawlerService
         $dPad = $dateInfo['day'];
         $dInt = $dateInfo['day_int'];
 
-        // 1. 数字格式模式匹配（支持 YY.MM.DD, YYYY.MM.DD, YYYY-MM-DD, DD.MM.YYYY, yymmdd 等）
+        // 1. 数字格式模式匹配（支持 YY.MM.DD, YY MM DD, YYYY.MM.DD, YYYY-MM-DD, DD.MM.YYYY, yymmdd 等）
         $numericPatterns = [
             "{$yy}.{$mPad}.{$dPad}",
+            "{$yy} {$mPad} {$dPad}",
             "{$y}.{$mPad}.{$dPad}",
+            "{$y} {$mPad} {$dPad}",
             "{$y}-{$mPad}-{$dPad}",
             "{$yy}-{$mPad}-{$dPad}",
             "{$dPad}.{$mPad}.{$y}",
+            "{$dPad} {$mPad} {$y}",
             "{$dPad}.{$mPad}.{$yy}",
+            "{$dPad} {$mPad} {$yy}",
             "{$dPad}-{$mPad}-{$y}",
             "{$dPad}-{$mPad}-{$yy}",
             "{$yy}{$mPad}{$dPad}",
@@ -300,6 +331,36 @@ class CiligouCrawlerService
                 return true;
             }
         }
+
+        // 1.1 欧美发行时差容差：检查前一天与后一天的日期（解决时差造成的1天偏差）
+        try {
+            $dtObj = Carbon::create((int) $y, (int) $mInt, (int) $dInt);
+            $adjDates = [
+                $dtObj->copy()->subDay(),
+                $dtObj->copy()->addDay(),
+            ];
+            foreach ($adjDates as $adj) {
+                $adjYy = $adj->format('y');
+                $adjY = (string) $adj->year;
+                $adjM = $adj->format('m');
+                $adjD = $adj->format('d');
+                $adjPatterns = [
+                    "{$adjYy}.{$adjM}.{$adjD}",
+                    "{$adjYy} {$adjM} {$adjD}",
+                    "{$adjY}.{$adjM}.{$adjD}",
+                    "{$adjY} {$adjM} {$adjD}",
+                    "{$adjY}-{$adjM}-{$adjD}",
+                    "{$adjYy}-{$adjM}-{$adjD}",
+                    "{$adjYy}{$adjM}{$adjD}",
+                    "{$adjY}{$adjM}{$adjD}",
+                ];
+                foreach ($adjPatterns as $ap) {
+                    if (str_contains($lower, strtolower($ap))) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable) {}
 
         // 2. 英文月份格式匹配（例如 "August 27, 2010"、"27 August 2010"、"Aug 27, 2010" 等）
         $monthWords = $this->englishMonthNames[$mInt] ?? [];
@@ -350,7 +411,7 @@ class CiligouCrawlerService
         }
 
         // 3. DD.MM.YYYY (欧洲格式)
-        if (preg_match('/\b(\d{1,2})[._-](\d{1,2})[._-]((?:19|20)\d{2})\b/', $title, $m)) {
+        if (preg_match('/\b(\d{1,2})[._\s-](\d{1,2})[._\s-]((?:19|20)\d{2})\b/', $title, $m)) {
             $day = (int) $m[1];
             $month = (int) $m[2];
             $year = (int) $m[3];
@@ -359,8 +420,8 @@ class CiligouCrawlerService
             }
         }
 
-        // 4. YY.MM.DD / YYYY.MM.DD / YYYY-MM-DD
-        if (preg_match('/\b(?:(19\d{2}|20\d{2})|(\d{2}))[._-](\d{2})[._-](\d{2})\b/', $title, $m)) {
+        // 4. YY.MM.DD / YYYY.MM.DD / YYYY-MM-DD / YY MM DD
+        if (preg_match('/\b(?:(19\d{2}|20\d{2})|(\d{2}))[._\s-](\d{2})[._\s-](\d{2})\b/', $title, $m)) {
             $year = !empty($m[1]) ? (int) $m[1] : (int) $m[2] + ((int) $m[2] > 70 ? 1900 : 2000);
             $month = (int) $m[3];
             $day = (int) $m[4];
@@ -770,10 +831,43 @@ class CiligouCrawlerService
             // B. 检查种子标题中是否包含显式的“冲突日期”
             $titleDate = $this->extractTitleDate($torrentTitle);
             if ($titleDate !== null) {
-                if ($titleDate['year'] != (int) $dateInfo['year']
-                    || $titleDate['month'] != (int) $dateInfo['month_int']
-                    || $titleDate['day'] != (int) $dateInfo['day_int']) {
-                    // 种子标题含有明确的不同日期，属于同演员或频道的其他期视频，排除！
+                $isExactDate = ($titleDate['year'] == (int) $dateInfo['year']
+                    && $titleDate['month'] == (int) $dateInfo['month_int']
+                    && $titleDate['day'] == (int) $dateInfo['day_int']);
+
+                if (!$isExactDate) {
+                    // 判断是否为欧美时差引起的 +-1 天微小偏差
+                    $diffDays = 999;
+                    try {
+                        $vDt = Carbon::create((int) $dateInfo['year'], (int) $dateInfo['month_int'], (int) $dateInfo['day_int']);
+                        $tDt = Carbon::create((int) $titleDate['year'], (int) $titleDate['month'], (int) $titleDate['day']);
+                        $diffDays = abs($vDt->diffInDays($tDt));
+                    } catch (Throwable) {}
+
+                    if ($diffDays === 1) {
+                        // 偏差 1 天：检查内容词元重合度，若核心词高度重合（如 Deeper + Violet Voss + Absolution），确认为同一部片
+                        $checkWords = [];
+                        if (!empty($video->video_code)) {
+                            $checkWords = array_values(array_filter(explode('.', preg_replace('/[_\s-]+/', '.', (string) $video->video_code)), fn($w) => strlen($w) >= 3 && !preg_match('/^\d+$/', $w)));
+                        }
+                        if (empty($checkWords) && !empty($video->name)) {
+                            $checkWords = array_values(array_filter(explode(' ', preg_replace('/[^a-zA-Z0-9]+/', ' ', (string) $video->name)), fn($w) => strlen($w) >= 3));
+                        }
+
+                        $matchedWords = 0;
+                        foreach ($checkWords as $cw) {
+                            if (str_contains(strtolower($torrentTitle), strtolower($cw))) {
+                                $matchedWords++;
+                            }
+                        }
+
+                        $ratio = !empty($checkWords) ? $matchedWords / count($checkWords) : 0;
+                        if ($matchedWords >= 2 && $ratio >= 0.5) {
+                            return true;
+                        }
+                    }
+
+                    // 确属明确冲突的不同日期（大于1天差异），排除！
                     return false;
                 }
             }
