@@ -1127,10 +1127,155 @@ class XxxclubCrawlerService
             }
         }
 
-        // 确保关联视频标记为拥有下载资源
+        // 自动同步视频的 has_downloads, is_4k, max_quality 及 is_vr 状态
+        $qualityUpdates = $this->syncVideoQualities($video);
+        if (!empty($qualityUpdates)) {
+            $stats['quality_updates'] = $qualityUpdates;
+        }
+
+        return $stats;
+    }
+
+    /**
+     * 根据关联的下载项，精准同步更新视频的 is_4k, max_quality, is_vr 及 has_downloads 字段
+     * @return array<string, mixed> 返回本次发生变更的字段键值
+     */
+    public function syncVideoQualities(Video $video): array
+    {
+        // 1. 读取关联的下载项（优先使用有效项，无有效项则使用全部）
+        $downloads = $video->downloads()->where('status', 1)->get();
+        if ($downloads->isEmpty()) {
+            $downloads = $video->downloads()->get();
+        }
+
+        if ($downloads->isEmpty()) {
+            if ($video->has_downloads) {
+                $video->update(['has_downloads' => false]);
+                $video->has_downloads = false;
+                return ['has_downloads' => false];
+            }
+            return [];
+        }
+
+        $has4k = false;
+        $has1080p = false;
+        $has720p = false;
+        $hasVr = false;
+
+        foreach ($downloads as $dl) {
+            $res = strtoupper(trim((string) $dl->resolution));
+            $title = (string) $dl->title;
+
+            // 4K / 2160p 识别
+            if (in_array($res, ['4K', '2160P', 'UHD']) || preg_match('/\b(2160p|4k|uhd)\b/i', $title)) {
+                $has4k = true;
+            } elseif (in_array($res, ['1080P', 'FHD', 'FULLHD']) || preg_match('/\b(1080p|fhd)\b/i', $title)) {
+                $has1080p = true;
+            } elseif (in_array($res, ['720P', 'HD']) || preg_match('/\b(720p|hd)\b/i', $title)) {
+                $has720p = true;
+            }
+
+            // VR 识别
+            if (preg_match('/(?:\b|[._\-\[\(])(?:vr|virtual[\s._-]?reality)(?:\b|[._\-\]\)])|(?i:\b[a-z0-9]+vr\b)/i', $title)) {
+                $hasVr = true;
+            }
+        }
+
+        // 辅助检测：若下载项标题中未显式包含 VR，但视频编码或片商明确属于 VR 厂牌
+        if (!$hasVr) {
+            $rawCode = (string) ($video->video_code ?? '');
+            if (preg_match('/(?:\b|[._\-\[\(])(?:vr|virtual[\s._-]?reality)(?:\b|[._\-\]\)])|(?i:\b[a-z0-9]+vr\b)/i', $rawCode)) {
+                $hasVr = true;
+            } elseif ($video->relationLoaded('channel') && $video->channel && preg_match('/(?:\b|[._\-\[\(])vr(?:\b|[._\-\]\)])|(?i:\b[a-z0-9]+vr\b)/i', (string) $video->channel->name)) {
+                $hasVr = true;
+            }
+        }
+
+        $updates = [];
+
+        // 标记拥有下载项
         if (!$video->has_downloads) {
-            $video->update(['has_downloads' => true]);
-            $video->has_downloads = true;
+            $updates['has_downloads'] = true;
+        }
+
+        // 4K 与最高画质判定：只要拥有 4k 下载项，即更新 is_4k 为 true，并确保 max_quality 为 2160p
+        if ($has4k) {
+            if (!$video->is_4k) {
+                $updates['is_4k'] = true;
+            }
+            if ($video->max_quality !== '2160p') {
+                $updates['max_quality'] = '2160p';
+            }
+        } elseif ($has1080p) {
+            // 缺失 4K 但拥有 1080P 时，且原视频未标为 4K 时设置 max_quality 为 1080p
+            if (!$video->is_4k && $video->max_quality !== '2160p' && $video->max_quality !== '1080p') {
+                $updates['max_quality'] = '1080p';
+            }
+        } elseif ($has720p) {
+            if (!$video->is_4k && empty($video->max_quality)) {
+                $updates['max_quality'] = '720p';
+            }
+        }
+
+        // VR 判定：若匹配到 VR 资源，且 is_vr 为 false，则更新 is_vr 为 true
+        if ($hasVr && !$video->is_vr) {
+            $updates['is_vr'] = true;
+        }
+
+        if (!empty($updates)) {
+            $video->update($updates);
+            foreach ($updates as $k => $v) {
+                $video->{$k} = $v;
+            }
+        }
+
+        return $updates;
+    }
+
+    /**
+     * 批量处理历史已执行过下载项抓取的视频，重新扫描下载项并同步更新 is_4k, max_quality 与 is_vr
+     */
+    public function syncAllVideosQualities(bool $dryRun = false, ?callable $progressCallback = null, ?int $limit = null, bool $forceAll = false): array
+    {
+        $stats = [
+            'scanned'             => 0,
+            'updated_videos'      => 0,
+            'updated_4k'          => 0,
+            'updated_max_quality' => 0,
+            'updated_vr'          => 0,
+            'unchanged'           => 0,
+        ];
+
+        $query = $forceAll
+            ? Video::query()->orderBy('id')
+            : Video::where('has_downloads', true)->orWhereHas('downloads')->orderBy('id');
+
+        if ($limit !== null && $limit > 0) {
+            $query->limit($limit);
+        }
+
+        foreach ($query->with(['downloads', 'channel'])->cursor() as $video) {
+            $stats['scanned']++;
+
+            if ($dryRun) {
+                $cloned = clone $video;
+                $updates = $this->syncVideoQualities($cloned);
+            } else {
+                $updates = $this->syncVideoQualities($video);
+            }
+
+            if (!empty($updates)) {
+                $stats['updated_videos']++;
+                if (isset($updates['is_4k'])) $stats['updated_4k']++;
+                if (isset($updates['max_quality'])) $stats['updated_max_quality']++;
+                if (isset($updates['is_vr'])) $stats['updated_vr']++;
+            } else {
+                $stats['unchanged']++;
+            }
+
+            if ($progressCallback !== null) {
+                $progressCallback($video, $updates, $stats);
+            }
         }
 
         return $stats;

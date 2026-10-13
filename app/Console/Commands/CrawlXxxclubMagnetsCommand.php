@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Video;
 use App\Services\Crawler\CiligouCrawlerService;
 use App\Services\Crawler\XxxclubCrawlerService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -33,6 +34,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--list-cooldown : 查看当前所有正处于冷静期中的视频列表及剩余冷静时间}
                             {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
+                            {--sync-qualities : 回溯扫描所有已有下载项的视频，重新检测并同步更新 4K (is_4k/max_quality) 与 VR (is_vr) 标记}
                             {--force : 强制覆盖更新已存在的下载项}
                             {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}';
 
@@ -91,6 +93,16 @@ class CrawlXxxclubMagnetsCommand extends Command
 
         if ($isDryRun) {
             $this->warn("⚠️  当前处于【--dry-run 演练模式】，仅执行检索、抓取与匹配分析，不写入数据库！");
+        }
+
+        // 快捷选项：全量回溯同步已有视频的 4K (is_4k/max_quality) 与 VR (is_vr) 标记
+        if ((bool) $this->option('sync-qualities')) {
+            return $this->call('video:sync-qualities', array_filter([
+                '--dry-run'  => $isDryRun,
+                '--video-id' => $videoId,
+                '--channel'  => $channel,
+                '--limit'    => $limit > 0 ? $limit : null,
+            ]));
         }
 
         // =========================================================================
