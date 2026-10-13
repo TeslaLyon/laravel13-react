@@ -158,12 +158,48 @@ class CiligouCrawlerService
                     }
                 }
 
-                // 2.4 欧美发行时差容差：前一天日期（例如 8.october.2026）
+                // 2.4 欧美发行时差容差：前一天日期（例如 8.october.2026 或 26.10.05）
                 try {
                     $dtObj = Carbon::create((int) $dateInfo['year'], (int) $dateInfo['month_int'], (int) $dateInfo['day_int']);
                     $prevDt = $dtObj->subDay();
                     $prevMonthName = $this->englishMonthNames[$prevDt->month][0] ?? $monthName;
                     $prevDatePart = "{$prevDt->day}.{$prevMonthName}.{$prevDt->year}";
+                    $prevNumericDate = $prevDt->format('y.m.d'); // 如 26.10.05
+
+                    // 厂牌 + 前一天数字日期 + 演员 + 片名 (例如: Blacked 26.10.05 Jessi Rae Some Title)
+                    $actorNameStr = '';
+                    $titleNameStr = '';
+                    if (preg_match('/(?:\.|\b)(?:20)?\d{2}[._-]\d{2}[._-]\d{2}[._-]([a-zA-Z0-9]+)[._-]([a-zA-Z0-9]+)(?:[._-](.+))?$/i', $rawCode, $actm)) {
+                        $actorNameStr = "{$actm[1]} {$actm[2]}";
+                        if (!empty($actm[3])) {
+                            $titleNameStr = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $actm[3]));
+                        }
+                    } elseif (!empty($codeActorWord ?? null)) {
+                        $actorNameStr = trim(explode(' ', $codeActorWord)[0]);
+                    }
+
+                    if (empty($titleNameStr)) {
+                        $rawVn = (string) ($video->name ?: $video->slug);
+                        if (!empty($rawVn)) {
+                            $titleNameStr = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $rawVn));
+                        }
+                    }
+
+                    if (!empty($cleanChannel) && !empty($actorNameStr)) {
+                        // 1) 厂牌 + 前一天日期 + 演员 + 原片片名 (排在纯演员前面)
+                        if (!empty($titleNameStr)) {
+                            $chPrevDateTitleWord = "{$cleanChannel} {$prevNumericDate} {$actorNameStr} {$titleNameStr}";
+                            if (!in_array($chPrevDateTitleWord, $words)) {
+                                $words[] = $chPrevDateTitleWord;
+                            }
+                        }
+
+                        // 2) 厂牌 + 前一天日期 + 演员
+                        $chPrevDateWord = "{$cleanChannel} {$prevNumericDate} {$actorNameStr}";
+                        if (!in_array($chPrevDateWord, $words)) {
+                            $words[] = $chPrevDateWord;
+                        }
+                    }
 
                     if (!empty($codeActorWord ?? null)) {
                         $prevActorWord = str_replace($datePart, $prevDatePart, $codeActorWord);

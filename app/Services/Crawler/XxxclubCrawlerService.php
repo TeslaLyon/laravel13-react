@@ -313,12 +313,38 @@ class XxxclubCrawlerService
                     $keywords[] = "{$channel}.{$origDate}";
                     $keywords[] = "{$channel}.{$prevDate}";
 
-                    // 厂牌 + 女演员 (如 Deeper.Violet.Voss)
+                    // 提取女演员名与片名部分（空格分隔）
                     $afterTokens = array_values(array_filter(explode('.', $afterDate), fn($t) => strlen($t) >= 2));
+                    $actorSpace = '';
+                    $titleSpace = '';
                     if (count($afterTokens) >= 2) {
-                        $keywords[] = "{$channel}.{$afterTokens[0]}.{$afterTokens[1]}";
+                        $actorSpace = "{$afterTokens[0]} {$afterTokens[1]}";
+                        if (count($afterTokens) > 2) {
+                            $titleSpace = implode(' ', array_slice($afterTokens, 2));
+                        }
                     } elseif (count($afterTokens) === 1) {
-                        $keywords[] = "{$channel}.{$afterTokens[0]}";
+                        $actorSpace = "{$afterTokens[0]}";
+                    }
+
+                    // 如果从 video_code 未能截取出标题部分，但原片有 name/slug，则补充使用
+                    if (empty($titleSpace)) {
+                        $rawVideoName = (string) ($video->name ?: $video->slug);
+                        if (!empty($rawVideoName)) {
+                            $titleSpace = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $rawVideoName));
+                        }
+                    }
+
+                    if (!empty($actorSpace)) {
+                        // 1) 厂牌 + 前一天日期 + 女演员名 + 原片片名（空格分隔，如 Blacked 26.10.05 Jessi Rae Some Title）
+                        if (!empty($titleSpace)) {
+                            $keywords[] = $this->limitKeywordWords("{$channel} {$prevDate} {$actorSpace} {$titleSpace}", 10);
+                        }
+
+                        // 2) 厂牌 + 前一天日期 + 主要女演员（空格分隔，如 Blacked 26.10.05 Jessi Rae）
+                        $keywords[] = "{$channel} {$prevDate} {$actorSpace}";
+
+                        // 3) 厂牌 + 主要女演员（空格分隔，如 Blacked Jessi Rae）
+                        $keywords[] = "{$channel} {$actorSpace}";
                     }
                 }
             }
@@ -372,16 +398,17 @@ class XxxclubCrawlerService
     }
 
     /**
-     * 限制关键词最大词数（xxxclub 最多支持 10 个有效词）
+     * 限制关键词最大词数（xxxclub 最多支持 10 个有效词，支持空格或点号分隔）
      */
     protected function limitKeywordWords(string $keyword, int $maxWords = 10): string
     {
-        $words = array_values(array_filter(explode('.', $keyword), fn($w) => strlen(trim($w)) > 0));
+        $delimiter = str_contains($keyword, ' ') ? ' ' : '.';
+        $words = array_values(array_filter(explode($delimiter, $keyword), fn($w) => strlen(trim($w)) > 0));
         if (count($words) <= $maxWords) {
-            return implode('.', $words);
+            return implode($delimiter, $words);
         }
 
-        return implode('.', array_slice($words, 0, $maxWords));
+        return implode($delimiter, array_slice($words, 0, $maxWords));
     }
 
     /**
