@@ -319,39 +319,46 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                                         )}
                                                     </span>
                                                 )}
-                                                {mainTitle}
+                                                <span>{mainTitle}</span>
+                                                <VideoCorrectionDialog
+                                                    video={video}
+                                                    type="name_zh"
+                                                    trigger={
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="inline-flex h-7 w-7 text-muted-foreground/70 hover:text-primary transition-colors align-middle ml-1.5 -mt-0.5 rounded-full"
+                                                            title={hasValidNameZh ? "补充或修正中文片名" : "补充中文片名"}
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    }
+                                                />
                                             </h1>
                                         );
                                     })()}
 
-                                    {/* 原片名及修正按钮布局 */}
-                                    <div className="flex items-center gap-2">
-                                        {video?.name_zh ? (
-                                            <span className="text-sm sm:text-base font-mono text-muted-foreground/80 break-all select-all">
-                                                {video.name}
-                                            </span>
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground/60 italic">
-                                                暂无中文译名
-                                            </span>
-                                        )}
+                                    {/* 原片名展示区域 */}
+                                    {(() => {
+                                        const hasValidNameZh = Boolean(video?.name_zh && video.name_zh.trim());
+                                        if (hasValidNameZh) {
+                                            return (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs sm:text-sm font-mono text-muted-foreground/80 break-all select-all" title="原英文/官方片名">
+                                                        {video?.name}
+                                                    </span>
+                                                </div>
+                                            );
+                                        }
 
-                                        {/* 修正按钮 - 始终展示 */}
-                                        <VideoCorrectionDialog
-                                            video={video}
-                                            type="name_zh"
-                                            trigger={
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6 text-muted-foreground hover:text-primary transition-colors shrink-0"
-                                                    title="补充或修正中文名"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </Button>
-                                            }
-                                        />
-                                    </div>
+                                        return (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs sm:text-sm text-muted-foreground/60 italic">
+                                                    暂无中文译名
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </Deferred>
                         </div>
