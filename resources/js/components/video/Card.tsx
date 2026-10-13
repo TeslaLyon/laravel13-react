@@ -74,8 +74,11 @@ export function VideoCard({ video }: { video: Video }) {
 
                 <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-base font-semibold leading-tight line-clamp-2 text-primary hover:text-red-500 transition-colors pt-1.5">
-                            {video.name}
+                        <h3
+                            className="text-base font-semibold leading-tight line-clamp-2 text-primary hover:text-red-500 transition-colors pt-1.5"
+                            title={hasValidNameZh ? video.name_zh : video.name}
+                        >
+                            {hasValidNameZh ? video.name_zh : video.name}
                         </h3>
 
                         <div className="shrink-0 -mt-1 -mr-2 transition-opacity p-1 hover:bg-muted-foreground/20 rounded-full">
@@ -84,8 +87,11 @@ export function VideoCard({ video }: { video: Video }) {
                     </div>
 
                     {hasValidNameZh && (
-                        <p className="text-sm font-semibold text-muted-foreground/85 line-clamp-1 mt-1 hover:text-red-500 transition-colors truncate" title={video.name_zh}>
-                            {video.name_zh}
+                        <p
+                            className="text-xs font-mono text-muted-foreground/80 line-clamp-1 mt-1 hover:text-muted-foreground transition-colors truncate"
+                            title={video.name}
+                        >
+                            {video.name}
                         </p>
                     )}
 
