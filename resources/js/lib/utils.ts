@@ -2,6 +2,12 @@ import type { InertiaLinkProps } from '@inertiajs/react';
 import { clsx } from 'clsx';
 import type { ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import 'dayjs/locale/zh-cn';
+
+dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -154,4 +160,26 @@ export function cdnUrl(path?: string | null): string {
     const cleanPath = path.replace(/^\//, '');
 
     return cdnBase ? `${cdnBase}/${cleanPath}` : `/${cleanPath}`;
+}
+
+/**
+ * 格式化视频卡片发布日期：
+ * - 如果在未来：展示“几天内发布”、“几小时内发布”等
+ * - 如果在过去：展示相对时间“3天前”、“2小时前”等
+ */
+export function formatVideoPublishTime(dateStr?: string | null): string {
+    if (!dateStr) return '';
+    const target = dayjs(dateStr);
+    if (!target.isValid()) return '';
+
+    const now = dayjs();
+    if (target.isAfter(now)) {
+        const fromNowStr = target.fromNow().replace(/\s+/g, '');
+        if (fromNowStr.endsWith('内')) {
+            return `${fromNowStr}发布`;
+        }
+        return `${fromNowStr}内发布`;
+    }
+
+    return target.fromNow().replace(/\s+/g, '');
 }

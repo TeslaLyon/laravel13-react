@@ -1,17 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Video } from "@/types/video";
 import { VideoMenu } from "@/components/video/Menu";
-import { getCardHoverColor, formatChineseUnit } from "@/lib/utils";
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/zh-cn'
+import { getCardHoverColor, formatChineseUnit, formatVideoPublishTime } from "@/lib/utils";
 
 import { ResponsiveVideoImage } from '@/components/video/ResponsiveVideoImage';
 import { CountryFlag } from "@/components/CountryFlag";
 import { Download } from "lucide-react";
-
-dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
 
 export function VideoCard({ video }: { video: Video }) {
     const hoverBgStyle = getCardHoverColor(video.id);
@@ -101,7 +95,7 @@ export function VideoCard({ video }: { video: Video }) {
                         </p>
                     )}
                     <p className="text-sm text-muted-foreground truncate">
-                        {formatChineseUnit(video.views_count)}次观看 • {dayjs(video.release_at || video.created_at).fromNow()}
+                        {formatChineseUnit(video.views_count)}次观看 • {formatVideoPublishTime(video.release_at || video.created_at)}
                     </p>
                 </div>
             </div>
