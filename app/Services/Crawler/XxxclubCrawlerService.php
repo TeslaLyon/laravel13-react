@@ -198,6 +198,70 @@ class XxxclubCrawlerService
     }
 
     /**
+     * 获取所有当前正处于冷静期中的视频列表（含剩余冷静时间 TTL）
+     * @return array<int, array{id: int, ttl_seconds: int, ttl_formatted: string, video: ?Video}>
+     */
+    public function getCoolingDownVideos(): array
+    {
+        $items = [];
+        try {
+            if (class_exists(Redis::class)) {
+                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                if (!empty($keys)) {
+                    foreach ($keys as $k) {
+                        if (preg_match('/crawler:xxxclub:cooldown:(\d+)$/', $k, $m)) {
+                            $vid = (int) $m[1];
+                            $ttl = (int) Redis::ttl($k);
+                            $items[$vid] = [
+                                'id'            => $vid,
+                                'ttl_seconds'   => $ttl,
+                                'ttl_formatted' => $this->formatTtl($ttl),
+                            ];
+                        }
+                    }
+                }
+            }
+        } catch (Throwable) {}
+
+        if (empty($items)) {
+            return [];
+        }
+
+        // 关联查询对应的视频元数据
+        $videoIds = array_keys($items);
+        $videos = Video::with('channel')->whereIn('id', $videoIds)->get()->keyBy('id');
+
+        foreach ($items as $vid => &$data) {
+            $data['video'] = $videos->get($vid);
+        }
+
+        // 按剩余 TTL 从大到小排序
+        uasort($items, fn($a, $b) => $b['ttl_seconds'] <=> $a['ttl_seconds']);
+
+        return array_values($items);
+    }
+
+    /**
+     * 将 TTL 秒数格式化为人类易读的“X天X小时X分”
+     */
+    public function formatTtl(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return '已过期';
+        }
+        $days = intdiv($seconds, 86400);
+        $hours = intdiv($seconds % 86400, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+
+        $parts = [];
+        if ($days > 0) $parts[] = "{$days}天";
+        if ($hours > 0) $parts[] = "{$hours}小时";
+        if ($minutes > 0 || empty($parts)) $parts[] = "{$minutes}分钟";
+
+        return implode('', $parts);
+    }
+
+    /**
      * 根据视频元数据智能构建用于 xxxclub 的精确搜索关键词
      * xxxclub 最多取前 10 个词，以点号（.）分隔
      */

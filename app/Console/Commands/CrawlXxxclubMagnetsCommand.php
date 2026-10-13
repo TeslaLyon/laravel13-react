@@ -29,6 +29,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
                             {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
                             {--clear-cooldown : 一键清空所有已记录的冷却期标记，使其立即重新具备候选资格}
+                            {--clear-cooldown-id= : 清除指定视频ID的冷静期标记 (例如 --clear-cooldown-id=102)}
+                            {--list-cooldown : 查看当前所有正处于冷静期中的视频列表及剩余冷静时间}
                             {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--force : 强制覆盖更新已存在的下载项}
@@ -45,6 +47,18 @@ class CrawlXxxclubMagnetsCommand extends Command
     public function handle(XxxclubCrawlerService $crawlerService, CiligouCrawlerService $ciligouService): int
     {
         $startTime = microtime(true);
+
+        // 快捷选项：查看冷静期列表
+        if ((bool) $this->option('list-cooldown')) {
+            return $this->handleListCooldown($crawlerService);
+        }
+
+        // 快捷选项：单独清除某部视频的冷静期
+        $clearCooldownId = $this->option('clear-cooldown-id') ? (int) $this->option('clear-cooldown-id') : null;
+        if ($clearCooldownId) {
+            $crawlerService->clearCoolingDown($clearCooldownId);
+            $this->info("🧹 已成功清除视频 ID: [{$clearCooldownId}] 的冷静期标记！该视频已可重新参与抓取。");
+        }
 
         $limit = max(0, (int) $this->option('limit'));
         $videoId = $this->option('video-id') ? (int) $this->option('video-id') : null;
@@ -547,5 +561,53 @@ class CrawlXxxclubMagnetsCommand extends Command
         $remMinutes = $minutes % 60;
 
         return "{$hours} 小时 {$remMinutes} 分 {$remSeconds} 秒";
+    }
+
+    /**
+     * 处理 --list-cooldown 选项：格式化列出当前所有正处于冷静期中的视频及剩余时间
+     */
+    protected function handleListCooldown(XxxclubCrawlerService $crawlerService): int
+    {
+        $this->info("🔍 正在检索当前所有处于冷静期中的视频标记...");
+
+        $items = $crawlerService->getCoolingDownVideos();
+
+        if (empty($items)) {
+            $this->info("🎉 当前没有任何处于冷静期中的视频！");
+            return self::SUCCESS;
+        }
+
+        $total = count($items);
+        $this->info("❄️  当前共有 <fg=cyan>{$total}</> 部视频处于冷静期中：");
+
+        $rows = [];
+        foreach ($items as $idx => $item) {
+            $video = $item['video'];
+            $code = $video ? ($video->video_code ?: ($video->name ?: "ID:{$item['id']}")) : "未知视频 [ID:{$item['id']}]";
+            $channel = $video && $video->channel ? $video->channel->name : '-';
+            $release = $video && $video->release_at ? Carbon::parse($video->release_at)->format('Y-m-d') : '-';
+
+            $rows[] = [
+                $item['id'],
+                $code,
+                $channel,
+                $release,
+                $item['ttl_formatted'],
+            ];
+        }
+
+        $this->table(
+            ['视频 ID', '视频 Code / 标题', '所属厂牌', '上映日期', '剩余冷静时间'],
+            $rows
+        );
+
+        $this->newLine();
+        $this->line("💡 <fg=yellow>快捷操作提示：</>");
+        $this->line(" 1. 对指定视频立即重试抓取: <fg=cyan>php artisan video:crawl-xxxclub-magnets --video-id={ID}</>");
+        $this->line(" 2. 单独解除某个视频的冷静期: <fg=cyan>php artisan video:crawl-xxxclub-magnets --clear-cooldown-id={ID}</>");
+        $this->line(" 3. 忽略冷静期全量重新扫描:   <fg=cyan>php artisan video:crawl-xxxclub-magnets --ignore-cooldown --limit=50</>");
+        $this->line(" 4. 一键清空所有视频的冷静期:   <fg=cyan>php artisan video:crawl-xxxclub-magnets --clear-cooldown</>");
+
+        return self::SUCCESS;
     }
 }
