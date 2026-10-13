@@ -20,7 +20,9 @@ class CrawlThePornDBTagsCommand extends Command
                             {--limit= : 每页处理视频上限数量（默认全部）}
                             {--delay=2 : 抓取详情页间隔秒数，防触发频繁风控（默认 2 秒）}
                             {--skip-tagged : 如果本地视频已有标签，则跳过详情页抓取，大幅提高同步效率}
-                            {--dry-run : 演练模式，仅打印解析与匹配结果，不写入数据库}';
+                            {--dry-run : 演练模式，仅打印解析与匹配结果，不写入数据库}
+                            {--file= : 指定本地列表页 HTML 文件（如 site-list.html）进行离线测试}
+                            {--detail-file= : 指定本地详情页 HTML 文件（如 detail.html）进行离线测试}';
 
     /**
      * 控制台命令描述
@@ -49,14 +51,34 @@ class CrawlThePornDBTagsCommand extends Command
         $delay = max(0, (int) ($this->option('delay') ?? 2));
         $skipTagged = (bool) $this->option('skip-tagged');
         $dryRun = (bool) $this->option('dry-run');
+        $localFilePath = $this->option('file');
+        $localDetailFilePath = $this->option('detail-file');
 
         // 关闭数据库查询日志，防止大规模跑批内存溢出
         DB::disableQueryLog();
 
+        // 注入详细步骤日志回调，实时输出至终端控制台
+        $service->setLogger(function (string $message, string $level = 'info') {
+            match ($level) {
+                'error'   => $this->error("  {$message}"),
+                'warn'    => $this->warn("  {$message}"),
+                'comment' => $this->comment("  {$message}"),
+                'line'    => $this->line("  {$message}"),
+                default   => $this->info("  {$message}"),
+            };
+        });
+
         $this->info("==================================================");
         $this->info("🚀 开始启动 ThePornDB 标签同步任务");
         $this->line("🎯 目标厂牌: <comment>{$siteSlug}</comment>");
-        $this->line("📄 起始页码: <comment>{$startPage}</comment>" . ($crawlAll ? " (自动抓取至最后一页)" : " (仅抓取当前页)"));
+        if ($localFilePath) {
+            $this->line("📁 本地列表文件: <info>{$localFilePath}</info>");
+        } else {
+            $this->line("📄 起始页码: <comment>{$startPage}</comment>" . ($crawlAll ? " (自动抓取至最后一页)" : " (仅抓取当前页)"));
+        }
+        if ($localDetailFilePath) {
+            $this->line("📁 本地详情文件: <info>{$localDetailFilePath}</info>");
+        }
         $this->line("⏱️ 详情间隔: <comment>{$delay} 秒</comment>");
         $this->line("⏩ 跳过已打标: <comment>" . ($skipTagged ? '开启' : '关闭') . "</comment>");
         $this->line("🛡️ 运行模式: <comment>" . ($dryRun ? '演练模式 (Dry-Run)' : '正式入库') . "</comment>");
@@ -78,9 +100,23 @@ class CrawlThePornDBTagsCommand extends Command
             $this->newLine();
             $this->info("🔍 [第 {$currentPage} 页] 正在拉取厂牌列表...");
 
-            $listResult = $service->crawlSitePage($siteSlug, $currentPage);
+            $localHtml = null;
+            if ($localFilePath) {
+                if (!file_exists($localFilePath) && !file_exists(base_path($localFilePath))) {
+                    $this->error("❌ 本地列表文件不存在: {$localFilePath}");
+                    return Command::FAILURE;
+                }
+                $path = file_exists($localFilePath) ? $localFilePath : base_path($localFilePath);
+                $localHtml = file_get_contents($path);
+                $crawlAll = false; // 本地单文件测试无需翻页
+            }
+
+            $listResult = $service->crawlSitePage($siteSlug, $currentPage, $localHtml);
             if (!$listResult['success']) {
                 $this->error("❌ [第 {$currentPage} 页] " . ($listResult['message'] ?? '拉取失败'));
+                if (!empty($listResult['debug_info'])) {
+                    $this->warn("   ℹ️ 诊断信息: " . $listResult['debug_info']);
+                }
                 if (!$crawlAll) {
                     return Command::FAILURE;
                 }
@@ -124,15 +160,23 @@ class CrawlThePornDBTagsCommand extends Command
                     continue;
                 }
 
-                if (empty($sceneLink)) {
+                if (empty($sceneLink) && empty($localDetailFilePath)) {
                     $this->error("     ❌ 视频缺少详情页链接");
                     $stats['failed_scenes']++;
                     continue;
                 }
 
-                // 3. 抓取详情页
-                $this->line("     🌐 正在请求详情页: <comment>{$sceneLink}</comment>");
-                $sceneDetail = $service->crawlSceneDetail($sceneLink);
+                // 3. 抓取详情页（支持本地 detail.html 文件注入）
+                $localDetailHtml = null;
+                if ($localDetailFilePath) {
+                    $dPath = file_exists($localDetailFilePath) ? $localDetailFilePath : base_path($localDetailFilePath);
+                    if (file_exists($dPath)) {
+                        $localDetailHtml = file_get_contents($dPath);
+                    }
+                }
+
+                $this->line("     🌐 正在请求详情页: <comment>" . ($localDetailHtml ? "本地注入: {$localDetailFilePath}" : $sceneLink) . "</comment>");
+                $sceneDetail = $service->crawlSceneDetail($sceneLink ?: 'local', $localDetailHtml);
                 if (!$sceneDetail) {
                     $this->error("     ❌ 详情页解析失败，跳过");
                     $stats['failed_scenes']++;

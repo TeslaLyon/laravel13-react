@@ -15,6 +15,29 @@ class ThePornDBCrawlerService
 {
     protected array $readyFlareSolverrSessions = [];
     protected array $sessionRequestCounts = [];
+    public ?string $lastFetchDiagnosis = null;
+
+    /** @var callable|null */
+    protected $logger = null;
+
+    public function setLogger(?callable $logger): self
+    {
+        $this->logger = $logger;
+        return $this;
+    }
+
+    public function log(string $message, string $level = 'info'): void
+    {
+        if ($this->logger) {
+            ($this->logger)($message, $level);
+        }
+
+        match ($level) {
+            'error'   => Log::error("[ThePornDB] {$message}"),
+            'warn'    => Log::warning("[ThePornDB] {$message}"),
+            default   => Log::info("[ThePornDB] {$message}"),
+        };
+    }
 
     /**
      * 常见欧美成人标签中英对照字典（覆盖体位、动作、特征、场景等核心词汇）
@@ -164,31 +187,59 @@ class ThePornDBCrawlerService
      * @param int $page 页码
      * @return array
      */
-    public function crawlSitePage(string $siteSlug, int $page = 1): array
+    /**
+     * 爬取指定厂牌的视频列表页
+     *
+     * @param string $siteSlug 厂牌 slug（如 vixen, blacked, deeper, tushy, slayed 等）
+     * @param int $page 页码
+     * @param string|null $localHtml 可选：直接传入本地 HTML 内容进行离线测试
+     * @return array
+     */
+    public function crawlSitePage(string $siteSlug, int $page = 1, ?string $localHtml = null): array
     {
         $page = max(1, $page);
         $url = "https://theporndb.net/sites/{$siteSlug}";
         $params = $page > 1 ? ['page' => $page] : [];
 
-        $html = $this->fetchHtml($url, $params);
+        $html = $localHtml !== null ? $localHtml : $this->fetchHtml($url, $params);
         if (empty($html)) {
             return [
-                'success' => false,
-                'message' => "抓取厂牌 [{$siteSlug}] 第 {$page} 页失败，页面为空",
-                'site'    => $siteSlug,
-                'page'    => $page,
-                'scenes'  => [],
+                'success'    => false,
+                'message'    => "抓取厂牌 [{$siteSlug}] 第 {$page} 页失败：响应内容为空（可能网络超时或 FlareSolverr 未启动）",
+                'site'       => $siteSlug,
+                'page'       => $page,
+                'scenes'     => [],
+                'debug_info' => $this->lastFetchDiagnosis ?? '无响应内容',
             ];
         }
 
         $inertiaData = $this->extractInertiaData($html);
         if (!$inertiaData || empty($inertiaData['props']['scenes'])) {
+            // 深入诊断未命中原因
+            $pageTitle = '';
+            if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $tm)) {
+                $pageTitle = trim($tm[1]);
+            }
+            $isCf = str_contains($html, 'Just a moment...')
+                || str_contains($html, 'challenge-platform')
+                || str_contains($html, 'cf-browser-verification')
+                || str_contains($html, 'Attention Required!')
+                || str_contains($html, 'Turnstile')
+                || str_contains($html, 'Verify you are human');
+
+            $snippet = mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags($html))), 0, 160);
+
+            $reason = $isCf
+                ? "页面被 Cloudflare 5秒盾/人机质询拦截，尚未成功穿透 (标题: [{$pageTitle}])"
+                : "页面未找到 Inertia JSON 结构 (标题: [{$pageTitle}], 摘要: {$snippet})";
+
             return [
-                'success' => false,
-                'message' => "解析厂牌 [{$siteSlug}] 第 {$page} 页 Inertia JSON 数据为空或结构不符",
-                'site'    => $siteSlug,
-                'page'    => $page,
-                'scenes'  => [],
+                'success'    => false,
+                'message'    => "解析厂牌 [{$siteSlug}] 第 {$page} 页失败: {$reason}",
+                'debug_info' => "HTML 长度: " . strlen($html) . " 字节, 标题: [{$pageTitle}]",
+                'site'       => $siteSlug,
+                'page'       => $page,
+                'scenes'     => [],
             ];
         }
 
@@ -210,23 +261,29 @@ class ThePornDBCrawlerService
      * 抓取单部视频详情页
      *
      * @param string $sceneUrlOrSlug 详情页完整链接（https://theporndb.net/scenes/...）或 slug
+     * @param string|null $localDetailHtml 可选：直接传入本地详情页 HTML 内容进行离线测试
      * @return array|null 包含 scene 数据的数组，失败返回 null
      */
-    public function crawlSceneDetail(string $sceneUrlOrSlug): ?array
+    public function crawlSceneDetail(string $sceneUrlOrSlug, ?string $localDetailHtml = null): ?array
     {
-        $url = str_starts_with($sceneUrlOrSlug, 'http')
-            ? $sceneUrlOrSlug
-            : "https://theporndb.net/scenes/" . ltrim($sceneUrlOrSlug, '/');
+        if ($localDetailHtml !== null) {
+            $html = $localDetailHtml;
+        } else {
+            $url = str_starts_with($sceneUrlOrSlug, 'http')
+                ? $sceneUrlOrSlug
+                : "https://theporndb.net/scenes/" . ltrim($sceneUrlOrSlug, '/');
 
-        $html = $this->fetchHtml($url);
+            $html = $this->fetchHtml($url);
+        }
+
         if (empty($html)) {
-            Log::warning("[ThePornDB] 详情页抓取失败，内容为空: {$url}");
+            Log::warning("[ThePornDB] 详情页抓取失败，内容为空: {$sceneUrlOrSlug}");
             return null;
         }
 
         $inertiaData = $this->extractInertiaData($html);
         if (!$inertiaData || empty($inertiaData['props']['scene'])) {
-            Log::warning("[ThePornDB] 详情页未解析出 scene 数据: {$url}");
+            Log::warning("[ThePornDB] 详情页未解析出 scene 数据: {$sceneUrlOrSlug}");
             return null;
         }
 
@@ -442,12 +499,40 @@ class ThePornDBCrawlerService
      */
     public function extractInertiaData(string $html): ?array
     {
-        if (preg_match('/<script data-page="app" type="application\/json">(.*?)<\/script>/s', $html, $matches)) {
-            $json = json_decode($matches[1], true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
-                return $json;
+        $this->log("🔍 [解析] 正在从 HTML (长度 " . strlen($html) . " 字节) 匹配 Inertia 数据...", 'line');
+
+        // 兼容不同的属性顺序、引号与换行
+        $patterns = [
+            '/<script[^>]*data-page=["\']app["\'][^>]*>(.*?)<\/script>/s',
+            '/<script[^>]*id=["\']app["\'][^>]*data-page[^>]*>(.*?)<\/script>/s',
+            '/<script[^>]*type=["\']application\/json["\'][^>]*data-page[^>]*>(.*?)<\/script>/s',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $html, $matches)) {
+                $json = json_decode($matches[1], true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
+                    $component = $json['component'] ?? '未知组件';
+                    $hasScenes = !empty($json['props']['scenes']);
+                    $hasScene = !empty($json['props']['scene']);
+                    $this->log("✅ [解析] 成功解析 Inertia JSON! 组件: [{$component}], scenes: " . ($hasScenes ? '有' : '无') . ", scene: " . ($hasScene ? '有' : '无'), 'info');
+                    return $json;
+                } else {
+                    $this->log("⚠️  [解析] 命中 script 标签但 JSON 解码失败: " . json_last_error_msg(), 'warn');
+                }
             }
         }
+
+        // 提取标题与前置摘要便于排查
+        $pageTitle = '无标题';
+        if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $tm)) {
+            $pageTitle = trim($tm[1]);
+        }
+        $snippet = mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags($html))), 0, 150);
+        $this->log("❌ [解析] 未能找到任何 <script data-page=\"app\"> 标签！", 'warn');
+        $this->log("   📄 网页标题: [{$pageTitle}]", 'comment');
+        $this->log("   📝 网页摘要: [{$snippet}...]", 'comment');
+
         return null;
     }
 
@@ -459,9 +544,17 @@ class ThePornDBCrawlerService
         $flaresolverrUrl = config('services.flaresolverr.url', env('FLARESOLVERR_URL', 'http://flaresolverr:8191/v1'));
         $hostKey = 'theporndb.net';
 
+        $this->log("--------------------------------------------------", 'line');
+        $this->log("🌐 [请求] 开始请求目标: {$url}", 'line');
+        $this->log("⚙️  [配置] FlareSolverr URL: [{$flaresolverrUrl}]", 'line');
+
         try {
             $proxy = config('services.crawler.proxy');
             $customUserAgent = config('services.crawler.user_agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
+
+            if (!empty($proxy)) {
+                $this->log("🔌 [代理] 使用代理: [{$proxy}]", 'line');
+            }
 
             // 1. 读取配套的 User-Agent
             try {
@@ -487,8 +580,15 @@ class ThePornDBCrawlerService
             } catch (Throwable) {
             }
 
+            if (!empty($cookie)) {
+                $this->log("🍪 [Cookie] 命中 Redis 缓存 Cookie (" . substr($cookie, 0, 30) . "...)，尝试常规 HTTP 直连", 'line');
+            } else {
+                $this->log("🍪 [Cookie] Redis 中无缓存 Cookie", 'line');
+            }
+
             // 若完全无 Cookie，且有配置 FlareSolverr，直接唤醒 FlareSolverr 首次获取
             if (!empty($flaresolverrUrl) && empty($cookie)) {
+                $this->log("🛡️  [路由] 无可用 Cookie，直接调度 FlareSolverr 穿透 5 秒盾...", 'info');
                 return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
             }
 
@@ -511,6 +611,7 @@ class ThePornDBCrawlerService
                 $headers['cookie'] = $cookie;
             }
 
+            $this->log("🚀 [直连] 发起 HTTP GET 请求...", 'line');
             $request = Http::timeout(25)
                 ->retry(2, 1000, throw: false)
                 ->withHeaders($headers);
@@ -520,10 +621,22 @@ class ThePornDBCrawlerService
             }
 
             $response = $request->get($url, $params);
+            $statusCode = $response->status();
+            $body = $response->body();
+            $this->log("📥 [直连] 收到 HTTP 响应，状态码: [{$statusCode}], 内容长度: " . strlen($body) . " 字节", 'line');
 
             // 4. 判定是否遭遇 5 秒盾或未授权阻断
-            if ($response->status() === 403 || str_contains($response->body(), 'Just a moment...')) {
-                Log::warning("[ThePornDB] 命中 Cloudflare 5秒盾，切换至 FlareSolverr 穿透求解: {$url}");
+            $isCfBlocked = $statusCode === 403
+                || $statusCode === 503
+                || str_contains($body, 'Just a moment...')
+                || str_contains($body, 'challenge-platform')
+                || str_contains($body, 'cf-browser-verification')
+                || str_contains($body, 'Attention Required!')
+                || str_contains($body, 'Turnstile')
+                || str_contains($body, 'Verify you are human');
+
+            if ($isCfBlocked) {
+                $this->log("⚠️  [直连] 判定命中 Cloudflare 盾或 403 阻断！清除过期 Cookie，切换至 FlareSolverr 求解...", 'warn');
                 try {
                     Redis::del("crawler:cf_clearance:{$hostKey}");
                     Redis::del("crawler:cookie_str:{$hostKey}");
@@ -533,15 +646,18 @@ class ThePornDBCrawlerService
                     return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
                 }
 
+                $this->lastFetchDiagnosis = "命中 Cloudflare 盾 (HTTP {$statusCode})，但未配置或无法连接 FlareSolverr";
+                $this->log("❌ [直连] 未配置 FlareSolverr，无法穿透 5 秒盾！", 'error');
                 return '';
             }
 
-            return $response->successful() ? $response->body() : '';
+            return $response->successful() ? $body : '';
         } catch (Throwable $e) {
-            Log::warning("[ThePornDB] HTTP 直连异常，尝试切换至 FlareSolverr: " . $e->getMessage());
+            $this->log("❌ [直连] HTTP 请求异常: " . $e->getMessage() . "，尝试切换至 FlareSolverr...", 'warn');
             if (!empty($flaresolverrUrl)) {
                 return $this->fetchViaFlareSolverr($flaresolverrUrl, $url, $params);
             }
+            $this->lastFetchDiagnosis = "请求异常: " . $e->getMessage();
             return '';
         }
     }
@@ -562,19 +678,20 @@ class ThePornDBCrawlerService
             $cleanUrl = rtrim($flaresolverrUrl, '/');
             $endpoint = str_ends_with($cleanUrl, '/v1') ? $cleanUrl : "{$cleanUrl}/v1";
 
+            $this->log("🤖 [FlareSolverr] 准备调用接口: {$endpoint}", 'line');
             $this->ensureFlareSolverrSession($endpoint, $sessionId);
 
             // 防 Chromium 标签页内存泄露：超过 15 次重置会话
             $this->sessionRequestCounts[$sessionId] = ($this->sessionRequestCounts[$sessionId] ?? 0) + 1;
             if ($this->sessionRequestCounts[$sessionId] > 15) {
-                Log::info("[ThePornDB] FlareSolverr 会话已请求 15 次，重置会话释放内存...");
+                $this->log("🔄 [FlareSolverr] 会话已连续请求 15 次，重置会话以释放 Chromium 内存...", 'line');
                 $this->destroyFlareSolverrSession($endpoint, $sessionId);
                 $this->ensureFlareSolverrSession($endpoint, $sessionId);
                 $this->sessionRequestCounts[$sessionId] = 1;
             }
 
             $startTime = microtime(true);
-            Log::info("[ThePornDB] FlareSolverr 穿透请求: {$url}");
+            $this->log("⏳ [FlareSolverr] 提交 request.get 任务 [会话: {$sessionId}]，等待浏览器穿透 Cloudflare (最多60s)...", 'comment');
 
             $postData = [
                 'cmd'        => 'request.get',
@@ -601,7 +718,7 @@ class ThePornDBCrawlerService
             );
 
             if ($needsRecreate) {
-                Log::warning("[ThePornDB] 会话异常，重新建立并重试: {$errMsg}");
+                $this->log("⚠️  [FlareSolverr] 会话异常 ({$errMsg})，重新建立会话并重试...", 'warn');
                 $this->destroyFlareSolverrSession($endpoint, $sessionId);
                 $this->ensureFlareSolverrSession($endpoint, $sessionId);
 
@@ -609,12 +726,20 @@ class ThePornDBCrawlerService
                 $data = $response->json() ?? [];
             }
 
+            $elapsed = round(microtime(true) - $startTime, 2);
+
             if (($data['status'] ?? '') === 'ok' && !empty($data['solution']['response'])) {
-                $elapsed = round(microtime(true) - $startTime, 2);
-                Log::info("[ThePornDB] FlareSolverr 穿透成功 (耗时 {$elapsed}s)！");
+                $respHtml = $data['solution']['response'];
+                $this->log("🎉 [FlareSolverr] 穿透成功！耗时: {$elapsed}s，响应 HTML: " . strlen($respHtml) . " 字节", 'info');
+
+                // 检查返回内容是否依然停留在 5 秒盾页面
+                if (str_contains($respHtml, 'Just a moment...') || str_contains($respHtml, 'challenge-platform')) {
+                    $this->log("⚠️  [FlareSolverr] 警告：FlareSolverr 返回的 HTML 仍包含 Cloudflare 质询内容（未完全通过），页面可能需要人工验证！", 'warn');
+                }
 
                 // 缓存真实 UA
                 if (!empty($data['solution']['userAgent'])) {
+                    $this->log("👤 [FlareSolverr] 捕获浏览器 User-Agent: " . substr($data['solution']['userAgent'], 0, 45) . "...", 'line');
                     try {
                         Redis::setex('crawler:user_agent', 86400, $data['solution']['userAgent']);
                     } catch (Throwable) {}
@@ -623,16 +748,20 @@ class ThePornDBCrawlerService
                 // 提取并缓存 Cookie
                 if (!empty($data['solution']['cookies'])) {
                     $cookiePairs = [];
+                    $gotCfClearance = false;
                     foreach ($data['solution']['cookies'] as $c) {
                         if (!empty($c['name']) && isset($c['value'])) {
                             $cookiePairs[] = "{$c['name']}={$c['value']}";
                             if ($c['name'] === 'cf_clearance') {
+                                $gotCfClearance = true;
                                 try {
                                     Redis::setex("crawler:cf_clearance:{$hostKey}", 7200, $c['value']);
                                 } catch (Throwable) {}
                             }
                         }
                     }
+                    $this->log("🍪 [FlareSolverr] 获取到 Cookies: " . count($cookiePairs) . " 个, cf_clearance: " . ($gotCfClearance ? '已获取✅' : '未找到❌'), 'line');
+
                     if (!empty($cookiePairs)) {
                         try {
                             Redis::setex("crawler:cookie_str:{$hostKey}", 7200, implode('; ', $cookiePairs));
@@ -640,13 +769,16 @@ class ThePornDBCrawlerService
                     }
                 }
 
-                return $data['solution']['response'];
+                return $respHtml;
             }
 
-            Log::error("[ThePornDB] FlareSolverr 求解失败: " . $response->body());
+            $errOutput = $data['message'] ?? $response->body();
+            $this->log("❌ [FlareSolverr] 求解失败 (耗时 {$elapsed}s): {$errOutput}", 'error');
+            $this->lastFetchDiagnosis = "FlareSolverr 求解失败: {$errOutput}";
             return '';
         } catch (Throwable $e) {
-            Log::error("[ThePornDB] FlareSolverr 请求异常: " . $e->getMessage());
+            $this->log("❌ [FlareSolverr] 请求过程抛出异常: " . $e->getMessage(), 'error');
+            $this->lastFetchDiagnosis = "FlareSolverr 异常: " . $e->getMessage();
             return '';
         }
     }
@@ -661,6 +793,7 @@ class ThePornDBCrawlerService
         }
 
         try {
+            $this->log("📡 [FlareSolverr] 检查/创建会话 [{$sessionId}]...", 'line');
             $postData = [
                 'cmd'     => 'sessions.create',
                 'session' => $sessionId,
@@ -675,10 +808,13 @@ class ThePornDBCrawlerService
                 $data = $response->json();
                 if (($data['status'] ?? '') === 'ok' || str_contains($data['message'] ?? '', 'already exists')) {
                     $this->readyFlareSolverrSessions[$sessionId] = true;
+                    $this->log("✅ [FlareSolverr] 会话 [{$sessionId}] 准备完毕", 'line');
+                    return;
                 }
             }
+            $this->log("⚠️  [FlareSolverr] 会话创建返回非成功状态: " . $response->body(), 'warn');
         } catch (Throwable $e) {
-            Log::warning("[ThePornDB] 会话 [{$sessionId}] 初始化异常: " . $e->getMessage());
+            $this->log("❌ [FlareSolverr] 连接 FlareSolverr 失败: " . $e->getMessage() . " (请检查 FLARESOLVERR_URL 是否可通)", 'error');
         }
     }
 
