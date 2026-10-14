@@ -83,7 +83,7 @@ class DorcelCrawlerService
                 'slug'                 => self::CHANNEL_SLUG,
                 'data_crawl_type'      => 1,
                 'avatar'               => '/images/channels/dorcelclub-avatar.avif',
-                'logo'                 => '/images/channels/dorcelclub-logo.jpg',
+                'logo'                 => '/images/channels/dorcelclub-logo.avif',
                 'official_website_url' => self::BASE_URL,
             ]
         );
@@ -96,8 +96,8 @@ class DorcelCrawlerService
         if (empty($this->channel->avatar) || $this->channel->avatar !== '/images/channels/dorcelclub-avatar.avif') {
             $updates['avatar'] = '/images/channels/dorcelclub-avatar.avif';
         }
-        if (empty($this->channel->logo) || $this->channel->logo !== '/images/channels/dorcelclub-logo.jpg') {
-            $updates['logo'] = '/images/channels/dorcelclub-logo.jpg';
+        if (empty($this->channel->logo) || $this->channel->logo !== '/images/channels/dorcelclub-logo.avif') {
+            $updates['logo'] = '/images/channels/dorcelclub-logo.avif';
         }
         if (!empty($updates)) {
             $this->channel->update($updates);
