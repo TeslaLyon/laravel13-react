@@ -86,7 +86,11 @@ class CrawlThePornDBTagsCommand extends Command
 
         $authUser = null;
         try {
-            $authUser = \Illuminate\Support\Facades\Redis::get('crawler:tpdb_auth_user');
+            $isAuth = \Illuminate\Support\Facades\Redis::get('crawler:tpdb_authenticated');
+            $cachedCookie = \Illuminate\Support\Facades\Redis::get('crawler:cookie_str:theporndb.net');
+            if ($isAuth && !empty($cachedCookie)) {
+                $authUser = \Illuminate\Support\Facades\Redis::get('crawler:tpdb_auth_user');
+            }
         } catch (\Throwable) {}
 
         $this->info("==================================================");

@@ -227,10 +227,7 @@ class ThePornDBCrawlerService
             }
 
             // 2. 深入诊断未命中原因
-            $isCf = str_contains($html, 'Just a moment...')
-                || str_contains($html, 'cf-browser-verification')
-                || str_contains($html, 'Attention Required!')
-                || str_contains($html, 'Verify you are human');
+            $isCf = $this->isCloudflareBlocked(200, $html);
 
             $snippet = mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags($html))), 0, 160);
 
@@ -642,6 +639,50 @@ class ThePornDBCrawlerService
     }
 
     /**
+     * 精准判断响应是否真正遭遇 Cloudflare 5秒盾或人机质询阻断
+     *
+     * 避免因现代网站在正常页面中嵌入 /cdn-cgi/challenge-platform/ 脚本或 Turnstile 样式而造成的假阳性误判。
+     *
+     * @param int $statusCode HTTP 状态码
+     * @param string $body 响应 HTML 内容
+     * @return bool
+     */
+    public function isCloudflareBlocked(int $statusCode, string $body): bool
+    {
+        // 1. 如果状态码为 200，且已成功包含 Inertia 结构或正常单页应用标志，绝非阻断
+        if ($statusCode === 200) {
+            $hasInertia = str_contains($body, 'data-page=') || str_contains($body, 'id="app"');
+            if ($hasInertia) {
+                // 仅当标题明确是 Cloudflare 质询拦截时才算拦截
+                $isCfTitle = str_contains($body, '<title>Just a moment...</title>')
+                    || str_contains($body, '<title>Attention Required! | Cloudflare</title>');
+                if (!$isCfTitle && !str_contains($body, 'id="challenge-running"')) {
+                    return false;
+                }
+            }
+        }
+
+        // 2. 典型 Cloudflare 拦截特征：403 或 503 状态码
+        if ($statusCode === 403 || $statusCode === 503) {
+            return true;
+        }
+
+        // 3. 页面标题或特定质询 DOM 容器（注意：绝不能仅凭 /challenge-platform/ 或 Turnstile 脚本路径误判）
+        if (str_contains($body, '<title>Just a moment...</title>')
+            || str_contains($body, '<title>Attention Required! | Cloudflare</title>')
+            || str_contains($body, 'id="challenge-running"')
+            || str_contains($body, 'id="challenge-stage"')
+            || str_contains($body, 'id="cf-please-wait"')
+            || (str_contains($body, 'cf-browser-verification') && !str_contains($body, 'data-page='))
+            || (str_contains($body, 'Verify you are human') && !str_contains($body, 'data-page='))
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * 自动登录 ThePornDB 并将登录凭证持久化到 Redis (默认 30 天)
      *
      * @param string|null $email 账号邮箱（留空读取配置/环境变量）
@@ -1039,20 +1080,15 @@ class ThePornDBCrawlerService
                 $this->log("📥 [直连] 收到 HTTP 响应，状态码: [{$statusCode}], 内容长度: " . strlen($body) . " 字节", 'line');
 
                 // 4. 判定是否遭遇 5 秒盾或未授权阻断
-                $isCfBlocked = $statusCode === 403
-                    || $statusCode === 503
-                    || str_contains($body, 'Just a moment...')
-                    || str_contains($body, 'challenge-platform')
-                    || str_contains($body, 'cf-browser-verification')
-                    || str_contains($body, 'Attention Required!')
-                    || str_contains($body, 'Turnstile')
-                    || str_contains($body, 'Verify you are human');
+                $isCfBlocked = $this->isCloudflareBlocked($statusCode, $body);
 
                 if ($isCfBlocked) {
-                    $this->log("⚠️  [直连] 判定命中 Cloudflare 盾或 403 阻断！清除过期 Cookie，切换至 FlareSolverr 求解...", 'warn');
+                    $this->log("⚠️  [直连] 判定命中 Cloudflare 盾或 403 阻断 (HTTP {$statusCode})！清除过期凭证，切换至 FlareSolverr 求解...", 'warn');
                     try {
                         Redis::del("crawler:cf_clearance:{$hostKey}");
                         Redis::del("crawler:cookie_str:{$hostKey}");
+                        Redis::del("crawler:cookies_array:{$hostKey}");
+                        Redis::del("crawler:tpdb_authenticated");
                     } catch (Throwable) {}
 
                     if (!empty($flaresolverrUrl)) {
@@ -1168,7 +1204,8 @@ class ThePornDBCrawlerService
             $needsRecreate = ($status === 'error' || $response->serverError()) && (
                 str_contains($errMsg, 'session') ||
                 str_contains($errMsg, 'tab crashed') ||
-                str_contains($errMsg, 'chromedriver')
+                str_contains($errMsg, 'chromedriver') ||
+                str_contains($errMsg, 'timeout')
             );
 
             if ($needsRecreate) {
@@ -1187,7 +1224,7 @@ class ThePornDBCrawlerService
                 $this->log("🎉 [FlareSolverr] 穿透成功！耗时: {$elapsed}s，响应 HTML: " . strlen($respHtml) . " 字节", 'info');
 
                 // 检查返回内容是否依然停留在 5 秒盾页面
-                if (str_contains($respHtml, 'Just a moment...') || str_contains($respHtml, 'cf-browser-verification') || str_contains($respHtml, 'Attention Required!')) {
+                if ($this->isCloudflareBlocked(200, $respHtml)) {
                     $this->log("⚠️  [FlareSolverr] 警告：FlareSolverr 返回的 HTML 仍包含 Cloudflare 质询内容（未完全通过），页面可能需要人工验证！", 'warn');
                 }
 
@@ -1231,10 +1268,12 @@ class ThePornDBCrawlerService
             $errOutput = $data['message'] ?? $response->body();
             $this->log("❌ [FlareSolverr] 求解失败 (耗时 {$elapsed}s): {$errOutput}", 'error');
             $this->lastFetchDiagnosis = "FlareSolverr 求解失败: {$errOutput}";
+            $this->destroyFlareSolverrSession($endpoint, $sessionId);
             return '';
         } catch (Throwable $e) {
             $this->log("❌ [FlareSolverr] 请求过程抛出异常: " . $e->getMessage(), 'error');
             $this->lastFetchDiagnosis = "FlareSolverr 异常: " . $e->getMessage();
+            $this->destroyFlareSolverrSession($endpoint, $sessionId);
             return '';
         }
     }
