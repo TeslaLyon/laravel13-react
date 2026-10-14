@@ -228,10 +228,8 @@ class ThePornDBCrawlerService
 
             // 2. 深入诊断未命中原因
             $isCf = str_contains($html, 'Just a moment...')
-                || str_contains($html, 'challenge-platform')
                 || str_contains($html, 'cf-browser-verification')
                 || str_contains($html, 'Attention Required!')
-                || str_contains($html, 'Turnstile')
                 || str_contains($html, 'Verify you are human');
 
             $snippet = mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags($html))), 0, 160);
@@ -294,7 +292,53 @@ class ThePornDBCrawlerService
             return null;
         }
 
-        return $inertiaData['props']['scene'];
+        $scene = $inertiaData['props']['scene'];
+        $scene['combined_tags'] = $this->extractCombinedTags($scene);
+
+        return $scene;
+    }
+
+    /**
+     * 将详情页数据中的 tags 与 markers 融合为统一的标签列表（自动按名称去重）
+     *
+     * @param array $sceneDetail TPDB scene 节点
+     * @return array 融合后的标签对象/名称数组
+     */
+    public function extractCombinedTags(array $sceneDetail): array
+    {
+        $tags = [];
+        $seen = [];
+
+        // 1. 融合 tags 字段 (通常每项包含 name)
+        foreach ($sceneDetail['tags'] ?? [] as $tag) {
+            $name = is_array($tag) ? ($tag['name'] ?? $tag['title'] ?? '') : (string) $tag;
+            $name = trim($name);
+            $key = strtolower($name);
+            if (!empty($name) && !isset($seen[$key])) {
+                $seen[$key] = true;
+                $tags[] = [
+                    'name'        => $name,
+                    'source'      => 'tag',
+                    'description' => is_array($tag) ? ($tag['description'] ?? null) : null,
+                ];
+            }
+        }
+
+        // 2. 融合 markers 字段 (通常每项包含 title，代表视频各时段具体动作/体位)
+        foreach ($sceneDetail['markers'] ?? [] as $marker) {
+            $name = is_array($marker) ? ($marker['title'] ?? $marker['name'] ?? '') : (string) $marker;
+            $name = trim($name);
+            $key = strtolower($name);
+            if (!empty($name) && !isset($seen[$key])) {
+                $seen[$key] = true;
+                $tags[] = [
+                    'name'   => $name,
+                    'source' => 'marker',
+                ];
+            }
+        }
+
+        return $tags;
     }
 
     /**
@@ -370,10 +414,10 @@ class ThePornDBCrawlerService
     }
 
     /**
-     * 将从 TPDB 抓取到的标签同步给指定的本地视频
+     * 将从 TPDB 抓取到的标签同步给指定的本地视频 (支持 tags 与 markers 融合数据)
      *
      * @param Video $video 本地视频模型
-     * @param array $tagsData TPDB 的 tags 数组，每项通常为 ['id' => 1, 'name' => 'Blowjob', ...]
+     * @param array $tagsData TPDB 的 tags/markers 数组，每项通常为 ['id' => 1, 'name' => 'Blowjob', ...] 或 ['title' => 'Pussy Licking', ...]
      * @param bool $dryRun 是否仅演练，不实际入库
      * @return array 同步结果与标签明细
      */
@@ -389,13 +433,20 @@ class ThePornDBCrawlerService
 
         $tagIds = [];
         $appliedTags = [];
+        $seen = [];
 
         foreach ($tagsData as $tagItem) {
-            $rawName = is_array($tagItem) ? ($tagItem['name'] ?? '') : (string) $tagItem;
+            $rawName = is_array($tagItem) ? ($tagItem['name'] ?? $tagItem['title'] ?? '') : (string) $tagItem;
             $rawName = trim($rawName);
             if (empty($rawName)) {
                 continue;
             }
+
+            $key = strtolower($rawName);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
 
             if ($dryRun) {
                 $nameZh = $this->resolveChineseName($rawName);
@@ -592,8 +643,8 @@ class ThePornDBCrawlerService
 
         $proxy = config('services.crawler.proxy');
 
-        // 步骤 1：访问 /login 获取初始 Cookie 与 CSRF 令牌
-        $this->log("📡 [登录] 步骤 1/2: 请求 https://theporndb.net/login 获取 CSRF 令牌与初始 Cookie...", 'line');
+        // 步骤 1：访问 /login 获取初始 Cookie 与 XSRF-TOKEN
+        $this->log("📡 [登录] 步骤 1/3: 请求 https://theporndb.net/login 获取 CSRF 令牌与初始 Cookie...", 'line');
         $getPayload = [
             'cmd'        => 'request.get',
             'url'        => 'https://theporndb.net/login',
@@ -606,98 +657,206 @@ class ThePornDBCrawlerService
 
         $loginHtml = '';
         $loginCookies = [];
+        $capturedUa = config('services.crawler.user_agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
         try {
             $response = Http::timeout(75)->post($endpoint, $getPayload);
             $getData = $response->json() ?? [];
             if (($getData['status'] ?? '') === 'ok') {
                 $loginHtml = $getData['solution']['response'] ?? '';
                 $loginCookies = $getData['solution']['cookies'] ?? [];
+                if (!empty($getData['solution']['userAgent'])) {
+                    $capturedUa = $getData['solution']['userAgent'];
+                }
             }
         } catch (Throwable $e) {
             $this->log("❌ [登录] 访问登录页失败: " . $e->getMessage(), 'error');
             return false;
         }
 
-        // 提取 CSRF Token
-        $csrfToken = null;
-        if (preg_match('/<meta\s+name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']/i', $loginHtml, $m)) {
-            $csrfToken = $m[1];
-        }
-        if (!$csrfToken && preg_match('/<input[^>]+name=["\']_token["\'][^>]+value=["\']([^"\']+)["\']/i', $loginHtml, $m)) {
-            $csrfToken = $m[1];
-        }
-        if (!$csrfToken && !empty($loginCookies)) {
-            foreach ($loginCookies as $c) {
-                if (($c['name'] ?? '') === 'XSRF-TOKEN' && !empty($c['value'])) {
-                    $csrfToken = urldecode($c['value']);
-                    break;
+        // 提取 XSRF-TOKEN 与 Cookie 字典
+        $xsrfTokenHeader = '';
+        $cookieMap = [];
+        foreach ($loginCookies as $c) {
+            if (!empty($c['name']) && isset($c['value'])) {
+                $cookieMap[$c['name']] = $c['value'];
+                if ($c['name'] === 'XSRF-TOKEN') {
+                    $xsrfTokenHeader = urldecode($c['value']);
                 }
             }
         }
 
-        $this->log("🔑 [登录] CSRF 令牌: " . ($csrfToken ? '已提取✅' : '未在 HTML 中显式找到(依赖 Cookie 会话)'), 'line');
+        $this->log("🔑 [登录] XSRF 令牌: " . ($xsrfTokenHeader ? '已提取✅' : '未在 Cookie 中找到⚠️'), 'line');
 
-        // 步骤 2：提交 POST 表单
-        $this->log("🚀 [登录] 步骤 2/2: 提交登录认证 (email + password + remember)...", 'line');
-        $formFields = [
-            'email'    => $email,
-            'password' => $password,
-            'remember' => 'true',
+        // 步骤 2：提交认证请求
+        $this->log("🚀 [登录] 步骤 2/3: 提交登录认证 (账号: {$email})...", 'line');
+        $loginAttemptSuccessful = false;
+        $updatedCookies = $loginCookies;
+
+        // 策略 A：直接使用 HTTP 模拟 Inertia.js 客户端 POST 请求（绕过 Form 的 CSRF 限制，最符合现代 Laravel Inertia 标准）
+        $cookieHeaderPairs = [];
+        foreach ($cookieMap as $k => $v) {
+            $cookieHeaderPairs[] = "{$k}={$v}";
+        }
+        $cookieHeaderStr = implode('; ', $cookieHeaderPairs);
+
+        $inertiaHeaders = [
+            'user-agent'                => $capturedUa,
+            'cookie'                    => $cookieHeaderStr,
+            'x-xsrf-token'              => $xsrfTokenHeader,
+            'x-inertia'                 => 'true',
+            'x-requested-with'          => 'XMLHttpRequest',
+            'referer'                   => 'https://theporndb.net/login',
+            'origin'                    => 'https://theporndb.net',
+            'accept'                    => 'text/html, application/xhtml+xml',
+            'content-type'              => 'application/json',
+            'sec-ch-ua-mobile'          => '?0',
+            'sec-fetch-dest'            => 'empty',
+            'sec-fetch-mode'            => 'cors',
+            'sec-fetch-site'            => 'same-origin',
         ];
-        if (!empty($csrfToken)) {
-            $formFields['_token'] = $csrfToken;
+
+        try {
+            $req = Http::timeout(25)
+                ->withOptions(['allow_redirects' => false]) // 捕获 302 重定向与其 Set-Cookie
+                ->withHeaders($inertiaHeaders);
+
+            if (!empty($proxy)) {
+                $req = $req->withOptions(['proxy' => $proxy]);
+            }
+
+            $httpRes = $req->post('https://theporndb.net/login', [
+                'email'    => $email,
+                'password' => $password,
+                'remember' => true,
+            ]);
+
+            $status = $httpRes->status();
+            $this->log("📥 [登录] Inertia 直连认证响应码: [{$status}]", 'line');
+
+            // 提取响应中的所有 Set-Cookie 头
+            $setCookies = $httpRes->toPsrResponse()->getHeader('Set-Cookie');
+            $newCookieMap = [];
+            foreach ($setCookies as $sc) {
+                $parts = explode(';', $sc);
+                $main = trim($parts[0] ?? '');
+                if (!empty($main) && str_contains($main, '=')) {
+                    [$cName, $cVal] = explode('=', $main, 2);
+                    $newCookieMap[$cName] = $cVal;
+                    $cookieMap[$cName] = $cVal;
+                }
+            }
+
+            // 若响应是 302（登录重定向），或者 Set-Cookie 包含了 remember_web 或 session
+            if ($status === 302 || $status === 200 || !empty($newCookieMap)) {
+                $hasRemember = false;
+                foreach ($newCookieMap as $k => $v) {
+                    if (str_starts_with($k, 'remember_web_')) {
+                        $hasRemember = true;
+                        break;
+                    }
+                }
+                if ($hasRemember || isset($newCookieMap['theporndb_session']) || $status === 302) {
+                    $loginAttemptSuccessful = true;
+                    $this->log("🎉 [登录] Inertia 直连认证通过 (Set-Cookie 捕获成功)！", 'info');
+                    // 更新 $updatedCookies 数组供 FlareSolverr 注入
+                    $updatedCookies = [];
+                    foreach ($cookieMap as $k => $v) {
+                        $updatedCookies[] = [
+                            'name'   => $k,
+                            'value'  => $v,
+                            'domain' => '.theporndb.net',
+                            'path'   => '/',
+                        ];
+                    }
+                }
+            } elseif ($status === 422) {
+                $errors = $httpRes->json('props.errors') ?? $httpRes->json('errors') ?? [];
+                $this->log("❌ [登录] 账号验证失败 (422): " . json_encode($errors, JSON_UNESCAPED_UNICODE), 'error');
+                return false;
+            }
+        } catch (Throwable $e) {
+            $this->log("⚠️  [登录] Inertia 直连尝试异常: " . $e->getMessage() . "，切换至 FlareSolverr 模式...", 'warn');
         }
 
-        $postPayload = [
-            'cmd'        => 'request.post',
-            'url'        => 'https://theporndb.net/login',
+        // 策略 B：若策略 A 未成功，通过 FlareSolverr 提交 POST（切忌带 _token，携带 X-XSRF-TOKEN 请求头）
+        if (!$loginAttemptSuccessful) {
+            $this->log("🔄 [登录] 尝试通过 FlareSolverr 提交 POST 任务...", 'line');
+            $postPayload = [
+                'cmd'        => 'request.post',
+                'url'        => 'https://theporndb.net/login',
+                'session'    => $sessionId,
+                'postData'   => http_build_query([
+                    'email'    => $email,
+                    'password' => $password,
+                    'remember' => 'true',
+                ]),
+                'headers'    => [
+                    'X-XSRF-TOKEN'     => $xsrfTokenHeader,
+                    'X-Inertia'        => 'true',
+                    'X-Requested-With' => 'XMLHttpRequest',
+                    'Referer'          => 'https://theporndb.net/login',
+                ],
+                'maxTimeout' => 60000,
+            ];
+            if (!empty($proxy)) {
+                $postPayload['proxy'] = ['url' => $proxy];
+            }
+
+            try {
+                $postResponse = Http::timeout(75)->post($endpoint, $postPayload);
+                $postData = $postResponse->json() ?? [];
+                if (($postData['status'] ?? '') === 'ok') {
+                    $cookies = $postData['solution']['cookies'] ?? [];
+                    if (!empty($cookies)) {
+                        $updatedCookies = $cookies;
+                    }
+                }
+            } catch (Throwable $e) {
+                $this->log("⚠️  [登录] FlareSolverr POST 异常: " . $e->getMessage(), 'warn');
+            }
+        }
+
+        // 步骤 3：验证登录会话有效性（访问 /sites/vixen 检查 auth 数据与片单数据）
+        $this->log("🔍 [登录] 步骤 3/3: 探测受保护页面验证登录状态...", 'line');
+        $verifyPayload = [
+            'cmd'        => 'request.get',
+            'url'        => 'https://theporndb.net/sites/vixen',
             'session'    => $sessionId,
-            'postData'   => http_build_query($formFields),
-            'maxTimeout' => 60000,
+            'cookies'    => $updatedCookies,
+            'maxTimeout' => 45000,
         ];
         if (!empty($proxy)) {
-            $postPayload['proxy'] = ['url' => $proxy];
+            $verifyPayload['proxy'] = ['url' => $proxy];
         }
 
         try {
-            $startTime = microtime(true);
-            $postResponse = Http::timeout(75)->post($endpoint, $postPayload);
-            $elapsed = round(microtime(true) - $startTime, 2);
-            $postData = $postResponse->json() ?? [];
+            $probeRes = Http::timeout(50)->post($endpoint, $verifyPayload);
+            $probeData = $probeRes->json() ?? [];
+            $probeHtml = $probeData['solution']['response'] ?? '';
+            $finalCookies = $probeData['solution']['cookies'] ?? $updatedCookies;
+            $probeInertia = $this->extractInertiaData($probeHtml);
 
-            if (($postData['status'] ?? '') !== 'ok') {
-                $err = $postData['message'] ?? $postResponse->body();
-                $this->log("❌ [登录] FlareSolverr POST 提交失败 (耗时 {$elapsed}s): {$err}", 'error');
-                return false;
-            }
-
-            $respHtml = $postData['solution']['response'] ?? '';
-            $cookies = $postData['solution']['cookies'] ?? [];
-
-            // 检查登录结果
-            $inertia = $this->extractInertiaData($respHtml);
             $isLoggedIn = false;
             $authName = '';
+            $authEmail = '';
 
-            if ($inertia) {
-                $authEmail = $inertia['props']['auth']['email'] ?? null;
-                $authName = $inertia['props']['auth']['name'] ?? '';
-                $component = $inertia['component'] ?? '';
+            if ($probeInertia) {
+                $authEmail = $probeInertia['props']['auth']['email'] ?? null;
+                $authName = $probeInertia['props']['auth']['name'] ?? '';
+                $component = $probeInertia['component'] ?? '';
 
                 if (!empty($authEmail)) {
                     $isLoggedIn = true;
+                } elseif (!empty($probeInertia['props']['scenes'])) {
+                    $isLoggedIn = true;
                 } elseif ($component !== 'Auth/Login') {
                     $isLoggedIn = true;
-                } else {
-                    $errors = $inertia['props']['errors'] ?? [];
-                    if (!empty($errors)) {
-                        $errSummary = json_encode($errors, JSON_UNESCAPED_UNICODE);
-                        $this->log("❌ [登录] 账号验证未通过: {$errSummary}", 'error');
-                        return false;
-                    }
                 }
-            } else {
-                foreach ($cookies as $c) {
+            }
+
+            // 如果还是没命中，再检查返回的 Cookies 中是否有 remember_web_ 开头的 cookie
+            if (!$isLoggedIn) {
+                foreach ($finalCookies as $c) {
                     if (str_starts_with($c['name'] ?? '', 'remember_web_')) {
                         $isLoggedIn = true;
                         break;
@@ -705,31 +864,9 @@ class ThePornDBCrawlerService
                 }
             }
 
-            // 补充探测：若未直接在 Inertia 中看到 auth，探测 feed 页验证登录会话
-            if (!$isLoggedIn) {
-                $testPayload = [
-                    'cmd'        => 'request.get',
-                    'url'        => 'https://theporndb.net/feed',
-                    'session'    => $sessionId,
-                    'maxTimeout' => 30000,
-                ];
-                if (!empty($proxy)) {
-                    $testPayload['proxy'] = ['url' => $proxy];
-                }
-                $probeRes = Http::timeout(35)->post($endpoint, $testPayload);
-                $probeData = $probeRes->json() ?? [];
-                $probeHtml = $probeData['solution']['response'] ?? '';
-                $probeInertia = $this->extractInertiaData($probeHtml);
-                if (!empty($probeInertia['props']['auth']['email'])) {
-                    $isLoggedIn = true;
-                    $authName = $probeInertia['props']['auth']['name'] ?? '';
-                    $cookies = $probeData['solution']['cookies'] ?? $cookies;
-                }
-            }
-
             if ($isLoggedIn) {
                 $cookiePairs = [];
-                foreach ($cookies as $c) {
+                foreach ($finalCookies as $c) {
                     if (!empty($c['name']) && isset($c['value'])) {
                         $cookiePairs[] = "{$c['name']}={$c['value']}";
                         if ($c['name'] === 'cf_clearance') {
@@ -745,23 +882,23 @@ class ThePornDBCrawlerService
 
                 try {
                     Redis::setex("crawler:cookie_str:{$hostKey}", $ttl, $cookieStr);
-                    Redis::setex("crawler:cookies_array:{$hostKey}", $ttl, json_encode($cookies));
+                    Redis::setex("crawler:cookies_array:{$hostKey}", $ttl, json_encode($finalCookies));
                     Redis::setex("crawler:tpdb_authenticated", $ttl, '1');
-                    Redis::setex("crawler:tpdb_auth_user", $ttl, $email);
-                    if (!empty($postData['solution']['userAgent'])) {
-                        Redis::setex('crawler:user_agent', $ttl, $postData['solution']['userAgent']);
+                    Redis::setex("crawler:tpdb_auth_user", $ttl, $authEmail ?: $email);
+                    if (!empty($probeData['solution']['userAgent'])) {
+                        Redis::setex('crawler:user_agent', $ttl, $probeData['solution']['userAgent']);
                     }
                 } catch (Throwable) {}
 
                 $userNameText = $authName ? " [用户: {$authName}]" : "";
-                $this->log("🎉 [登录] ThePornDB 登录成功！账号: {$email}{$userNameText}，登录态已持久化保存至 Redis (有效期 30 天)", 'info');
+                $this->log("🎉 [登录] ThePornDB 登录成功！账号: {$email}{$userNameText}，会话凭证已持久化缓存至 Redis (有效期 30 天)", 'info');
                 return true;
             }
 
-            $this->log("❌ [登录] 登录未能完成：未检测到有效认证 Session 或用户信息", 'error');
+            $this->log("❌ [登录] 验证失败：受保护页面仍重定向至登录页或未找到用户认证标识", 'error');
             return false;
         } catch (Throwable $e) {
-            $this->log("❌ [登录] 提交登录过程异常: " . $e->getMessage(), 'error');
+            $this->log("❌ [登录] 登录验证过程异常: " . $e->getMessage(), 'error');
             return false;
         }
     }
@@ -1003,7 +1140,7 @@ class ThePornDBCrawlerService
                 $this->log("🎉 [FlareSolverr] 穿透成功！耗时: {$elapsed}s，响应 HTML: " . strlen($respHtml) . " 字节", 'info');
 
                 // 检查返回内容是否依然停留在 5 秒盾页面
-                if (str_contains($respHtml, 'Just a moment...') || str_contains($respHtml, 'challenge-platform')) {
+                if (str_contains($respHtml, 'Just a moment...') || str_contains($respHtml, 'cf-browser-verification') || str_contains($respHtml, 'Attention Required!')) {
                     $this->log("⚠️  [FlareSolverr] 警告：FlareSolverr 返回的 HTML 仍包含 Cloudflare 质询内容（未完全通过），页面可能需要人工验证！", 'warn');
                 }
 

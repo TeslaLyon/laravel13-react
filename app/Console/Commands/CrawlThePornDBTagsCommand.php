@@ -209,9 +209,11 @@ class CrawlThePornDBTagsCommand extends Command
                     continue;
                 }
 
-                $tagsData = $sceneDetail['tags'] ?? [];
+                $tagsCount = count($sceneDetail['tags'] ?? []);
+                $markersCount = count($sceneDetail['markers'] ?? []);
+                $tagsData = $service->extractCombinedTags($sceneDetail);
                 if (empty($tagsData)) {
-                    $this->comment("     ℹ️ 详情页无标签数据");
+                    $this->comment("     ℹ️ 详情页无标签及标记数据 (tags 与 markers 均为空)");
                     continue;
                 }
 
@@ -221,7 +223,13 @@ class CrawlThePornDBTagsCommand extends Command
                 $tagNamesZh = array_map(fn($t) => $t['name_zh'] ?? $t['name'], $applied);
 
                 $stats['synced_videos']++;
-                $this->info("     ✅ 成功同步 " . count($applied) . " 个标签: [" . implode(', ', $tagNamesZh) . "]");
+                $this->info(sprintf(
+                    "     ✅ 成功融合同步 %d 个标签 (原始 tags: %d, markers: %d): [%s]",
+                    count($applied),
+                    $tagsCount,
+                    $markersCount,
+                    implode(', ', $tagNamesZh)
+                ));
 
                 // 避免频繁请求封禁
                 if ($delay > 0) {
