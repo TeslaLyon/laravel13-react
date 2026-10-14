@@ -21,6 +21,9 @@ class CrawlThePornDBTagsCommand extends Command
                             {--delay=2 : 抓取详情页间隔秒数，防触发频繁风控（默认 2 秒）}
                             {--skip-tagged : 如果本地视频已有标签，则跳过详情页抓取，大幅提高同步效率}
                             {--dry-run : 演练模式，仅打印解析与匹配结果，不写入数据库}
+                            {--force-login : 强制执行 ThePornDB 自动登录并刷新 Redis 登录凭证}
+                            {--email= : ThePornDB 登录账号（留空默认读取配置或环境变量）}
+                            {--password= : ThePornDB 登录密码（留空默认读取配置或环境变量）}
                             {--file= : 指定本地列表页 HTML 文件（如 site-list.html）进行离线测试}
                             {--detail-file= : 指定本地详情页 HTML 文件（如 detail.html）进行离线测试}';
 
@@ -51,6 +54,9 @@ class CrawlThePornDBTagsCommand extends Command
         $delay = max(0, (int) ($this->option('delay') ?? 2));
         $skipTagged = (bool) $this->option('skip-tagged');
         $dryRun = (bool) $this->option('dry-run');
+        $forceLogin = (bool) $this->option('force-login');
+        $email = $this->option('email');
+        $password = $this->option('password');
         $localFilePath = $this->option('file');
         $localDetailFilePath = $this->option('detail-file');
 
@@ -68,9 +74,29 @@ class CrawlThePornDBTagsCommand extends Command
             };
         });
 
+        // 若指定了强制登录选项
+        if ($forceLogin) {
+            $this->info("🔑 收到 --force-login 指令，正在启动登录流程...");
+            $loginOk = $service->login($email, $password, force: true);
+            if (!$loginOk) {
+                $this->error("❌ ThePornDB 强制登录失败，任务中止！");
+                return Command::FAILURE;
+            }
+        }
+
+        $authUser = null;
+        try {
+            $authUser = \Illuminate\Support\Facades\Redis::get('crawler:tpdb_auth_user');
+        } catch (\Throwable) {}
+
         $this->info("==================================================");
         $this->info("🚀 开始启动 ThePornDB 标签同步任务");
         $this->line("🎯 目标厂牌: <comment>{$siteSlug}</comment>");
+        if ($authUser) {
+            $this->line("👤 账号状态: <info>已登录 ({$authUser})</info>");
+        } else {
+            $this->line("👤 账号状态: <comment>按需自动登录</comment>");
+        }
         if ($localFilePath) {
             $this->line("📁 本地列表文件: <info>{$localFilePath}</info>");
         } else {
