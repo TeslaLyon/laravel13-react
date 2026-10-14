@@ -498,20 +498,15 @@ class DorcelCrawlerService
         $doc = \Dom\HTMLDocument::createFromString($html, LIBXML_NOERROR);
         $detailData = [];
 
-        // 1. 发布时间
-        $publishDateEl = $doc->querySelector('span.publish_date, .publish_date');
-        if ($publishDateEl) {
-            $publishDateText = trim($publishDateEl->textContent);
-            $timestamp = strtotime($publishDateText);
-            if ($timestamp) {
-                try {
-                    $date = Carbon::createFromFormat('F d, Y', $publishDateText);
-                    $detailData['release_at'] = $date->format('Y-m-d H:i:s');
-                    $detailData['release_timestamp'] = $timestamp;
-                } catch (Throwable) {
-                    $detailData['release_at'] = date('Y-m-d H:i:s', $timestamp);
-                    $detailData['release_timestamp'] = $timestamp;
-                }
+        // 1. 发布时间：精准读取详情页中的 <span class="publish_date">October 14, 2026</span>
+        $publishDateEls = $doc->querySelectorAll('span.publish_date, .publish_date, [class*="publish_date"], [class*="publish-date"]');
+        foreach ($publishDateEls as $publishDateEl) {
+            $parsed = $this->parseReleaseDate($publishDateEl->textContent);
+            if ($parsed) {
+                $detailData['release_at'] = $parsed['release_at'];
+                $detailData['released_at'] = $parsed['release_at'];
+                $detailData['release_timestamp'] = $parsed['release_timestamp'];
+                break;
             }
         }
 
@@ -535,6 +530,64 @@ class DorcelCrawlerService
         $detailData['list_img_large_meta'] = $this->extractLargeImgMetaPhp84($doc);
 
         return $detailData;
+    }
+
+    /**
+     * 解析发布时间文本（支持提取 <span class="publish_date">October 14, 2026</span> 等各类日期格式）
+     * 自动处理 HTML 实体、特殊空格（&nbsp;/\u{00a0}）、多余换行与文本前缀
+     *
+     * @param string|null $raw
+     * @return array{release_at: string, release_timestamp: int}|null
+     */
+    public function parseReleaseDate(?string $raw): ?array
+    {
+        if (empty($raw)) {
+            return null;
+        }
+
+        // 1. 替换 HTML 实体与特殊空格
+        $clean = str_replace(["\xc2\xa0", '&nbsp;', "\u{00a0}"], ' ', $raw);
+        $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $clean = preg_replace('/\s+/', ' ', trim($clean));
+
+        if (empty($clean)) {
+            return null;
+        }
+
+        // 2. 尝试从文本中精准提取日期部分（支持 "Month DD, YYYY"、"DD Month YYYY"、"YYYY-MM-DD" 等）
+        $monthPattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember))';
+        $dateStr = null;
+
+        if (preg_match('/(' . $monthPattern . '\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/i', $clean, $m)) {
+            $dateStr = $m[1];
+        } elseif (preg_match('/(\d{1,2}(?:st|nd|rd|th)?\s+' . $monthPattern . ',?\s+\d{4})/i', $clean, $m)) {
+            $dateStr = $m[1];
+        } elseif (preg_match('/(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2})/', $clean, $m)) {
+            $dateStr = $m[1];
+        } else {
+            $dateStr = $clean;
+        }
+
+        // 移除英文序数后缀 (st, nd, rd, th)
+        $normalizedDateStr = preg_replace('/(?<=\d)(st|nd|rd|th)/i', '', $dateStr);
+
+        try {
+            $carbon = Carbon::parse($normalizedDateStr)->startOfDay();
+            return [
+                'release_at'        => $carbon->format('Y-m-d H:i:s'),
+                'release_timestamp' => $carbon->timestamp,
+            ];
+        } catch (Throwable) {
+            $ts = strtotime($normalizedDateStr);
+            if ($ts && $ts > 0) {
+                return [
+                    'release_at'        => date('Y-m-d 00:00:00', $ts),
+                    'release_timestamp' => $ts,
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -812,18 +865,16 @@ class DorcelCrawlerService
         $xpath = new DOMXPath($dom);
         $detailData = [];
 
-        $publishDateNodes = $xpath->query('//span[contains(@class, "publish_date")] | //*[contains(@class, "publish_date")]');
-        if ($publishDateNodes && $publishDateNodes->length > 0) {
-            $publishDateText = trim($publishDateNodes->item(0)->textContent);
-            $timestamp = strtotime($publishDateText);
-            if ($timestamp) {
-                try {
-                    $date = Carbon::createFromFormat('F d, Y', $publishDateText);
-                    $detailData['release_at'] = $date->format('Y-m-d H:i:s');
-                    $detailData['release_timestamp'] = $timestamp;
-                } catch (Throwable) {
-                    $detailData['release_at'] = date('Y-m-d H:i:s', $timestamp);
-                    $detailData['release_timestamp'] = $timestamp;
+        // 1. 发布时间：精准读取详情页中的 <span class="publish_date">October 14, 2026</span>
+        $publishDateNodes = $xpath->query('//span[contains(@class, "publish_date")] | //*[contains(@class, "publish_date")] | //*[contains(@class, "publish-date")]');
+        if ($publishDateNodes) {
+            foreach ($publishDateNodes as $publishDateNode) {
+                $parsed = $this->parseReleaseDate($publishDateNode->textContent);
+                if ($parsed) {
+                    $detailData['release_at'] = $parsed['release_at'];
+                    $detailData['released_at'] = $parsed['release_at'];
+                    $detailData['release_timestamp'] = $parsed['release_timestamp'];
+                    break;
                 }
             }
         }
@@ -969,8 +1020,9 @@ class DorcelCrawlerService
             $videoData['preview'] = $listItem['preview'];
         }
 
-        if (!empty($detailItem['release_at'])) {
-            $videoData['release_at'] = $detailItem['release_at'];
+        $releaseAt = $detailItem['release_at'] ?? ($detailItem['released_at'] ?? null);
+        if (!empty($releaseAt)) {
+            $videoData['release_at'] = $releaseAt;
         }
 
         // 详情大图元数据：优先使用详情页解析的 list_img_large_meta，若无则从 list_img 自动派生构造（严格参照 Project1 模式）
@@ -985,6 +1037,8 @@ class DorcelCrawlerService
                 'video_code'          => $videoCode,
                 'slug'                => $videoData['slug'],
                 'source_uuid'         => $sourceUuid,
+                'release_at'          => $videoData['release_at'] ?? null,
+                'released_at'         => $videoData['release_at'] ?? null,
                 'preview'             => $listItem['preview'] ?? null,
                 'actors'              => array_column($actors, 'name'),
                 'list_img_count'      => count($listItem['list_img'] ?? []),
@@ -1061,10 +1115,12 @@ class DorcelCrawlerService
             }
 
             return [
-                'status'     => $video->wasRecentlyCreated ? 'created' : 'updated',
-                'video'      => $video,
-                'video_code' => $videoCode,
-                'actor_count'=> count($actorIds),
+                'status'      => $video->wasRecentlyCreated ? 'created' : 'updated',
+                'video'       => $video,
+                'video_code'  => $videoCode,
+                'release_at'  => $video->release_at,
+                'released_at' => $video->release_at,
+                'actor_count' => count($actorIds),
             ];
         });
     }
@@ -1086,6 +1142,13 @@ class DorcelCrawlerService
     public function buildVideoCode(array $listItem, ?array $detailItem): string
     {
         $releaseTimestamp = $detailItem['release_timestamp'] ?? null;
+        if (!$releaseTimestamp && !empty($detailItem['release_at'])) {
+            $releaseTimestamp = strtotime($detailItem['release_at']);
+        }
+        if (!$releaseTimestamp && !empty($detailItem['released_at'])) {
+            $releaseTimestamp = strtotime($detailItem['released_at']);
+        }
+
         if ($releaseTimestamp) {
             $datePart = date('y.m.d', $releaseTimestamp);
         } else {
