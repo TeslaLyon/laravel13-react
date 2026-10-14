@@ -318,7 +318,7 @@ class VixenCrawlerService
         }
 
         $sourceUUID = "{$channel->slug}:{$videoId}:{$sourceSlug}";
-        $videoSlug = "{$channel->slug}-{$sourceSlug}";
+        $videoSlug = "{$channel->slug}-{$videoId}-{$sourceSlug}";
 
         // 1. 冲突判定（旧代码核心逻辑：检测同名/待定演员）
         if ($this->handleVideoRepeatActor($videoNode, $channel, $sourceUUID)) {

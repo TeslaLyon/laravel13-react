@@ -358,10 +358,12 @@ class ThePornDBCrawlerService
             if (!empty($path)) {
                 $targetSlug = basename($path);
                 if (!empty($targetSlug)) {
-                    // 优先匹配新版规范 slug (例如 vixen-beautiful-ashby-fucks-him-good)
+                    // 优先匹配新版规范 slug (例如 vixen-12345-beautiful-ashby 或 vixen-beautiful-ashby)
                     if (!empty($siteSlug)) {
-                        $prefixedSlug = strtolower($siteSlug) . '-' . $targetSlug;
-                        $video = Video::where('slug', $prefixedSlug)->first();
+                        $sitePrefix = strtolower($siteSlug) . '-';
+                        $video = Video::where('slug', 'LIKE', "{$sitePrefix}%-{$targetSlug}")
+                            ->orWhere('slug', "{$sitePrefix}{$targetSlug}")
+                            ->first();
                         if ($video) return $video;
                     }
 
@@ -381,8 +383,10 @@ class ThePornDBCrawlerService
             $extSlug = end($parts);
             if (!empty($extSlug)) {
                 if (!empty($siteSlug)) {
-                    $prefixedSlug = strtolower($siteSlug) . '-' . $extSlug;
-                    $video = Video::where('slug', $prefixedSlug)->first();
+                    $sitePrefix = strtolower($siteSlug) . '-';
+                    $video = Video::where('slug', 'LIKE', "{$sitePrefix}%-{$extSlug}")
+                        ->orWhere('slug', "{$sitePrefix}{$extSlug}")
+                        ->first();
                     if ($video) return $video;
                 }
 
@@ -396,14 +400,19 @@ class ThePornDBCrawlerService
 
         // 策略 3：根据 TPDB slug 匹配（例如 vixen-beautiful-ashby-fucks-him-good）
         if (!empty($sceneSlug)) {
-            // 直接以完整 TPDB slug 匹配视频的 slug（完全对齐新版 {channel_slug}-{source_slug}）
+            // 直接以完整 TPDB slug 匹配视频的 slug
             $video = Video::where('slug', $sceneSlug)->first();
             if ($video) return $video;
 
-            // 兼容旧版：若带 siteSlug 前缀，尝试去除前缀匹配原始 slug
-            if ($siteSlug && str_starts_with($sceneSlug, "{$siteSlug}-")) {
-                $strippedSlug = substr($sceneSlug, strlen("{$siteSlug}-"));
-                $video = Video::where('slug', $strippedSlug)->first();
+            if ($siteSlug) {
+                $sitePrefix = strtolower($siteSlug) . '-';
+                $cleanSceneSlug = str_starts_with($sceneSlug, $sitePrefix) ? substr($sceneSlug, strlen($sitePrefix)) : $sceneSlug;
+                $video = Video::where('slug', 'LIKE', "{$sitePrefix}%-{$cleanSceneSlug}")
+                    ->orWhere('slug', "{$sitePrefix}{$cleanSceneSlug}")
+                    ->first();
+                if ($video) return $video;
+
+                $video = Video::where('slug', $cleanSceneSlug)->first();
                 if ($video) return $video;
             }
         }
@@ -419,8 +428,10 @@ class ThePornDBCrawlerService
             // 标题转换为 slug 后再次匹配
             $titleSlug = Str::slug($sceneTitle);
             if (!empty($siteSlug)) {
-                $prefixedTitleSlug = strtolower($siteSlug) . '-' . $titleSlug;
-                $video = Video::where('slug', $prefixedTitleSlug)->first();
+                $sitePrefix = strtolower($siteSlug) . '-';
+                $video = Video::where('slug', 'LIKE', "{$sitePrefix}%-{$titleSlug}")
+                    ->orWhere('slug', "{$sitePrefix}{$titleSlug}")
+                    ->first();
                 if ($video) return $video;
             }
 

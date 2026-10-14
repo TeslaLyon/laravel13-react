@@ -28,7 +28,7 @@ class SyncVideoSlugsCommand extends Command
      *
      * @var string
      */
-    protected $description = '将视频数据库中的 slug 批量升级对齐为规范的 {channel_slug}-{source_slug} 格式，并补全 DorcelClub 的 source_uuid';
+    protected $description = '将视频数据库中的 slug 批量升级对齐为规范的 {channel_slug}-{source_id}-{source_slug} 格式，并补全 DorcelClub 的 source_uuid';
 
     /**
      * 执行控制台命令
@@ -101,45 +101,77 @@ class SyncVideoSlugsCommand extends Command
                 $currentSlug = trim((string) $video->slug);
                 $currentUuid = trim((string) $video->source_uuid);
 
-                // 1. 规范提取原生 source_slug
-                $cleanSlug = preg_replace('/^' . preg_quote($channelSlug, '/') . '-+/i', '', $currentSlug);
-                if (empty($cleanSlug)) {
-                    $cleanSlug = Str::slug($video->name ?: $video->video_code);
-                }
-
+                $sourceId = '';
+                $sourceSlug = '';
                 $targetUuid = $currentUuid;
                 $needUuidUpdate = false;
 
-                // 2. 针对 DorcelClub，拼接规则为: dorcelclub-{id}-{slug}，source_uuid 为: dorcelclub:{id}:{slug}
-                if ($channelSlug === 'dorcelclub') {
-                    $videoSourceId = '';
-                    $videoSourceSlug = $cleanSlug;
+                // 1. 优先从 source_uuid 提取源视频 ID 和源 slug
+                if (!empty($currentUuid)) {
+                    $uuidParts = explode(':', $currentUuid);
+                    $count = count($uuidParts);
 
-                    if (!empty($currentUuid)) {
-                        $uuidParts = explode(':', $currentUuid);
-                        if (count($uuidParts) >= 2 && $uuidParts[0] === 'dorcelclub') {
-                            $videoSourceId = $uuidParts[1];
-                            if (!empty($uuidParts[2])) {
-                                $videoSourceSlug = $uuidParts[2];
-                            }
+                    // 格式如: vixen:photo:12345:some-slug (写真)
+                    if ($count >= 4 && $uuidParts[1] === 'photo') {
+                        $sourceId = $uuidParts[2];
+                        $sourceSlug = $uuidParts[3];
+                    }
+                    // 格式如: dorcelclub:895134:sensory-evening 或 vixen:12345:some-slug
+                    elseif ($count >= 3) {
+                        $sourceId = $uuidParts[1];
+                        $sourceSlug = $uuidParts[2];
+                    }
+                    // 格式如: 11526137:some-slug (Project1 规范)
+                    elseif ($count === 2 && (ctype_digit($uuidParts[0]) || is_numeric($uuidParts[0]))) {
+                        $sourceId = $uuidParts[0];
+                        $sourceSlug = $uuidParts[1];
+                    }
+                    // 格式如: legacy dorcelclub:895134
+                    elseif ($count === 2 && (ctype_digit($uuidParts[1]) || is_numeric($uuidParts[1]))) {
+                        $sourceId = $uuidParts[1];
+                    }
+                }
+
+                // 2. 若 source_uuid 中未解析出 sourceId，尝试从当前 slug 中提取数字 ID
+                // 例如已是 channel-12345-some-slug 或 12345-some-slug
+                if (empty($sourceId)) {
+                    if (preg_match('/^(?:' . preg_quote($channelSlug, '/') . '-)?(\d+)-(.*)$/i', $currentSlug, $m)) {
+                        $sourceId = $m[1];
+                        if (empty($sourceSlug)) {
+                            $sourceSlug = $m[2];
                         }
                     }
+                }
 
-                    // 若 cleanSlug 已经包含数字 ID 前缀（例如 895134-sensory-evening），提取出 ID 和纯 slug
-                    if (empty($videoSourceId) && preg_match('/^(\d+)-(.*)$/', $cleanSlug, $m)) {
-                        $videoSourceId = $m[1];
-                        $videoSourceSlug = $m[2];
-                    }
-
-                    if (!empty($videoSourceId)) {
-                        $targetSlug = "dorcelclub-{$videoSourceId}-{$videoSourceSlug}";
-                        $targetUuid = "dorcelclub:{$videoSourceId}:{$videoSourceSlug}";
-                        $needUuidUpdate = ($currentUuid !== $targetUuid);
-                    } else {
-                        $targetSlug = "dorcelclub-{$cleanSlug}";
+                // 3. 规范化清洗源 slug：去除前置片商 slug 与数字 ID 前缀
+                if (empty($sourceSlug)) {
+                    $sourceSlug = preg_replace('/^' . preg_quote($channelSlug, '/') . '-+/i', '', $currentSlug);
+                    if (!empty($sourceId)) {
+                        $sourceSlug = preg_replace('/^' . preg_quote($sourceId, '/') . '-+/i', '', $sourceSlug);
                     }
                 } else {
-                    $targetSlug = "{$channelSlug}-{$cleanSlug}";
+                    $sourceSlug = preg_replace('/^' . preg_quote($channelSlug, '/') . '-+/i', '', $sourceSlug);
+                    if (!empty($sourceId)) {
+                        $sourceSlug = preg_replace('/^' . preg_quote($sourceId, '/') . '-+/i', '', $sourceSlug);
+                    }
+                }
+
+                if (empty($sourceSlug)) {
+                    $sourceSlug = Str::slug($video->name ?: $video->video_code);
+                }
+
+                // 4. 针对 DorcelClub，确保 source_uuid 规范化为 dorcelclub:{id}:{slug}
+                if ($channelSlug === 'dorcelclub' && !empty($sourceId)) {
+                    $targetUuid = "dorcelclub:{$sourceId}:{$sourceSlug}";
+                    $needUuidUpdate = ($currentUuid !== $targetUuid);
+                }
+
+                // 5. 生成统一格式的 targetSlug: {channel_slug}-{source_id}-{source_slug}
+                if (!empty($sourceId)) {
+                    $targetSlug = "{$channelSlug}-{$sourceId}-{$sourceSlug}";
+                } else {
+                    // 若无源 ID（极个别特殊情况），降级为 {channel_slug}-{source_slug}
+                    $targetSlug = "{$channelSlug}-{$sourceSlug}";
                 }
 
                 $needSlugUpdate = ($currentSlug !== $targetSlug);
