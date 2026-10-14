@@ -118,16 +118,87 @@ class DorcelCrawlerService
     {
         if ($node instanceof \Dom\Element || $node instanceof \DOMElement) {
             $val = $node->getAttribute($name);
-            return $val !== '' ? trim($val) : $default;
+            return ($val !== null && $val !== '') ? trim($val) : $default;
         }
 
         if (is_object($node) && method_exists($node, 'getAttribute')) {
             /** @var \DOMElement $node */
             $val = $node->getAttribute($name);
-            return $val !== '' ? trim($val) : $default;
+            return ($val !== null && $val !== '') ? trim($val) : $default;
         }
 
         return $default;
+    }
+
+    /**
+     * 提取预览预览字段（对齐前端 2< 原生动态预览规范）
+     * 规则：优先提取 previews.listing[2].src，其次兜底 data-hq-preview / data-preview
+     *
+     * @param object|array $card 卡片 DOM 节点或结构化数据
+     * @param object|null $previewEl 挂载了预览属性的子节点
+     * @return string|null
+     */
+    protected function extractPreview(object|array $card, ?object $previewEl = null): ?string
+    {
+        // 1. 如果卡片本身或外部传入的数据中含有 previews['listing'][2]['src']
+        if (is_array($card)) {
+            if (isset($card['previews']['listing'][2]['src'])) {
+                return '2<' . $card['previews']['listing'][2]['src'];
+            }
+            if (isset($card['previews']['listing'][0]['src'])) {
+                return '2<' . $card['previews']['listing'][0]['src'];
+            }
+        }
+
+        // 2. 检查 DOM 节点上是否包含嵌入的 json 属性（如 data-video、data-scene、data-previews）
+        if (is_object($card)) {
+            foreach (['data-video', 'data-item', 'data-scene', 'data-previews'] as $attr) {
+                $jsonStr = $this->getAttr($card, $attr);
+                if (!empty($jsonStr)) {
+                    $decoded = json_decode($jsonStr, true);
+                    if (is_array($decoded)) {
+                        if (isset($decoded['previews']['listing'][2]['src'])) {
+                            return '2<' . $decoded['previews']['listing'][2]['src'];
+                        }
+                        if (isset($decoded['previews']['listing'][0]['src'])) {
+                            return '2<' . $decoded['previews']['listing'][0]['src'];
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. 检查预览子节点或卡片上的特定属性 (data-hq-preview 或 data-preview)
+        $previewValue = '';
+        if ($previewEl) {
+            $previewValue = $this->getAttr($previewEl, 'data-hq-preview') ?: $this->getAttr($previewEl, 'data-preview');
+        }
+
+        if (empty($previewValue) && is_object($card)) {
+            $previewValue = $this->getAttr($card, 'data-hq-preview') ?: $this->getAttr($card, 'data-preview');
+        }
+
+        // 4. 若为 DOM 元素，递归查找含 data-hq-preview 的子元素
+        if (empty($previewValue) && is_object($card)) {
+            if (method_exists($card, 'querySelector')) {
+                $hqEl = $card->querySelector('[data-hq-preview]');
+                if ($hqEl) {
+                    $previewValue = $this->getAttr($hqEl, 'data-hq-preview');
+                }
+            } elseif ($card instanceof \DOMNode && $card->ownerDocument) {
+                $subXpath = new \DOMXPath($card->ownerDocument);
+                $subNodes = $subXpath->query('.//*[@data-hq-preview]', $card);
+                if ($subNodes && $subNodes->length > 0) {
+                    $previewValue = $this->getAttr($subNodes->item(0), 'data-hq-preview');
+                }
+            }
+        }
+
+        if (!empty($previewValue)) {
+            return '2<' . $previewValue;
+        }
+
+        return null;
     }
 
     /**
@@ -264,17 +335,36 @@ class DorcelCrawlerService
             return null;
         }
 
-        // 格式如: /en/scene/5248/video-slug-title
-        $detailUrlStr = str_replace('/en/scene/', '', ltrim($detailUrl, '/'));
-        $detailParts = explode('/', $detailUrlStr);
-        $videoSourceId = $detailParts[0] ?? '';
-        $videoSourceSlug = $detailParts[1] ?? Str::slug($videoName);
+        // 格式如: /en/scene/5248/video-slug-title 或 https://www.dorcelclub.com/en/scene/895134/sensory-evening
+        $videoSourceId = '';
+        $videoSourceSlug = '';
+
+        if (preg_match('~/scene/(\d+)(?:/([^/?#]+))?~i', $detailUrl, $urlMatches)) {
+            $videoSourceId = $urlMatches[1];
+            $videoSourceSlug = !empty($urlMatches[2]) ? $urlMatches[2] : Str::slug($videoName);
+        } else {
+            $pathParts = array_values(array_filter(explode('/', parse_url($detailUrl, PHP_URL_PATH) ?? '')));
+            foreach ($pathParts as $idx => $part) {
+                if (ctype_digit($part)) {
+                    $videoSourceId = $part;
+                    if (isset($pathParts[$idx + 1])) {
+                        $videoSourceSlug = $pathParts[$idx + 1];
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (empty($videoSourceSlug)) {
+            $videoSourceSlug = Str::slug($videoName);
+        }
 
         if (empty($videoSourceId)) {
             return null;
         }
 
-        $sourceUuid = self::CHANNEL_SLUG . ':' . $videoSourceId;
+        $sourceUuid = self::CHANNEL_SLUG . ':' . $videoSourceId . ':' . $videoSourceSlug;
+        $videoSlug = self::CHANNEL_SLUG . '-' . $videoSourceId . '-' . $videoSourceSlug;
 
         // 演员提取
         $actors = [];
@@ -293,48 +383,49 @@ class DorcelCrawlerService
 
         // 封面图片提取（存原始 URL）
         $listImg = [];
-        $sources = $card->querySelectorAll('a.thumb picture source, picture source');
-        $pattern = '/(https?:\/\/[^\s]+) \d+x/';
+        $sources = $card->querySelectorAll('a.thumb picture source, span.thumb-ratio picture source, picture source');
 
         if ($sources->count() > 0) {
-            // 小图 (370x231)
-            $smallNode = ($sources->count() >= 5) ? $sources->item(4) : $sources->item($sources->count() - 1);
-            if ($smallNode) {
-                $srcset = $this->getAttr($smallNode, 'data-srcset') ?: $this->getAttr($smallNode, 'srcset');
-                if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                    $smValue = $matches[1][0];
-                    $mdValue = $matches[1][1];
-
-                    $listImg[] = [
-                        'src_source'         => $smValue,
-                        'placeholder_source' => '',
-                        'width'              => 370,
-                        'height'             => 231,
-                        'highdpi'            => [
-                            'double_source' => $mdValue,
-                        ],
-                    ];
+            $parsed = $this->parsePictureSources($sources);
+            if (!empty($parsed)) {
+                // 小图：优先取 ~360/370 宽度（或第 0 项）
+                $small = $parsed[0];
+                foreach ($parsed as $item) {
+                    if ($item['w1x'] <= 400 && $item['w1x'] > 0) {
+                        $small = $item;
+                        break;
+                    }
                 }
-            }
+                $listImg[] = [
+                    'src_source'         => $small['url1x'] ?: $small['url2x'],
+                    'placeholder_source' => '',
+                    'width'              => $small['w1x'] ?: 370,
+                    'height'             => $small['h1x'] ?: 231,
+                    'highdpi'            => [
+                        'double_source' => $small['url2x'] ?: $small['url1x'],
+                    ],
+                ];
 
-            // 大图 (575x360)
-            $bigNode = ($sources->count() >= 3) ? $sources->item(2) : $sources->item(0);
-            if ($bigNode) {
-                $srcset = $this->getAttr($bigNode, 'data-srcset') ?: $this->getAttr($bigNode, 'srcset');
-                if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                    $lgValue = $matches[1][0];
-                    $xlValue = $matches[1][1];
-
-                    $listImg[] = [
-                        'src_source'         => $lgValue,
-                        'placeholder_source' => '',
-                        'width'              => 575,
-                        'height'             => 360,
-                        'highdpi'            => [
-                            'double_source' => $xlValue,
-                        ],
-                    ];
+                // 大图：优先取 ~575 宽度（或中间项）
+                $big = null;
+                foreach ($parsed as $item) {
+                    if ($item['w1x'] === 575 || ($item['w1x'] >= 500 && $item['w1x'] <= 650)) {
+                        $big = $item;
+                        break;
+                    }
                 }
+                if (!$big) {
+                    $big = (count($parsed) >= 2) ? $parsed[(int) floor(count($parsed) / 2)] : end($parsed);
+                }
+                $listImg[] = [
+                    'src_source'         => $big['url1x'] ?: $big['url2x'],
+                    'placeholder_source' => '',
+                    'width'              => $big['w1x'] ?: 575,
+                    'height'             => $big['h1x'] ?: 360,
+                    'highdpi'            => [
+                        'double_source' => $big['url2x'] ?: $big['url1x'],
+                    ],
+                ];
             }
         }
 
@@ -349,19 +440,14 @@ class DorcelCrawlerService
             }
         }
 
-        // 动态预览提取
-        $preview = null;
+        // 动态预览提取（优先读取 previews.listing[2].src，兜底读取 data-hq-preview，对齐前端 2< 规范）
         $previewEl = $card->querySelector('span.thumb-ratio, a.thumb');
-        if ($previewEl) {
-            $previewValue = $this->getAttr($previewEl, 'data-hq-preview');
-            if (!empty($previewValue)) {
-                $preview = '2>' . $previewValue;
-            }
-        }
+        $preview = $this->extractPreview($card, $previewEl);
 
         return [
             'source_id'   => $videoSourceId,
             'source_slug' => $videoSourceSlug,
+            'slug'        => $videoSlug,
             'source_uuid' => $sourceUuid,
             'name'        => $videoName,
             'detail_url'  => $detailUrl,
@@ -452,46 +538,148 @@ class DorcelCrawlerService
     }
 
     /**
-     * 【PHP 8.4 新特性驱动】从详情页解析大图 Meta
-     * 字段与结构严格对齐 Project1VideoCrawlerService
+     * 从一组 picture source 节点中动态解析图片尺寸并按 1x 宽度升序排列
+     * 自动从 URL 文件名中提取宽高等信息（如 _1150_766_crop_ 或 _575_383_crop_）
      */
-    protected function extractLargeImgMetaPhp84(object $doc): array
+    protected function parsePictureSources(iterable $sources): array
     {
-        $largeImgMeta = [];
-        $sourceConfigs = [
-            ['key' => 0, 'width' => 360, 'height' => 240, 'media' => '(max-width: 360px)'],
-            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(min-width: 361px) and (max-width: 768px)'],
-            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 769px)'],
-        ];
-
-        $largeSources = $doc->querySelectorAll('div.player_container picture source, div.player picture source, picture source');
+        $parsed = [];
         $pattern = '/(https?:\/\/[^\s]+) \d+x/';
 
-        if ($largeSources->count() > 0) {
-            foreach ($sourceConfigs as $config) {
-                if ($largeSources->count() > $config['key']) {
-                    $sourceNode = $largeSources->item($config['key']);
-                    $srcset = $this->getAttr($sourceNode, 'data-srcset') ?: $this->getAttr($sourceNode, 'srcset');
-                    if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                        $smUrl = $matches[1][0];
-                        $doubleUrl = $matches[1][1];
-
-                        $largeImgMeta[] = [
-                            'src_source'         => $smUrl,
-                            'placeholder_source' => '',
-                            'width'              => $config['width'],
-                            'height'             => $config['height'],
-                            'media'              => $config['media'],
-                            'highdpi'            => [
-                                'double_source' => $doubleUrl,
-                            ],
-                        ];
-                    }
-                }
+        foreach ($sources as $sourceNode) {
+            $srcset = $this->getAttr($sourceNode, 'data-srcset') ?: $this->getAttr($sourceNode, 'srcset');
+            if (empty($srcset)) {
+                continue;
             }
+
+            $media = $this->getAttr($sourceNode, 'media') ?: '';
+            $url1x = '';
+            $url2x = '';
+
+            if (preg_match_all($pattern, $srcset, $matches) && !empty($matches[1])) {
+                $url1x = $matches[1][0];
+                $url2x = $matches[1][1] ?? $url1x;
+            } else {
+                $parts = array_map('trim', explode(',', $srcset));
+                $url1x = explode(' ', $parts[0])[0];
+                $url2x = isset($parts[1]) ? explode(' ', $parts[1])[0] : $url1x;
+            }
+
+            $w1x = 0; $h1x = 0;
+            if (preg_match('/_(\d+)_(\d+)_crop/', $url1x, $m)) {
+                $w1x = (int) $m[1];
+                $h1x = (int) $m[2];
+            } elseif (preg_match('/[_\-](\d{3,4})[x_](\d{3,4})[_\-\.]/', $url1x, $m)) {
+                $w1x = (int) $m[1];
+                $h1x = (int) $m[2];
+            }
+
+            $w2x = 0; $h2x = 0;
+            if (preg_match('/_(\d+)_(\d+)_crop/', $url2x, $m)) {
+                $w2x = (int) $m[1];
+                $h2x = (int) $m[2];
+            } elseif (preg_match('/[_\-](\d{3,4})[x_](\d{3,4})[_\-\.]/', $url2x, $m)) {
+                $w2x = (int) $m[1];
+                $h2x = (int) $m[2];
+            }
+
+            $parsed[] = [
+                'media' => $media,
+                'url1x' => $url1x,
+                'url2x' => $url2x,
+                'w1x'   => $w1x,
+                'h1x'   => $h1x,
+                'w2x'   => $w2x,
+                'h2x'   => $h2x,
+                'max_w' => max($w1x, $w2x),
+            ];
+        }
+
+        // 按 1x 宽度升序排序（保证顺序无关、稳定可靠）
+        usort($parsed, fn ($a, $b) => $a['w1x'] <=> $b['w1x']);
+
+        return $parsed;
+    }
+
+    /**
+     * 从已解析的 sources 列表中提取一个中等尺寸和一个最大尺寸大图元数据
+     */
+    protected function extractLargeImgMetaFromSources(array $parsed): array
+    {
+        if (empty($parsed)) {
+            return [];
+        }
+
+        // 1. 中等尺寸：精准匹配 ~575 宽度（如 575x383），未命中则取中间项
+        $med = null;
+        foreach ($parsed as $item) {
+            if ($item['w1x'] === 575 || ($item['w1x'] >= 500 && $item['w1x'] <= 650)) {
+                $med = $item;
+                break;
+            }
+        }
+        if (!$med) {
+            $midIndex = (int) floor(count($parsed) / 2);
+            $med = $parsed[$midIndex] ?? $parsed[0];
+        }
+
+        // 2. 最大尺寸：取升序排序后的最后一项（对应桌面端最高分辨率图源）
+        $max = end($parsed);
+
+        $largeImgMeta = [];
+
+        // 中等尺寸项 (Medium)
+        if ($med && (!empty($med['url1x']) || !empty($med['url2x']))) {
+            $largeImgMeta[] = [
+                'src_source'         => $med['url1x'] ?: $med['url2x'],
+                'placeholder_source' => '',
+                'width'              => $med['w1x'] ?: 575,
+                'height'             => $med['h1x'] ?: 383,
+                'media'              => '(max-width: 768px)',
+                'highdpi'            => [
+                    'double_source' => $med['url2x'] ?: $med['url1x'],
+                ],
+            ];
+        }
+
+        // 最大尺寸项 (Largest) - 对应最大图源
+        if ($max && (!empty($max['url1x']) || !empty($max['url2x']))) {
+            $largeImgMeta[] = [
+                'src_source'         => $max['url1x'] ?: $max['url2x'],
+                'placeholder_source' => '',
+                'width'              => $max['w1x'] ?: 773,
+                'height'             => $max['h1x'] ?: 515,
+                'media'              => '(min-width: 769px)',
+                'highdpi'            => [
+                    'double_source' => $max['url2x'] ?: $max['url1x'],
+                ],
+            ];
         }
 
         return $largeImgMeta;
+    }
+
+    /**
+     * 【PHP 8.4 新特性驱动】从详情页解析大图 Meta
+     * 提取一个中等尺寸和一个最大尺寸图片（严格对齐标准大图规范）
+     */
+    protected function extractLargeImgMetaPhp84(object $doc): array
+    {
+        // 优先定位缩略图比例容器/播放器/Banner 专属 picture 节点，兜底匹配页面任意 picture
+        $pictureEl = $doc->querySelector('span.thumb-ratio picture, div.player_container picture, div.player picture, div.header picture, #movies picture')
+            ?: $doc->querySelector('picture');
+
+        if (!$pictureEl) {
+            return [];
+        }
+
+        $sources = $pictureEl->querySelectorAll('source');
+        if ($sources->count() === 0) {
+            return [];
+        }
+
+        $parsed = $this->parsePictureSources($sources);
+        return $this->extractLargeImgMetaFromSources($parsed);
     }
 
     /**
@@ -501,8 +689,7 @@ class DorcelCrawlerService
     {
         $dom = new DOMDocument('1.0', 'UTF-8');
         libxml_use_internal_errors(true);
-        $encodedHtml = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
-        @$dom->loadHTML($encodedHtml, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET);
         libxml_clear_errors();
 
         $xpath = new DOMXPath($dom);
@@ -530,16 +717,35 @@ class DorcelCrawlerService
                     continue;
                 }
 
-                $detailUrlStr = str_replace('/en/scene/', '', ltrim($detailUrl, '/'));
-                $detailParts = explode('/', $detailUrlStr);
-                $videoSourceId = $detailParts[0] ?? '';
-                $videoSourceSlug = $detailParts[1] ?? Str::slug($videoName);
+                $videoSourceId = '';
+                $videoSourceSlug = '';
+
+                if (preg_match('~/scene/(\d+)(?:/([^/?#]+))?~i', $detailUrl, $urlMatches)) {
+                    $videoSourceId = $urlMatches[1];
+                    $videoSourceSlug = !empty($urlMatches[2]) ? $urlMatches[2] : Str::slug($videoName);
+                } else {
+                    $pathParts = array_values(array_filter(explode('/', parse_url($detailUrl, PHP_URL_PATH) ?? '')));
+                    foreach ($pathParts as $idx => $part) {
+                        if (ctype_digit($part)) {
+                            $videoSourceId = $part;
+                            if (isset($pathParts[$idx + 1])) {
+                                $videoSourceSlug = $pathParts[$idx + 1];
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                if (empty($videoSourceSlug)) {
+                    $videoSourceSlug = Str::slug($videoName);
+                }
 
                 if (empty($videoSourceId)) {
                     continue;
                 }
 
-                $sourceUuid = self::CHANNEL_SLUG . ':' . $videoSourceId;
+                $sourceUuid = self::CHANNEL_SLUG . ':' . $videoSourceId . ':' . $videoSourceSlug;
+                $videoSlug = self::CHANNEL_SLUG . '-' . $videoSourceId . '-' . $videoSourceSlug;
 
                 $actors = [];
                 $actorsNodes = $xpath->query('.//div[contains(@class, "actors")]', $node);
@@ -554,18 +760,14 @@ class DorcelCrawlerService
 
                 $listImg = $this->extractListImagesClassic($xpath, $node);
 
-                $preview = null;
-                $previewNodes = $xpath->query('.//span[contains(@class, "thumb-ratio")]', $node);
-                if ($previewNodes && $previewNodes->length > 0) {
-                    $previewValue = $this->getAttr($previewNodes->item(0), 'data-hq-preview');
-                    if (!empty($previewValue)) {
-                        $preview = '2>' . $previewValue;
-                    }
-                }
+                $previewNodes = $xpath->query('.//span[contains(@class, "thumb-ratio")] | .//a[contains(@class, "thumb")]', $node);
+                $previewEl = ($previewNodes && $previewNodes->length > 0) ? $previewNodes->item(0) : null;
+                $preview = $this->extractPreview($node, $previewEl);
 
                 $scenes[] = [
                     'source_id'   => $videoSourceId,
                     'source_slug' => $videoSourceSlug,
+                    'slug'        => $videoSlug,
                     'source_uuid' => $sourceUuid,
                     'name'        => $videoName,
                     'detail_url'  => $detailUrl,
@@ -604,8 +806,7 @@ class DorcelCrawlerService
     {
         $dom = new DOMDocument('1.0', 'UTF-8');
         libxml_use_internal_errors(true);
-        $encodedHtml = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
-        @$dom->loadHTML($encodedHtml, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET);
         libxml_clear_errors();
 
         $xpath = new DOMXPath($dom);
@@ -652,40 +853,45 @@ class DorcelCrawlerService
     protected function extractListImagesClassic(DOMXPath $xpath, DOMNode $node): array
     {
         $listImgData = [];
-        $pattern = '/(https?:\/\/[^\s]+) \d+x/';
-        $sources = $xpath->query('.//a[contains(@class, "thumb")]//picture//source | .//picture//source', $node);
+        $sources = $xpath->query('.//a[contains(@class, "thumb")]//picture//source | .//span[contains(@class, "thumb-ratio")]//picture//source | .//picture//source', $node);
 
         if ($sources && $sources->length > 0) {
-            $smallNode = ($sources->length >= 5) ? $sources->item(4) : $sources->item($sources->length - 1);
-            if ($smallNode) {
-                $srcset = $this->getAttr($smallNode, 'data-srcset') ?: $this->getAttr($smallNode, 'srcset');
-                if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                    $smValue = $matches[1][0];
-                    $mdValue = $matches[1][1];
-                    $listImgData[] = [
-                        'src_source'         => $smValue,
-                        'placeholder_source' => '',
-                        'width'              => 370,
-                        'height'             => 231,
-                        'highdpi'            => ['double_source' => $mdValue],
-                    ];
+            $parsed = $this->parsePictureSources($sources);
+            if (!empty($parsed)) {
+                // 小图：优先取 ~360/370 宽度（或第 0 项）
+                $small = $parsed[0];
+                foreach ($parsed as $item) {
+                    if ($item['w1x'] <= 400 && $item['w1x'] > 0) {
+                        $small = $item;
+                        break;
+                    }
                 }
-            }
+                $listImgData[] = [
+                    'src_source'         => $small['url1x'] ?: $small['url2x'],
+                    'placeholder_source' => '',
+                    'width'              => $small['w1x'] ?: 370,
+                    'height'             => $small['h1x'] ?: 231,
+                    'highdpi'            => ['double_source' => $small['url2x'] ?: $small['url1x']],
+                ];
 
-            $bigNode = ($sources->length >= 3) ? $sources->item(2) : $sources->item(0);
-            if ($bigNode) {
-                $srcset = $this->getAttr($bigNode, 'data-srcset') ?: $this->getAttr($bigNode, 'srcset');
-                if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                    $lgValue = $matches[1][0];
-                    $xlValue = $matches[1][1];
-                    $listImgData[] = [
-                        'src_source'         => $lgValue,
-                        'placeholder_source' => '',
-                        'width'              => 575,
-                        'height'             => 360,
-                        'highdpi'            => ['double_source' => $xlValue],
-                    ];
+                // 大图：优先取 ~575 宽度
+                $big = null;
+                foreach ($parsed as $item) {
+                    if ($item['w1x'] === 575 || ($item['w1x'] >= 500 && $item['w1x'] <= 650)) {
+                        $big = $item;
+                        break;
+                    }
                 }
+                if (!$big) {
+                    $big = (count($parsed) >= 2) ? $parsed[(int) floor(count($parsed) / 2)] : end($parsed);
+                }
+                $listImgData[] = [
+                    'src_source'         => $big['url1x'] ?: $big['url2x'],
+                    'placeholder_source' => '',
+                    'width'              => $big['w1x'] ?: 575,
+                    'height'             => $big['h1x'] ?: 360,
+                    'highdpi'            => ['double_source' => $big['url2x'] ?: $big['url1x']],
+                ];
             }
         }
 
@@ -704,44 +910,25 @@ class DorcelCrawlerService
     }
 
     /**
-     * 经典 XPath 提取大图 Meta（严格对齐 Project1VideoCrawlerService 结构）
+     * 经典 XPath 提取大图 Meta
+     * 提取一个中等尺寸和一个最大尺寸图片（严格对齐标准大图规范）
      */
     protected function extractLargeImgMetaClassic(DOMXPath $xpath): array
     {
-        $imgData = [];
-        $pattern = '/(https?:\/\/[^\s]+) \d+x/';
-        $sourceConfigs = [
-            ['key' => 0, 'width' => 360, 'height' => 240, 'media' => '(max-width: 360px)'],
-            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(min-width: 361px) and (max-width: 768px)'],
-            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 769px)'],
-        ];
-
-        $sources = $xpath->query('//div[contains(@class, "player_container")]//picture//source | //div[contains(@class, "player")]//picture//source');
-
-        if ($sources && $sources->length > 0) {
-            foreach ($sourceConfigs as $config) {
-                if ($sources->length > $config['key']) {
-                    $sourceNode = $sources->item($config['key']);
-                    $srcset = $this->getAttr($sourceNode, 'data-srcset') ?: $this->getAttr($sourceNode, 'srcset');
-                    if ($srcset && preg_match_all($pattern, $srcset, $matches) && count($matches[1]) >= 2) {
-                        $smUrl = $matches[1][0];
-                        $doubleUrl = $matches[1][1];
-                        $imgData[] = [
-                            'src_source'         => $smUrl,
-                            'placeholder_source' => '',
-                            'width'              => $config['width'],
-                            'height'             => $config['height'],
-                            'media'              => $config['media'],
-                            'highdpi'            => [
-                                'double_source' => $doubleUrl,
-                            ],
-                        ];
-                    }
-                }
-            }
+        // 优先定位缩略图比例容器/播放器/Banner 专属 picture 节点，兜底匹配页面任意 picture
+        $pictureNodes = $xpath->query('//span[contains(@class, "thumb-ratio")]//picture | //div[contains(@class, "player_container")]//picture | //div[contains(@class, "player")]//picture | //div[contains(@class, "header")]//picture | //picture');
+        if (!$pictureNodes || $pictureNodes->length === 0) {
+            return [];
         }
 
-        return $imgData;
+        $pictureNode = $pictureNodes->item(0);
+        $sources = $xpath->query('.//source', $pictureNode);
+        if (!$sources || $sources->length === 0) {
+            return [];
+        }
+
+        $parsed = $this->parsePictureSources($sources);
+        return $this->extractLargeImgMetaFromSources($parsed);
     }
 
     /**
@@ -769,7 +956,7 @@ class DorcelCrawlerService
         $videoData = [
             'channel_id'         => $channel->id,
             'name'               => $listItem['name'],
-            'slug'               => $listItem['source_slug'],
+            'slug'               => $listItem['slug'] ?? (self::CHANNEL_SLUG . '-' . (!empty($listItem['source_id']) ? $listItem['source_id'] . '-' : '') . $listItem['source_slug']),
             'status'             => 1, // 默认上架
             'sexual_orientation' => 1, // 异性
         ];
@@ -796,7 +983,9 @@ class DorcelCrawlerService
             return [
                 'status'              => 'dry_run',
                 'video_code'          => $videoCode,
+                'slug'                => $videoData['slug'],
                 'source_uuid'         => $sourceUuid,
+                'preview'             => $listItem['preview'] ?? null,
                 'actors'              => array_column($actors, 'name'),
                 'list_img_count'      => count($listItem['list_img'] ?? []),
                 'large_meta_count'    => count($largeImgMeta),
@@ -807,17 +996,29 @@ class DorcelCrawlerService
         }
 
         // 4. 正式入库：事务保证原子性
-        return DB::transaction(function () use ($sourceUuid, $videoCode, $videoData, $detailItem, $actors, $largeImgMeta) {
+        return DB::transaction(function () use ($sourceUuid, $videoCode, $videoData, $detailItem, $actors, $largeImgMeta, $listItem) {
             $conflictVideo = Video::where('video_code', $videoCode)->first();
             if ($conflictVideo && $conflictVideo->source_uuid !== $sourceUuid) {
                 $videoCode .= '.' . substr(md5($sourceUuid), 0, 4);
             }
             $videoData['video_code'] = $videoCode;
 
-            $video = Video::updateOrCreate(
-                ['source_uuid' => $sourceUuid],
-                $videoData
-            );
+            // 智能兼容旧版本 source_uuid (dorcelclub:{id}) 升级至新版本规范 (dorcelclub:{id}:{slug})
+            $oldSourceUuid = self::CHANNEL_SLUG . ':' . ($listItem['source_id'] ?? '');
+            $existing = Video::where('source_uuid', $sourceUuid)
+                ->when(!empty($listItem['source_id']), fn ($q) => $q->orWhere('source_uuid', $oldSourceUuid))
+                ->first();
+
+            if ($existing) {
+                $videoData['source_uuid'] = $sourceUuid;
+                $existing->update($videoData);
+                $video = $existing;
+            } else {
+                $video = Video::updateOrCreate(
+                    ['source_uuid' => $sourceUuid],
+                    $videoData
+                );
+            }
 
             // 5. 写入详情表
             $detailData = [
@@ -1147,7 +1348,7 @@ class DorcelCrawlerService
 
     /**
      * 根据 list_img 生成标准 list_img_large_meta 结构
-     * 字段与结构严格对齐 Project1VideoCrawlerService::handleListImgLargeMeta
+     * 提取一个中等尺寸和一个最大尺寸图片（严格对齐规范）
      */
     public function buildLargeImgMetaFromListImg(array $listImg): array
     {
@@ -1155,45 +1356,52 @@ class DorcelCrawlerService
             return [];
         }
 
+        // list_img[0] 通常为小图 (370x231)，list_img[1] 为大图 (575x360，含 double_source 高清图)
         $itemSm = $listImg[0] ?? [];
         $itemLg = $listImg[1] ?? $itemSm;
 
-        $smSrc = $itemSm['src'] ?? '';
-        $smSource = $itemSm['src_source'] ?? '';
-        $placeholderSource = $itemSm['placeholder_source'] ?? '';
+        $placeholderSource = $itemSm['placeholder_source'] ?? ($itemLg['placeholder_source'] ?? '');
 
-        $mdSource = $itemSm['highdpi']['double_source'] ?? ($itemLg['src_source'] ?? $smSource);
-        $xxSource = $itemLg['highdpi']['double_source'] ?? ($itemLg['src_source'] ?? $mdSource);
+        // 中等尺寸取 575 宽度的 1x 图（若无则取小图的 double_source 或 src_source）
+        $medSource = $itemLg['src_source'] ?? ($itemSm['highdpi']['double_source'] ?? ($itemSm['src_source'] ?? ''));
+        // 最大尺寸优先取 575 的 double_source（xl 高清大图，如 1150+）或原图
+        $maxSource = $itemLg['highdpi']['double_source'] ?? ($itemLg['src_source'] ?? $medSource);
+
+        $medW = (int) ($itemLg['width'] ?? 575);
+        $medH = (int) ($itemLg['height'] ?? 383);
+        if (preg_match('/_(\d+)_(\d+)_crop/', $medSource, $m)) {
+            $medW = (int) $m[1];
+            $medH = (int) $m[2];
+        }
+
+        $maxW = 773;
+        $maxH = 515;
+        if (preg_match('/_(\d+)_(\d+)_crop/', $maxSource, $m)) {
+            $maxW = (int) $m[1];
+            $maxH = (int) $m[2];
+        }
 
         return [
+            // 1. 中等尺寸 (Medium)
             [
-                'src_source'         => $smSource,
+                'src_source'         => $medSource,
                 'placeholder_source' => $placeholderSource,
-                'width'              => 360,
-                'height'             => 240,
-                'media'              => '(max-width: 360px)',
+                'width'              => $medW,
+                'height'             => $medH,
+                'media'              => '(max-width: 768px)',
                 'highdpi'            => [
-                    'double_source' => $mdSource,
+                    'double_source' => $maxSource,
                 ],
             ],
+            // 2. 最大尺寸 (Largest)
             [
-                'src_source'         => $mdSource,
+                'src_source'         => $maxSource,
                 'placeholder_source' => $placeholderSource,
-                'width'              => 575,
-                'height'             => 383,
-                'media'              => '(min-width: 361px) and (max-width: 768px)',
-                'highdpi'            => [
-                    'double_source' => $xxSource,
-                ],
-            ],
-            [
-                'src_source'         => $xxSource,
-                'placeholder_source' => $placeholderSource,
-                'width'              => 773,
-                'height'             => 515,
+                'width'              => $maxW,
+                'height'             => $maxH,
                 'media'              => '(min-width: 769px)',
                 'highdpi'            => [
-                    'double_source' => $xxSource,
+                    'double_source' => $maxSource,
                 ],
             ],
         ];

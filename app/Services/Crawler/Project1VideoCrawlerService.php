@@ -179,12 +179,12 @@ class Project1VideoCrawlerService
     protected function saveVideoItem(Channel $channel, array $item): Video
     {
         $title = trim($item['title'] ?? '');
-        $slug = Str::slug($title);
+        $sourceSlug = Str::slug($title);
         $sourceId = (string) ($item['id'] ?? '');
         if ($sourceId === '') {
             throw new \InvalidArgumentException("视频缺少有效 id 字段");
         }
-        $sourceUUID = $this->handleSourceUUID($sourceId, $slug);
+        $sourceUUID = $this->handleSourceUUID($sourceId, $sourceSlug);
         $releaseAt = $this->handleReleaseAt($item['dateReleased'] ?? null);
 
         $actorsData = is_array($item['actors'] ?? null) ? $item['actors'] : [];
@@ -207,8 +207,11 @@ class Project1VideoCrawlerService
             ];
         }
 
-        // 生成视频代码 (Video Code)
-        $videoCode = $this->handleVideoCode($item, $femaleActors, $slug, $releaseAt);
+        // 生成视频代码 (Video Code)，基于 sourceSlug
+        $videoCode = $this->handleVideoCode($item, $femaleActors, $sourceSlug, $releaseAt);
+
+        // 统一 slug 格式：片商 slug + '-' + 源 slug
+        $slug = "{$channel->slug}-{$sourceSlug}";
 
         // 整理 videos 主表数据
         $videoData = [
@@ -245,7 +248,7 @@ class Project1VideoCrawlerService
             $videoDetailData['screen_img'] = $screenImg;
         }
 
-        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item, $title) {
+        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item, $title, $channel) {
             // 1. 查询现有视频记录（以 source_uuid 作为唯一标识）
             $existingVideo = Video::where('source_uuid', $sourceUUID)->first();
 
@@ -254,7 +257,12 @@ class Project1VideoCrawlerService
                 // 1) 若新抓取的标题为空，坚决不覆盖原有标题
                 if (empty(trim($title))) {
                     unset($videoData['name']);
-                    unset($videoData['slug']);
+                    // 确保旧 slug 自动补齐片商前缀
+                    if (!empty($existingVideo->slug) && !str_starts_with($existingVideo->slug, "{$channel->slug}-")) {
+                        $videoData['slug'] = "{$channel->slug}-{$existingVideo->slug}";
+                    } else {
+                        unset($videoData['slug']);
+                    }
                 }
                 // 2) 若库中已有有效名称，且新抓取的标题与原名称不一致，不进行覆盖，防止数据污染
                 elseif (!empty(trim($existingVideo->name)) && $existingVideo->name !== $title) {
@@ -263,7 +271,11 @@ class Project1VideoCrawlerService
                         'crawled_name' => $title,
                     ]);
                     unset($videoData['name']);
-                    unset($videoData['slug']);
+                    if (!empty($existingVideo->slug) && !str_starts_with($existingVideo->slug, "{$channel->slug}-")) {
+                        $videoData['slug'] = "{$channel->slug}-{$existingVideo->slug}";
+                    } else {
+                        unset($videoData['slug']);
+                    }
                 }
 
                 // 3) 其它重要字段的非空保护（新值为空时不冲掉旧值）
@@ -283,7 +295,7 @@ class Project1VideoCrawlerService
                 // 新建记录时若标题为空，兜底使用 video_code
                 if (empty(trim($title))) {
                     $videoData['name'] = $videoData['video_code'] ?? $sourceUUID;
-                    $videoData['slug'] = Str::slug($videoData['name']);
+                    $videoData['slug'] = "{$channel->slug}-" . Str::slug($videoData['name']);
                 }
                 $video = Video::create($videoData);
             }

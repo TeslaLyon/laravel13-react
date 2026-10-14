@@ -311,13 +311,14 @@ class VixenCrawlerService
      */
     protected function processSingleVideo(Channel $channel, array $videoNode, bool $downloadImages, bool $forceImages = false): array
     {
-        $slug = $videoNode['slug'] ?? '';
+        $sourceSlug = $videoNode['slug'] ?? '';
         $videoId = $videoNode['videoId'] ?? '';
-        if (empty($slug) || empty($videoId)) {
+        if (empty($sourceSlug) || empty($videoId)) {
             return ['status' => 'skipped', 'reason' => '缺少 slug 或 videoId'];
         }
 
-        $sourceUUID = "{$channel->slug}:{$videoId}:{$slug}";
+        $sourceUUID = "{$channel->slug}:{$videoId}:{$sourceSlug}";
+        $videoSlug = "{$channel->slug}-{$sourceSlug}";
 
         // 1. 冲突判定（旧代码核心逻辑：检测同名/待定演员）
         if ($this->handleVideoRepeatActor($videoNode, $channel, $sourceUUID)) {
@@ -337,7 +338,7 @@ class VixenCrawlerService
         }
 
         // 3. 拉取详情页 HTML，获取 carousel 轮播截图、大图 meta、高清时长等
-        $detailUrl = rtrim($channel->official_website_url, '/') . "/videos/{$slug}";
+        $detailUrl = rtrim($channel->official_website_url, '/') . "/videos/{$sourceSlug}";
         $detailHtml = $this->fetchHtml($detailUrl);
         $detailData = [];
         if (!empty($detailHtml)) {
@@ -357,7 +358,7 @@ class VixenCrawlerService
 
         // 5. 格式化生成统一编码 video_code
         $femaleActors = $detailData['modelsSlugged'] ?? ($videoNode['modelsSlugged'] ?? []);
-        $videoCode = $this->generateVideoCode($channel->slug, $releaseAt, $femaleActors, $slug);
+        $videoCode = $this->generateVideoCode($channel->slug, $releaseAt, $femaleActors, $sourceSlug);
 
         // 6. 处理图片资源（list_img, screen_img；详情头图直接复用 list_img 最大图，不再写入 list_img_large_meta）
         $listImg = $this->processListImg($channel->slug, $videoId, $videoNode, $downloadImages);
@@ -373,7 +374,8 @@ class VixenCrawlerService
             DB::transaction(function () use (
                 $channel,
                 $sourceUUID,
-                $slug,
+                $videoSlug,
+                $sourceSlug,
                 $videoId,
                 $title,
                 $releaseAt,
@@ -394,7 +396,7 @@ class VixenCrawlerService
                     [
                         'channel_id'         => $channel->id,
                         'name'               => $title,
-                        'slug'               => $slug,
+                        'slug'               => $videoSlug,
                         'release_at'         => $releaseAt,
                         'video_code'         => $videoCode,
                         'is_4k'              => $is4k,
@@ -439,12 +441,12 @@ class VixenCrawlerService
                     $photo = Photo::updateOrCreate(
                         [
                             'channel_id' => $channel->id,
-                            'slug'       => $slug,
+                            'slug'       => $videoSlug,
                         ],
                         [
                             'name'               => $title,
-                            'slug'               => $slug,
-                            'source_uuid'        => "{$channel->slug}:photo:{$videoId}:{$slug}",
+                            'slug'               => $videoSlug,
+                            'source_uuid'        => "{$channel->slug}:photo:{$videoId}:{$sourceSlug}",
                             'photo_code'         => $videoCode,
                             'release_at'         => $releaseAt,
                             'total'              => $picturesInSet,
@@ -460,9 +462,9 @@ class VixenCrawlerService
                 }
             });
 
-            return ['status' => 'success', 'slug' => $slug];
+            return ['status' => 'success', 'slug' => $videoSlug];
         } catch (Throwable $e) {
-            Log::error("视频 [{$slug}] 数据库入库失败: " . $e->getMessage());
+            Log::error("视频 [{$videoSlug}] 数据库入库失败: " . $e->getMessage());
             return ['status' => 'failed', 'reason' => $e->getMessage()];
         }
     }

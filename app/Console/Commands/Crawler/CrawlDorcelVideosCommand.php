@@ -146,7 +146,8 @@ class CrawlDorcelVideosCommand extends Command
                 $sceneTitle = $sceneItem['name'];
                 $sourceUuid = $sceneItem['source_uuid'];
 
-                $this->line(sprintf("  [%d/%d] 🎬 视频: <info>%s</info> (UUID: %s)", $sceneIndex, count($scenes), $sceneTitle, $sourceUuid));
+                $sceneSlug = $sceneItem['slug'] ?? '';
+                $this->line(sprintf("  [%d/%d] 🎬 视频: <info>%s</info> (Slug: <comment>%s</comment>, UUID: %s)", $sceneIndex, count($scenes), $sceneTitle, $sceneSlug, $sourceUuid));
 
                 // 极速增量模式：若本地库中已存在该 source_uuid 且开启了 --skip-existing，直接跳过详情抓取
                 if ($skipExisting && Video::where('source_uuid', $sourceUuid)->exists()) {
