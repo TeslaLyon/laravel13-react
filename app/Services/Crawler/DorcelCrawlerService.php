@@ -81,10 +81,27 @@ class DorcelCrawlerService
             [
                 'name'                 => self::CHANNEL_NAME,
                 'slug'                 => self::CHANNEL_SLUG,
-                'data_crawl_type'      => 0,
+                'data_crawl_type'      => 1,
+                'avatar'               => '/images/channels/dorcelclub-avatar.avif',
+                'logo'                 => '/images/channels/dorcelclub-logo.jpg',
                 'official_website_url' => self::BASE_URL,
             ]
         );
+
+        // 若数据库中已存在旧记录，同步确保字段最新
+        $updates = [];
+        if ($this->channel->data_crawl_type !== 1) {
+            $updates['data_crawl_type'] = 1;
+        }
+        if (empty($this->channel->avatar) || $this->channel->avatar !== '/images/channels/dorcelclub-avatar.avif') {
+            $updates['avatar'] = '/images/channels/dorcelclub-avatar.avif';
+        }
+        if (empty($this->channel->logo) || $this->channel->logo !== '/images/channels/dorcelclub-logo.jpg') {
+            $updates['logo'] = '/images/channels/dorcelclub-logo.jpg';
+        }
+        if (!empty($updates)) {
+            $this->channel->update($updates);
+        }
 
         return $this->channel;
     }
