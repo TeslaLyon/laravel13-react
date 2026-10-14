@@ -223,13 +223,22 @@ class CrawlThePornDBTagsCommand extends Command
                 $tagNamesZh = array_map(fn($t) => $t['name_zh'] ?? $t['name'], $applied);
 
                 $stats['synced_videos']++;
-                $this->info(sprintf(
-                    "     ✅ 成功融合同步 %d 个标签 (原始 tags: %d, markers: %d): [%s]",
-                    count($applied),
-                    $tagsCount,
-                    $markersCount,
-                    implode(', ', $tagNamesZh)
-                ));
+
+                if ($dryRun) {
+                    $this->comment(sprintf(
+                        "     🛡️ [演练模式] 模拟解析出 %d 个标签 (未写入数据库，去掉 --dry-run 即可正式入库): [%s]",
+                        count($applied),
+                        implode(', ', $tagNamesZh)
+                    ));
+                } else {
+                    $this->info(sprintf(
+                        "     ✅ [正式入库] 成功新增/关联 %d 个标签至视频 (tags: %d, markers: %d): [%s]",
+                        count($applied),
+                        $tagsCount,
+                        $markersCount,
+                        implode(', ', $tagNamesZh)
+                    ));
+                }
 
                 // 避免频繁请求封禁
                 if ($delay > 0) {

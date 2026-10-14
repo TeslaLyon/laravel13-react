@@ -457,22 +457,30 @@ class ThePornDBCrawlerService
                 continue;
             }
 
-            $tagModel = $this->getOrCreateTag($rawName);
-            if ($tagModel) {
-                $tagIds[] = $tagModel->id;
-                $appliedTags[] = [
-                    'id'      => $tagModel->id,
-                    'name'    => $tagModel->name,
-                    'name_zh' => $tagModel->name_zh,
-                ];
+            try {
+                $tagModel = $this->getOrCreateTag($rawName);
+                if ($tagModel) {
+                    $tagIds[] = $tagModel->id;
+                    $appliedTags[] = [
+                        'id'      => $tagModel->id,
+                        'name'    => $tagModel->name,
+                        'name_zh' => $tagModel->name_zh,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $this->log("⚠️  [标签同步] 处理标签 [{$rawName}] 异常: " . $e->getMessage(), 'warn');
             }
         }
 
         if (!$dryRun && !empty($tagIds)) {
-            $video->tags()->syncWithoutDetaching($tagIds);
+            try {
+                $video->tags()->syncWithoutDetaching($tagIds);
 
-            // 更新标签关联视频数量统计
-            Tag::whereIn('id', $tagIds)->increment('video_num');
+                // 更新标签关联视频数量统计
+                Tag::whereIn('id', $tagIds)->increment('video_num');
+            } catch (\Throwable $e) {
+                $this->log("❌ [标签关联] 关联标签至视频 [ID: {$video->id}] 异常: " . $e->getMessage(), 'error');
+            }
         }
 
         return [
@@ -483,51 +491,90 @@ class ThePornDBCrawlerService
     }
 
     /**
-     * 获取或创建标签（自动匹配中文翻译与友好 slug）
+     * 获取或创建标签（自动匹配中文翻译与友好 slug，支持 name/name_zh/slug 智能去重防冲突）
      *
      * @param string $tagName 原始英文标签名
-     * @return Tag
+     * @return Tag|null
      */
-    public function getOrCreateTag(string $tagName): Tag
+    public function getOrCreateTag(string $tagName): ?Tag
     {
         $tagName = trim($tagName);
-        $slug = Str::slug($tagName);
-        if (empty($slug)) {
-            $slug = strtolower(str_replace([' ', '/', '(', ')', '+', '&'], '-', $tagName));
+        if (empty($tagName)) {
+            return null;
         }
 
-        // 1. 尝试以 name 或 slug 精准查询现有标签
+        $slug = Str::slug($tagName);
+        if (empty($slug)) {
+            $slug = strtolower(str_replace([' ', '/', '(', ')', '+', '&', '_', '.'], '-', $tagName));
+        }
+
+        // 1. 匹配中文名称（若词典无对应翻译，则安全回退为原英文名）
+        $nameZh = $this->resolveChineseName($tagName);
+
+        // 2. 尝试从数据库查询现有标签：
+        // 匹配原则：无论 slug、英文名（忽略大小写）还是中文译名相同，均归属于同一标签概念
         $existing = Tag::where('slug', $slug)
             ->orWhereRaw('LOWER(name) = ?', [strtolower($tagName)])
+            ->orWhere('name_zh', $nameZh)
             ->first();
 
         if ($existing) {
-            // 若现有标签没有中文翻译，尝试用词典补全
-            if (empty($existing->name_zh) || $existing->name_zh === $existing->name) {
-                $zh = $this->resolveChineseName($tagName);
-                if (!empty($zh) && $zh !== $tagName) {
-                    $existing->update(['name_zh' => $zh]);
-                }
+            // 若现有标签没有中文翻译（或之前存了英文名），且当前词典已具备中文翻译，则自动补全中文名
+            if ((empty($existing->name_zh) || $existing->name_zh === $existing->name) && $nameZh !== $tagName) {
+                try {
+                    $existing->update(['name_zh' => $nameZh]);
+                } catch (\Throwable) {}
             }
             return $existing;
         }
 
-        // 2. 匹配中文名称
-        $nameZh = $this->resolveChineseName($tagName);
+        // 3. 不存在时创建新标签（带唯一性冲突安全保护）
+        try {
+            return Tag::create([
+                'name'              => $tagName,
+                'name_zh'           => $nameZh,
+                'slug'              => $slug,
+                'description'       => "包含与【{$nameZh}】相关的精彩内容。",
+                'avatar'            => "/storage/tags/{$slug}_square.jpg",
+                'avatar_vertical'   => "/storage/tags/{$slug}_vertical.jpg",
+                'avatar_horizontal' => "/storage/tags/{$slug}_horizontal.jpg",
+                'video_num'         => 0,
+                'follow_num'        => 0,
+                'photo_num'         => 0,
+                'sort'              => 0,
+            ]);
+        } catch (\Throwable $e) {
+            // 若因并发写入或 name_zh 唯一性冲突报错，再次检索现有记录并返回
+            $existing = Tag::where('slug', $slug)
+                ->orWhereRaw('LOWER(name) = ?', [strtolower($tagName)])
+                ->orWhere('name_zh', $nameZh)
+                ->first();
 
-        return Tag::create([
-            'name'              => $tagName,
-            'name_zh'           => $nameZh,
-            'slug'              => $slug,
-            'description'       => "包含与【{$nameZh}】相关的精彩内容。",
-            'avatar'            => "/storage/tags/{$slug}_square.jpg",
-            'avatar_vertical'   => "/storage/tags/{$slug}_vertical.jpg",
-            'avatar_horizontal' => "/storage/tags/{$slug}_horizontal.jpg",
-            'video_num'         => 0,
-            'follow_num'        => 0,
-            'photo_num'         => 0,
-            'sort'              => 0,
-        ]);
+            if ($existing) {
+                return $existing;
+            }
+
+            // 若 slug 发生冲突，附加哈希后缀重试创建
+            $fallbackSlug = $slug . '-' . substr(md5($tagName), 0, 4);
+            try {
+                return Tag::create([
+                    'name'              => $tagName,
+                    'name_zh'           => $nameZh,
+                    'slug'              => $fallbackSlug,
+                    'description'       => "包含与【{$nameZh}】相关的精彩内容。",
+                    'avatar'            => "/storage/tags/{$fallbackSlug}_square.jpg",
+                    'avatar_vertical'   => "/storage/tags/{$fallbackSlug}_vertical.jpg",
+                    'avatar_horizontal' => "/storage/tags/{$fallbackSlug}_horizontal.jpg",
+                    'video_num'         => 0,
+                    'follow_num'        => 0,
+                    'photo_num'         => 0,
+                    'sort'              => 0,
+                ]);
+            } catch (\Throwable $ex) {
+                $this->log("⚠️  [标签入库] 创建标签 [{$tagName}] 异常: " . $ex->getMessage(), 'warn');
+                return null;
+            }
+        }
     }
 
     /**
