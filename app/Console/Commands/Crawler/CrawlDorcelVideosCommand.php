@@ -179,7 +179,13 @@ class CrawlDorcelVideosCommand extends Command
                         'created' => $this->info(sprintf("     ✅ [新增入库] Code: %s, 关联演员: %d 位", $syncResult['video_code'], $syncResult['actor_count'] ?? 0)),
                         'updated' => $this->line(sprintf("     🔄 [更新入库] Code: %s, 关联演员: %d 位", $syncResult['video_code'], $syncResult['actor_count'] ?? 0)),
                         'delayed' => $this->warn(sprintf("     ⚠️ [延期观察] %s", $syncResult['message'])),
-                        'dry_run' => $this->comment(sprintf("     🛡️ [演练模拟] Code: %s, 演员: [%s]", $syncResult['video_code'], implode(', ', $syncResult['actors'] ?? []))),
+                        'dry_run' => $this->comment(sprintf(
+                            "     🛡️ [演练模拟] Code: %s, 封面图: %d 组, 大图Meta: %d 组, 演员: [%s]",
+                            $syncResult['video_code'],
+                            $syncResult['list_img_count'] ?? 0,
+                            $syncResult['large_meta_count'] ?? 0,
+                            implode(', ', $syncResult['actors'] ?? [])
+                        )),
                         default   => $this->line("     ℹ️ 状态: " . ($syncResult['status'] ?? '未知')),
                     };
 

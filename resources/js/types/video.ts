@@ -218,24 +218,26 @@ export type ScreenImageMeta = {
  * 列表大图元数据结构 (对应 list_img_large_meta 解析后的单项)
  */
 export type ListImageMeta = {
-    src: string;
+    src?: string;
     width?: number;
     height?: number;
     media?: string;
     src_source?: string;
     placeholder?: string;
+    placeholder_source?: string;
     webp?: {
-        src: string;
+        src?: string;
         src_source?: string;
         placeholder?: string;
+        placeholder_source?: string;
         highdpi?: {
-            double: string;
-            double_source: string;
+            double?: string;
+            double_source?: string;
         };
     };
     highdpi?: {
-        double: string;
-        double_source: string;
+        double?: string;
+        double_source?: string;
     };
 };
 

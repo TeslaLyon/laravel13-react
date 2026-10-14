@@ -123,21 +123,25 @@ export function ResponsiveVideoImage({
             });
         } else {
             listImg.forEach((item) => {
-                const rawWebp1x = isSource ? (item.webp?.src_source || item.webp?.src) : item.webp?.src;
+                const rawWebp1x = isSource
+                    ? (item.webp?.src_source || item.webp?.src || item.src_source)
+                    : (item.webp?.src || item.src_source || item.src);
                 const webp1x = cdnUrl(rawWebp1x);
                 const rawWebp2x = isSource
-                    ? (item.webp?.highdpi?.double_source || item.webp?.highdpi?.double)
-                    : item.webp?.highdpi?.double;
+                    ? (item.webp?.highdpi?.double_source || item.webp?.highdpi?.double || item.highdpi?.double_source)
+                    : (item.webp?.highdpi?.double || item.highdpi?.double_source || item.highdpi?.double);
                 const webp2x = cdnUrl(rawWebp2x);
 
                 if (webp1x) webpEntries.push({ url: webp1x, width: item.width });
                 if (webp2x) webpEntries.push({ url: webp2x, width: item.width * 2 });
 
-                const rawJpg1x = isSource ? (item.src_source || item.src) : item.src;
+                const rawJpg1x = isSource
+                    ? (item.src_source || item.src)
+                    : (item.src || item.src_source);
                 const jpg1x = cdnUrl(rawJpg1x);
                 const rawJpg2x = isSource
                     ? (item.highdpi?.double_source || item.highdpi?.double)
-                    : item.highdpi?.double;
+                    : (item.highdpi?.double || item.highdpi?.double_source);
                 const jpg2x = cdnUrl(rawJpg2x);
 
                 if (jpg1x) jpgEntries.push({ url: jpg1x, width: item.width });
@@ -158,13 +162,13 @@ export function ResponsiveVideoImage({
         const firstItem = listImg[0];
         const rawPlaceholder = isSource
             ? (firstItem.webp?.placeholder_source || firstItem.placeholder_source || firstItem.webp?.placeholder || firstItem.placeholder || '')
-            : (firstItem.webp?.placeholder || firstItem.placeholder || '');
+            : (firstItem.placeholder || firstItem.placeholder_source || firstItem.webp?.placeholder || firstItem.webp?.placeholder_source || '');
         const placeholderUrl = cdnUrl(rawPlaceholder);
 
         const lastItem = listImg[listImg.length - 1];
         const rawDefaultSrc = isSource
             ? (lastItem.highdpi?.double_source || lastItem.src_source || lastItem.src)
-            : (lastItem.highdpi?.double || lastItem.src);
+            : (lastItem.highdpi?.double || lastItem.highdpi?.double_source || lastItem.src || lastItem.src_source);
         const defaultSrc = cdnUrl(rawDefaultSrc) || fallbackSrc;
 
         return { webpSrcSet, jpgSrcSet, placeholderUrl, defaultSrc };

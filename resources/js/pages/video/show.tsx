@@ -218,8 +218,8 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                 }
             }
 
-            // 🎯 优先使用 highdpi.double 高清大图链接
-            const highDpiSrc = largest?.highdpi?.double || largest?.src || '';
+            // 🎯 优先使用 highdpi.double_source / highdpi.double 高清大图链接
+            const highDpiSrc = largest?.highdpi?.double_source || largest?.highdpi?.double || largest?.src_source || largest?.src || '';
 
             return [{
                 ...largest,

@@ -289,25 +289,12 @@ class DorcelCrawlerService
                     $mdValue = $matches[1][1];
 
                     $listImg[] = [
-                        'src'                => $smValue,
                         'src_source'         => $smValue,
-                        'placeholder'        => '',
                         'placeholder_source' => '',
                         'width'              => 370,
                         'height'             => 231,
                         'highdpi'            => [
-                            'double'        => $mdValue,
                             'double_source' => $mdValue,
-                        ],
-                        'webp'               => [
-                            'src'                => $smValue,
-                            'src_source'         => $smValue,
-                            'placeholder'        => '',
-                            'placeholder_source' => '',
-                            'highdpi'            => [
-                                'double'        => $mdValue,
-                                'double_source' => $mdValue,
-                            ],
                         ],
                     ];
                 }
@@ -322,27 +309,25 @@ class DorcelCrawlerService
                     $xlValue = $matches[1][1];
 
                     $listImg[] = [
-                        'src'                => $lgValue,
                         'src_source'         => $lgValue,
-                        'placeholder'        => '',
                         'placeholder_source' => '',
                         'width'              => 575,
                         'height'             => 360,
                         'highdpi'            => [
-                            'double'        => $xlValue,
                             'double_source' => $xlValue,
                         ],
-                        'webp'               => [
-                            'src'                => $lgValue,
-                            'src_source'         => $lgValue,
-                            'placeholder'        => '',
-                            'placeholder_source' => '',
-                            'highdpi'            => [
-                                'double'        => $xlValue,
-                                'double_source' => $xlValue,
-                            ],
-                        ],
                     ];
+                }
+            }
+        }
+
+        // 若 picture source 匹配为空，尝试降级提取 img 节点
+        if (empty($listImg)) {
+            $imgNode = $card->querySelector('a.thumb img, img');
+            if ($imgNode) {
+                $imgUrl = $this->getAttr($imgNode, 'data-src') ?: $this->getAttr($imgNode, 'src');
+                if (!empty($imgUrl)) {
+                    $listImg = $this->buildListImgFromSingleUrl($imgUrl);
                 }
             }
         }
@@ -443,12 +428,23 @@ class DorcelCrawlerService
             $detailData['description'] = '';
         }
 
-        // 4. 详情页大图 Meta
-        $detailData['list_img_large_meta'] = [];
+        // 4. 详情页大图 Meta（严格对齐 Project1VideoCrawlerService 结构）
+        $detailData['list_img_large_meta'] = $this->extractLargeImgMetaPhp84($doc);
+
+        return $detailData;
+    }
+
+    /**
+     * 【PHP 8.4 新特性驱动】从详情页解析大图 Meta
+     * 字段与结构严格对齐 Project1VideoCrawlerService
+     */
+    protected function extractLargeImgMetaPhp84(object $doc): array
+    {
+        $largeImgMeta = [];
         $sourceConfigs = [
             ['key' => 0, 'width' => 360, 'height' => 240, 'media' => '(max-width: 360px)'],
-            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(max-width: 768px)'],
-            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 768px)'],
+            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(min-width: 361px) and (max-width: 768px)'],
+            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 769px)'],
         ];
 
         $largeSources = $doc->querySelectorAll('div.player_container picture source, div.player picture source, picture source');
@@ -463,27 +459,14 @@ class DorcelCrawlerService
                         $smUrl = $matches[1][0];
                         $doubleUrl = $matches[1][1];
 
-                        $detailData['list_img_large_meta'][] = [
-                            'src'                => $smUrl,
+                        $largeImgMeta[] = [
                             'src_source'         => $smUrl,
-                            'placeholder'        => '',
                             'placeholder_source' => '',
                             'width'              => $config['width'],
                             'height'             => $config['height'],
                             'media'              => $config['media'],
                             'highdpi'            => [
-                                'double'        => $doubleUrl,
                                 'double_source' => $doubleUrl,
-                            ],
-                            'webp'               => [
-                                'src'                => $smUrl,
-                                'src_source'         => $smUrl,
-                                'placeholder'        => '',
-                                'placeholder_source' => '',
-                                'highdpi'            => [
-                                    'double'        => $doubleUrl,
-                                    'double_source' => $doubleUrl,
-                                ],
                             ],
                         ];
                     }
@@ -491,7 +474,7 @@ class DorcelCrawlerService
             }
         }
 
-        return $detailData;
+        return $largeImgMeta;
     }
 
     /**
@@ -663,14 +646,11 @@ class DorcelCrawlerService
                     $smValue = $matches[1][0];
                     $mdValue = $matches[1][1];
                     $listImgData[] = [
-                        'src'                => $smValue,
                         'src_source'         => $smValue,
-                        'placeholder'        => '',
                         'placeholder_source' => '',
                         'width'              => 370,
                         'height'             => 231,
-                        'highdpi'            => ['double' => $mdValue, 'double_source' => $mdValue],
-                        'webp'               => ['src' => $smValue, 'src_source' => $smValue, 'placeholder' => '', 'placeholder_source' => '', 'highdpi' => ['double' => $mdValue, 'double_source' => $mdValue]],
+                        'highdpi'            => ['double_source' => $mdValue],
                     ];
                 }
             }
@@ -682,15 +662,23 @@ class DorcelCrawlerService
                     $lgValue = $matches[1][0];
                     $xlValue = $matches[1][1];
                     $listImgData[] = [
-                        'src'                => $lgValue,
                         'src_source'         => $lgValue,
-                        'placeholder'        => '',
                         'placeholder_source' => '',
                         'width'              => 575,
                         'height'             => 360,
-                        'highdpi'            => ['double' => $xlValue, 'double_source' => $xlValue],
-                        'webp'               => ['src' => $lgValue, 'src_source' => $lgValue, 'placeholder' => '', 'placeholder_source' => '', 'highdpi' => ['double' => $xlValue, 'double_source' => $xlValue]],
+                        'highdpi'            => ['double_source' => $xlValue],
                     ];
+                }
+            }
+        }
+
+        // 若 picture source 匹配为空，尝试降级提取 img 节点
+        if (empty($listImgData)) {
+            $imgNodes = $xpath->query('.//a[contains(@class, "thumb")]//img | .//img', $node);
+            if ($imgNodes && $imgNodes->length > 0) {
+                $imgUrl = $this->getAttr($imgNodes->item(0), 'data-src') ?: $this->getAttr($imgNodes->item(0), 'src');
+                if (!empty($imgUrl)) {
+                    $listImgData = $this->buildListImgFromSingleUrl($imgUrl);
                 }
             }
         }
@@ -699,7 +687,7 @@ class DorcelCrawlerService
     }
 
     /**
-     * 经典 XPath 提取大图 Meta
+     * 经典 XPath 提取大图 Meta（严格对齐 Project1VideoCrawlerService 结构）
      */
     protected function extractLargeImgMetaClassic(DOMXPath $xpath): array
     {
@@ -707,8 +695,8 @@ class DorcelCrawlerService
         $pattern = '/(https?:\/\/[^\s]+) \d+x/';
         $sourceConfigs = [
             ['key' => 0, 'width' => 360, 'height' => 240, 'media' => '(max-width: 360px)'],
-            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(max-width: 768px)'],
-            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 768px)'],
+            ['key' => 2, 'width' => 575, 'height' => 383, 'media' => '(min-width: 361px) and (max-width: 768px)'],
+            ['key' => 4, 'width' => 773, 'height' => 515, 'media' => '(min-width: 769px)'],
         ];
 
         $sources = $xpath->query('//div[contains(@class, "player_container")]//picture//source | //div[contains(@class, "player")]//picture//source');
@@ -722,15 +710,14 @@ class DorcelCrawlerService
                         $smUrl = $matches[1][0];
                         $doubleUrl = $matches[1][1];
                         $imgData[] = [
-                            'src'                => $smUrl,
                             'src_source'         => $smUrl,
-                            'placeholder'        => '',
                             'placeholder_source' => '',
                             'width'              => $config['width'],
                             'height'             => $config['height'],
                             'media'              => $config['media'],
-                            'highdpi'            => ['double' => $doubleUrl, 'double_source' => $doubleUrl],
-                            'webp'               => ['src' => $smUrl, 'src_source' => $smUrl, 'placeholder' => '', 'placeholder_source' => '', 'highdpi' => ['double' => $doubleUrl, 'double_source' => $doubleUrl]],
+                            'highdpi'            => [
+                                'double_source' => $doubleUrl,
+                            ],
                         ];
                     }
                 }
@@ -782,19 +769,28 @@ class DorcelCrawlerService
             $videoData['release_at'] = $detailItem['release_at'];
         }
 
+        // 详情大图元数据：优先使用详情页解析的 list_img_large_meta，若无则从 list_img 自动派生构造（严格参照 Project1 模式）
+        $largeImgMeta = !empty($detailItem['list_img_large_meta'])
+            ? $detailItem['list_img_large_meta']
+            : $this->buildLargeImgMetaFromListImg($listItem['list_img'] ?? []);
+
         // 演练模式：直接返回模拟结果
         if ($dryRun) {
             return [
-                'status'     => 'dry_run',
-                'video_code' => $videoCode,
-                'source_uuid'=> $sourceUuid,
-                'actors'     => array_column($actors, 'name'),
-                'video'      => null,
+                'status'              => 'dry_run',
+                'video_code'          => $videoCode,
+                'source_uuid'         => $sourceUuid,
+                'actors'              => array_column($actors, 'name'),
+                'list_img_count'      => count($listItem['list_img'] ?? []),
+                'large_meta_count'    => count($largeImgMeta),
+                'list_img'            => $listItem['list_img'] ?? [],
+                'list_img_large_meta' => $largeImgMeta,
+                'video'               => null,
             ];
         }
 
         // 4. 正式入库：事务保证原子性
-        return DB::transaction(function () use ($sourceUuid, $videoCode, $videoData, $detailItem, $actors) {
+        return DB::transaction(function () use ($sourceUuid, $videoCode, $videoData, $detailItem, $actors, $largeImgMeta) {
             $conflictVideo = Video::where('video_code', $videoCode)->first();
             if ($conflictVideo && $conflictVideo->source_uuid !== $sourceUuid) {
                 $videoCode .= '.' . substr(md5($sourceUuid), 0, 4);
@@ -813,8 +809,8 @@ class DorcelCrawlerService
                 'description'  => $detailItem['description'] ?? '',
             ];
 
-            if (!empty($detailItem['list_img_large_meta'])) {
-                $detailData['list_img_large_meta'] = $detailItem['list_img_large_meta'];
+            if (!empty($largeImgMeta)) {
+                $detailData['list_img_large_meta'] = $largeImgMeta;
             }
 
             VideoDetail::updateOrCreate(
@@ -1131,4 +1127,87 @@ class DorcelCrawlerService
             ]);
         } catch (Throwable) {}
     }
+
+    /**
+     * 根据 list_img 生成标准 list_img_large_meta 结构
+     * 字段与结构严格对齐 Project1VideoCrawlerService::handleListImgLargeMeta
+     */
+    public function buildLargeImgMetaFromListImg(array $listImg): array
+    {
+        if (empty($listImg)) {
+            return [];
+        }
+
+        $itemSm = $listImg[0] ?? [];
+        $itemLg = $listImg[1] ?? $itemSm;
+
+        $smSrc = $itemSm['src'] ?? '';
+        $smSource = $itemSm['src_source'] ?? '';
+        $placeholderSource = $itemSm['placeholder_source'] ?? '';
+
+        $mdSource = $itemSm['highdpi']['double_source'] ?? ($itemLg['src_source'] ?? $smSource);
+        $xxSource = $itemLg['highdpi']['double_source'] ?? ($itemLg['src_source'] ?? $mdSource);
+
+        return [
+            [
+                'src_source'         => $smSource,
+                'placeholder_source' => $placeholderSource,
+                'width'              => 360,
+                'height'             => 240,
+                'media'              => '(max-width: 360px)',
+                'highdpi'            => [
+                    'double_source' => $mdSource,
+                ],
+            ],
+            [
+                'src_source'         => $mdSource,
+                'placeholder_source' => $placeholderSource,
+                'width'              => 575,
+                'height'             => 383,
+                'media'              => '(min-width: 361px) and (max-width: 768px)',
+                'highdpi'            => [
+                    'double_source' => $xxSource,
+                ],
+            ],
+            [
+                'src_source'         => $xxSource,
+                'placeholder_source' => $placeholderSource,
+                'width'              => 773,
+                'height'             => 515,
+                'media'              => '(min-width: 769px)',
+                'highdpi'            => [
+                    'double_source' => $xxSource,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * 单张图片降级构造标准 list_img 结构
+     * 字段与结构严格对齐 Project1VideoCrawlerService::handleListImg
+     */
+    public function buildListImgFromSingleUrl(string $url): array
+    {
+        return [
+            [
+                'src_source'         => $url,
+                'placeholder_source' => '',
+                'width'              => 370,
+                'height'             => 231,
+                'highdpi'            => [
+                    'double_source' => $url,
+                ],
+            ],
+            [
+                'src_source'         => $url,
+                'placeholder_source' => '',
+                'width'              => 575,
+                'height'             => 360,
+                'highdpi'            => [
+                    'double_source' => $url,
+                ],
+            ],
+        ];
+    }
 }
+

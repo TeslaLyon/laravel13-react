@@ -620,61 +620,29 @@ class Project1VideoCrawlerService
             return [];
         }
 
-        $xsSrc = $this->handleFilesUrl($poster['xs']['url'], $channel, $sourceId);
-        $mdSrc = $this->handleFilesUrl($poster['md']['url'], $channel, $sourceId);
-        $smSrc = $this->handleFilesUrl($poster['sm']['url'], $channel, $sourceId);
-        $lgSrc = $this->handleFilesUrl($poster['lg']['url'], $channel, $sourceId);
-        $xlSrc = $this->handleFilesUrl($poster['xl']['url'], $channel, $sourceId);
-
-        $xsWebp = $this->handleFilesUrl($poster['xs']['urls']['webp'] ?? $poster['xs']['url'], $channel, $sourceId);
-        $mdWebp = $this->handleFilesUrl($poster['md']['urls']['webp'] ?? $poster['md']['url'], $channel, $sourceId);
-        $smWebp = $this->handleFilesUrl($poster['sm']['urls']['webp'] ?? $poster['sm']['url'], $channel, $sourceId);
-        $lgWebp = $this->handleFilesUrl($poster['lg']['urls']['webp'] ?? $poster['lg']['url'], $channel, $sourceId);
-        $xlWebp = $this->handleFilesUrl($poster['xl']['urls']['webp'] ?? $poster['xl']['url'], $channel, $sourceId);
+        $xsWebp = $poster['xs']['urls']['webp'] ?? $poster['xs']['url'];
+        $mdWebp = $poster['md']['urls']['webp'] ?? $poster['md']['url'];
+        $smWebp = $poster['sm']['urls']['webp'] ?? $poster['sm']['url'];
+        $lgWebp = $poster['lg']['urls']['webp'] ?? $poster['lg']['url'];
+        $xlWebp = $poster['xl']['urls']['webp'] ?? $poster['xl']['url'];
 
         return [
             [
-                'src'                => $smSrc['dbUrl'],
-                'src_source'         => $poster['sm']['url'],
-                'placeholder'        => $xsSrc['dbUrl'],
-                'placeholder_source' => $poster['xs']['url'],
+                'src_source'         => $smWebp,
+                'placeholder_source' => $xsWebp,
                 'width'              => $poster['sm']['width'] ?? 0,
                 'height'             => $poster['sm']['height'] ?? 0,
                 'highdpi'            => [
-                    'double'        => $mdSrc['dbUrl'],
-                    'double_source' => $poster['md']['url'],
-                ],
-                'webp'               => [
-                    'src'                => $smWebp['dbUrl'],
-                    'src_source'         => $poster['sm']['urls']['webp'] ?? '',
-                    'placeholder'        => $xsWebp['dbUrl'],
-                    'placeholder_source' => $poster['xs']['urls']['webp'] ?? '',
-                    'highdpi'            => [
-                        'double'        => $mdWebp['dbUrl'],
-                        'double_source' => $poster['md']['urls']['webp'] ?? '',
-                    ],
+                    'double_source' => $mdWebp,
                 ],
             ],
             [
-                'src'                => $lgSrc['dbUrl'],
-                'src_source'         => $poster['lg']['url'],
-                'placeholder'        => $xsSrc['dbUrl'],
-                'placeholder_source' => $poster['xs']['url'],
+                'src_source'         => $lgWebp,
+                'placeholder_source' => $xsWebp,
                 'width'              => $poster['lg']['width'] ?? 0,
                 'height'             => $poster['lg']['height'] ?? 0,
                 'highdpi'            => [
-                    'double'        => $xlSrc['dbUrl'],
-                    'double_source' => $poster['xl']['url'],
-                ],
-                'webp'               => [
-                    'src'                => $lgWebp['dbUrl'],
-                    'src_source'         => $poster['lg']['urls']['webp'] ?? '',
-                    'placeholder'        => $xsWebp['dbUrl'],
-                    'placeholder_source' => $poster['xs']['urls']['webp'] ?? '',
-                    'highdpi'            => [
-                        'double'        => $xlWebp['dbUrl'],
-                        'double_source' => $poster['xl']['urls']['webp'] ?? '',
-                    ],
+                    'double_source' => $xlWebp,
                 ],
             ],
         ];
@@ -687,54 +655,40 @@ class Project1VideoCrawlerService
             return [];
         }
 
-        $xsSrc = $this->handleFilesUrl($poster['xs']['url'], $channel, $sourceId);
-        $smSrc = $this->handleFilesUrl($poster['sm']['url'], $channel, $sourceId);
-        $mdSrc = $this->handleFilesUrl($poster['md']['url'], $channel, $sourceId);
-        $xxSrc = $this->handleFilesUrl($poster['xx']['url'], $channel, $sourceId);
-
-        $xsWebp = $this->handleFilesUrl($poster['xs']['urls']['webp'] ?? $poster['xs']['url'], $channel, $sourceId);
-        $smWebp = $this->handleFilesUrl($poster['sm']['urls']['webp'] ?? $poster['sm']['url'], $channel, $sourceId);
-        $mdWebp = $this->handleFilesUrl($poster['md']['urls']['webp'] ?? $poster['md']['url'], $channel, $sourceId);
-        $xxWebp = $this->handleFilesUrl($poster['xx']['urls']['webp'] ?? $poster['xx']['url'], $channel, $sourceId);
+        $xsWebp = $poster['xs']['urls']['webp'] ?? $poster['xs']['url'];
+        $smWebp = $poster['sm']['urls']['webp'] ?? $poster['sm']['url'];
+        $mdWebp = $poster['md']['urls']['webp'] ?? $poster['md']['url'];
+        $xxWebp = $poster['xx']['urls']['webp'] ?? $poster['xx']['url'];
 
         return [
             [
-                'src'         => $smSrc['dbUrl'],
-                'src_source'  => $poster['sm']['url'],
-                'placeholder' => $xsSrc['dbUrl'],
-                'width'       => $poster['sm']['width'] ?? 0,
-                'height'      => $poster['sm']['height'] ?? 0,
-                'media'       => '(max-width: 360px)',
-                'webp'        => [
-                    'src'         => $smWebp['dbUrl'],
-                    'src_source'  => $poster['sm']['urls']['webp'] ?? '',
-                    'placeholder' => $xsWebp['dbUrl'],
+                'src_source'         => $smWebp,
+                'placeholder_source' => $xsWebp,
+                'width'              => $poster['sm']['width'] ?? 0,
+                'height'             => $poster['sm']['height'] ?? 0,
+                'media'              => '(max-width: 360px)',
+                'highdpi'            => [
+                    'double_source' => $mdWebp,
                 ],
             ],
             [
-                'src'         => $mdSrc['dbUrl'],
-                'src_source'  => $poster['md']['url'],
-                'placeholder' => $xsSrc['dbUrl'],
-                'width'       => $poster['md']['width'] ?? 0,
-                'height'      => $poster['md']['height'] ?? 0,
-                'media'       => '(min-width: 361px) and (max-width: 768px)',
-                'webp'        => [
-                    'src'         => $mdWebp['dbUrl'],
-                    'src_source'  => $poster['md']['urls']['webp'] ?? '',
-                    'placeholder' => $xsWebp['dbUrl'],
+                'src_source'         => $mdWebp,
+                'placeholder_source' => $xsWebp,
+                'width'              => $poster['md']['width'] ?? 0,
+                'height'             => $poster['md']['height'] ?? 0,
+                'media'              => '(min-width: 361px) and (max-width: 768px)',
+                'highdpi'            => [
+                    'double_source' => $xxWebp,
                 ],
             ],
             [
-                'src'         => $xxSrc['dbUrl'],
-                'src_source'  => $poster['xx']['url'],
-                'placeholder' => $xsSrc['dbUrl'],
-                'width'       => $poster['xx']['width'] ?? 0,
-                'height'      => $poster['xx']['height'] ?? 0,
-                'media'       => '(min-width: 769px)',
-                'webp'        => [
-                    'src'         => $xxWebp['dbUrl'],
-                    'src_source'  => $poster['xx']['urls']['webp'] ?? '',
-                    'placeholder' => $xsWebp['dbUrl'],
+                'src_source'         => $xxWebp,
+                'placeholder_source' => $xsWebp,
+                'width'              => $poster['xx']['width'] ?? 0,
+                'height'             => $poster['xx']['height'] ?? 0,
+                'media'              => '(min-width: 769px)',
+                'highdpi'            => [
+                    'double_source' => $xxWebp,
                 ],
             ],
         ];
