@@ -95,7 +95,18 @@ export function ResponsiveVideoImage({
         };
     }, [preview]);
 
-    // 2. 解析 Responsive 静态封面及 Placeholder
+    // 2. 检测图片画幅比例：若宽/高比明显低于 16:9（例如 DorcelClub 的 3:2 = 1.5，4:3 = 1.33），标记为非 16:9 画幅
+    const isNonStandardAspect = useMemo(() => {
+        if (!listImg || !Array.isArray(listImg) || listImg.length === 0) return false;
+        const first = listImg[0];
+        if (first?.width && first?.height) {
+            const ratio = first.width / first.height;
+            return ratio < 1.68; // 16:9 约为 1.777，小于 1.68 的均为非 16:9 画幅
+        }
+        return false;
+    }, [listImg]);
+
+    // 3. 解析 Responsive 静态封面及 Placeholder
     const { webpSrcSet, jpgSrcSet, placeholderUrl, defaultSrc } = useMemo(() => {
         if (!listImg || !Array.isArray(listImg) || listImg.length === 0) {
             return { webpSrcSet: '', jpgSrcSet: '', placeholderUrl: '', defaultSrc: fallbackSrc };
@@ -344,30 +355,48 @@ export function ResponsiveVideoImage({
 
             {/* 静态响应式封面 */}
             {listImg && listImg.length > 0 ? (
-                <picture>
-                    {webpSrcSet && (
-                        <source
-                            type="image/webp"
-                            srcSet={webpSrcSet}
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        />
+                <>
+                    {/* 非 16:9 画幅（如 DorcelClub 3:2）时，底层渲染氛围毛玻璃背景，确保 16:9 视口饱和无生硬黑边 */}
+                    {isNonStandardAspect && (
+                        <div className="absolute inset-0 overflow-hidden pointer-events-none select-none z-0">
+                            <img
+                                src={defaultSrc}
+                                alt=""
+                                aria-hidden="true"
+                                className="w-full h-full object-cover scale-125 filter blur-xl opacity-60 dark:opacity-40"
+                            />
+                            <div className="absolute inset-0 bg-black/10 dark:bg-black/25" />
+                        </div>
                     )}
-                    {jpgSrcSet && (
-                        <source
-                            type="image/jpeg"
-                            srcSet={jpgSrcSet}
-                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        />
-                    )}
-                    <img
-                        src={defaultSrc}
-                        alt={alt}
-                        loading="lazy"
-                        onLoad={() => setIsCoverLoaded(true)}
-                        className={`${className} transition-all duration-300 ${isCoverLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
+
+                    <picture className={`relative z-10 w-full h-full ${isNonStandardAspect ? 'flex items-center justify-center' : 'block'}`}>
+                        {webpSrcSet && (
+                            <source
+                                type="image/webp"
+                                srcSet={webpSrcSet}
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            />
+                        )}
+                        {jpgSrcSet && (
+                            <source
+                                type="image/jpeg"
+                                srcSet={jpgSrcSet}
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            />
+                        )}
+                        <img
+                            src={defaultSrc}
+                            alt={alt}
+                            loading="lazy"
+                            onLoad={() => setIsCoverLoaded(true)}
+                            className={`w-full h-full ${
+                                isNonStandardAspect ? 'object-contain drop-shadow-sm' : 'object-cover'
+                            } rounded-xl transition-all duration-300 ${
+                                isCoverLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
                             }`}
-                    />
-                </picture>
+                        />
+                    </picture>
+                </>
             ) : (
                 <img
                     src={fallbackSrc}
@@ -392,7 +421,7 @@ export function ResponsiveVideoImage({
                             preload="auto"
                             onCanPlay={handleVideoCanPlay}
                             onWaiting={() => setIsPreviewLoading(true)}
-                            className="w-full h-full object-cover rounded-xl"
+                            className={`w-full h-full rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
 
@@ -400,7 +429,7 @@ export function ResponsiveVideoImage({
                         <img
                             src={previewData.url}
                             alt={`${alt} GIF预览`}
-                            className="w-full h-full object-cover rounded-xl"
+                            className={`w-full h-full rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
 
@@ -408,7 +437,7 @@ export function ResponsiveVideoImage({
                         <img
                             src={displayedImageUrl}
                             alt={`${alt} 预览图 ${activeImageIndex + 1}`}
-                            className="w-full h-full object-cover rounded-xl transition-all duration-100"
+                            className={`w-full h-full rounded-xl transition-all duration-100 ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
                 </div>

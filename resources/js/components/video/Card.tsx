@@ -29,7 +29,7 @@ export function VideoCard({ video }: { video: Video }) {
             <div className={`absolute -inset-3 rounded-2xl border border-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100 -z-10 ${hoverBgStyle}`}></div>
 
             {/* 视频封面区域 */}
-            <div className="relative w-full aspect-video">
+            <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-muted">
                 <ResponsiveVideoImage
                     listImg={video.list_img}
                     preview={video.preview}
