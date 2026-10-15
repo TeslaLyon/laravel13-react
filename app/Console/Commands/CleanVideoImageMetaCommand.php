@@ -121,10 +121,15 @@ class CleanVideoImageMetaCommand extends Command
             'errors'           => 0,
         ];
 
-        $sampleDiffPrinted = false;
+        $useProgressBar = $totalVideos > 5 && empty($targetIds) && !$dryRun;
+        $bar = null;
+        if ($useProgressBar) {
+            $bar = $this->output->createProgressBar($totalVideos);
+            $bar->start();
+        }
 
-        $bar = $this->output->createProgressBar($totalVideos);
-        $bar->start();
+        $printedDiffCount = 0;
+        $maxDiffPrints = !empty($targetIds) ? count($targetIds) : ($dryRun ? 5 : 1);
 
         $chunkQuery = Video::query();
         if (!empty($channelIds)) {
@@ -136,8 +141,10 @@ class CleanVideoImageMetaCommand extends Command
 
         $chunkQuery->select(['id', 'channel_id', 'list_img'])->chunkById($chunkSize, function ($videos) use (
             $dryRun,
+            $targetIds,
+            $maxDiffPrints,
+            &$printedDiffCount,
             &$stats,
-            &$sampleDiffPrinted,
             $bar
         ) {
             $videoIds = $videos->pluck('id')->toArray();
@@ -148,7 +155,9 @@ class CleanVideoImageMetaCommand extends Command
 
             foreach ($videos as $video) {
                 $stats['total_scanned']++;
-                $bar->advance();
+                if ($bar) {
+                    $bar->advance();
+                }
 
                 $rawListImg = $video->getRawOriginal('list_img');
                 $listImgData = is_string($rawListImg) ? json_decode($rawListImg, true) : $rawListImg;
@@ -169,6 +178,7 @@ class CleanVideoImageMetaCommand extends Command
                 $detail = $detailsMap->get($video->id);
                 $detailNeedsUpdate = false;
                 $cleanedLargeMeta = [];
+                $largeMetaData = null;
 
                 if ($detail) {
                     $rawLargeMeta = $detail->getRawOriginal('list_img_large_meta');
@@ -178,34 +188,37 @@ class CleanVideoImageMetaCommand extends Command
                         if ($this->isOldFormatLargeMeta($largeMetaData)) {
                             $cleanedLargeMeta = $this->cleanLargeMetaData($largeMetaData, $cleanedListImg);
                             $detailNeedsUpdate = true;
+                        } else {
+                            $cleanedLargeMeta = $largeMetaData;
                         }
                     }
+                }
+
+                // 🎯 演练模式或指定 ID 时，输出详尽的修改前与修改后数据内容
+                $shouldPrintDiff = false;
+                if (!empty($targetIds)) {
+                    $shouldPrintDiff = true;
+                } elseif ($dryRun && $printedDiffCount < $maxDiffPrints) {
+                    $shouldPrintDiff = true;
+                }
+
+                if ($shouldPrintDiff) {
+                    $this->printVideoDiff(
+                        $video,
+                        $listImgData,
+                        $cleanedListImg,
+                        $videoNeedsUpdate,
+                        $detail,
+                        $largeMetaData,
+                        $cleanedLargeMeta,
+                        $detailNeedsUpdate
+                    );
+                    $printedDiffCount++;
                 }
 
                 if (!$videoNeedsUpdate && !$detailNeedsUpdate) {
                     $stats['already_clean']++;
                     continue;
-                }
-
-                // 打印前几个演练对比样本
-                if (!$sampleDiffPrinted) {
-                    $sampleDiffPrinted = true;
-                    $this->newLine();
-                    $this->info("--------------------------------------------------");
-                    $this->info("🔍 [清理对比样本 - Video ID: {$video->id}]");
-                    if ($videoNeedsUpdate) {
-                        $this->line("<comment>【旧 list_img (清洗前)】</comment>:");
-                        $this->line(json_encode($listImgData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                        $this->line("<info>【新 list_img (清洗后)】</info>:");
-                        $this->line(json_encode($cleanedListImg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                    }
-                    if ($detailNeedsUpdate) {
-                        $this->line("<comment>【旧 list_img_large_meta (清洗前)】</comment>:");
-                        $this->line(json_encode($largeMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                        $this->line("<info>【新 list_img_large_meta (清洗后)】</info>:");
-                        $this->line(json_encode($cleanedLargeMeta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                    }
-                    $this->info("--------------------------------------------------");
                 }
 
                 // 正式写库
@@ -238,8 +251,10 @@ class CleanVideoImageMetaCommand extends Command
             }
         });
 
-        $bar->finish();
-        $this->newLine(2);
+        if ($bar) {
+            $bar->finish();
+            $this->newLine(2);
+        }
 
         // 5. 汇报最终统计结果
         $this->info("==================================================");
@@ -258,6 +273,65 @@ class CleanVideoImageMetaCommand extends Command
         $this->info("==================================================");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 在控制台清晰打印单个视频清洗前后的数据对比
+     */
+    protected function printVideoDiff(
+        Video $video,
+        mixed $listImgData,
+        array $cleanedListImg,
+        bool $videoNeedsUpdate,
+        ?VideoDetail $detail,
+        mixed $largeMetaData,
+        array $cleanedLargeMeta,
+        bool $detailNeedsUpdate
+    ): void {
+        $this->newLine();
+        $this->info("================================================================================");
+        $statusTag = ($videoNeedsUpdate || $detailNeedsUpdate)
+            ? "<comment>【待清洗 / 需要更新】</comment>"
+            : "<info>【已是纯净新结构 / 无需修改】</info>";
+        $this->line("🎬 <fg=cyan;options=bold>视频 ID: {$video->id}</> {$statusTag}");
+        $this->info("================================================================================");
+
+        // 1. videos.list_img 区域
+        $this->line("<fg=yellow;options=bold>📌 [字段 1] videos.list_img</>");
+        if ($videoNeedsUpdate) {
+            $this->line("<fg=red;options=bold>🔴 修改前 (清洗前原始数据):</>");
+            $this->line(json_encode($listImgData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $this->newLine();
+            $this->line("<fg=green;options=bold>🟢 修改后 (清洗后纯净 WebP 结构):</>");
+            $this->line(json_encode($cleanedListImg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } else {
+            $this->line("✅ <fg=green>无需修改 (已符合纯净规范)</>");
+            $this->line("<fg=gray>【当前数据内容】:</>");
+            $this->line(json_encode($listImgData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        }
+
+        $this->newLine();
+        $this->line("--------------------------------------------------------------------------------");
+
+        // 2. video_details.list_img_large_meta 区域
+        $this->line("<fg=yellow;options=bold>📌 [字段 2] video_details.list_img_large_meta</>");
+        if (!$detail) {
+            $this->line("<fg=gray>ℹ️ 暂无关联的 video_detail 记录</>");
+        } elseif ($detailNeedsUpdate) {
+            $this->line("<fg=red;options=bold>🔴 修改前 (清洗前原始数据):</>");
+            $this->line(json_encode($largeMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            $this->newLine();
+            $this->line("<fg=green;options=bold>🟢 修改后 (清洗后纯净 WebP 结构):</>");
+            $this->line(json_encode($cleanedLargeMeta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } elseif (!empty($largeMetaData)) {
+            $this->line("✅ <fg=green>无需修改 (已符合纯净规范)</>");
+            $this->line("<fg=gray>【当前数据内容】:</>");
+            $this->line(json_encode($largeMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } else {
+            $this->line("<fg=gray>ℹ️ 字段值为空 (null 或 [])</>");
+        }
+
+        $this->info("================================================================================");
     }
 
     /**
