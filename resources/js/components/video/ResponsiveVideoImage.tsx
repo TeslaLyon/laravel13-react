@@ -320,7 +320,9 @@ export function ResponsiveVideoImage({
     return (
         <div
             ref={containerRef}
-            className="relative w-full h-full overflow-hidden rounded-xl bg-muted group/image select-none"
+            className={`relative w-full h-full overflow-hidden rounded-xl ${
+                isNonStandardAspect ? 'bg-background' : 'bg-muted'
+            } group/image select-none`}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onMouseMove={handleMouseMove}
@@ -348,27 +350,17 @@ export function ResponsiveVideoImage({
                     src={placeholderUrl}
                     alt={alt}
                     aria-hidden="true"
-                    className={`absolute inset-0 w-full h-full object-cover rounded-xl transition-opacity duration-500 scale-105 filter blur-md ${isCoverLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                        }`}
+                    className={`absolute inset-0 w-full h-full ${
+                        isNonStandardAspect ? 'object-contain' : 'object-cover scale-105'
+                    } rounded-xl transition-opacity duration-500 filter blur-md ${
+                        isCoverLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                    }`}
                 />
             )}
 
             {/* 静态响应式封面 */}
             {listImg && listImg.length > 0 ? (
                 <>
-                    {/* 非 16:9 画幅（如 DorcelClub 3:2）时，底层渲染氛围毛玻璃背景，确保 16:9 视口饱和无生硬黑边 */}
-                    {isNonStandardAspect && (
-                        <div className="absolute inset-0 overflow-hidden pointer-events-none select-none z-0">
-                            <img
-                                src={defaultSrc}
-                                alt=""
-                                aria-hidden="true"
-                                className="w-full h-full object-cover scale-125 filter blur-xl opacity-60 dark:opacity-40"
-                            />
-                            <div className="absolute inset-0 bg-black/10 dark:bg-black/25" />
-                        </div>
-                    )}
-
                     <picture className={`relative z-10 w-full h-full ${isNonStandardAspect ? 'flex items-center justify-center' : 'block'}`}>
                         {webpSrcSet && (
                             <source
@@ -390,7 +382,7 @@ export function ResponsiveVideoImage({
                             loading="lazy"
                             onLoad={() => setIsCoverLoaded(true)}
                             className={`w-full h-full ${
-                                isNonStandardAspect ? 'object-contain drop-shadow-sm' : 'object-cover'
+                                isNonStandardAspect ? 'object-contain' : 'object-cover'
                             } rounded-xl transition-all duration-300 ${
                                 isCoverLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
                             }`}

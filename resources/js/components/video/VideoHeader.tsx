@@ -82,8 +82,8 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
     const initialDefaultImg = useMemo(() => {
         if (!lastItem) return '';
         const raw = isSource
-            ? (lastItem.webp?.src_source || lastItem.src_source || lastItem.webp?.src || lastItem.src)
-            : (lastItem.webp?.src || lastItem.src || lastItem.webp?.src_source || lastItem.src_source);
+            ? (lastItem.highdpi?.double_source || lastItem.webp?.highdpi?.double_source || lastItem.webp?.src_source || lastItem.src_source || lastItem.highdpi?.double || lastItem.webp?.src || lastItem.src)
+            : (lastItem.highdpi?.double || lastItem.webp?.highdpi?.double || lastItem.webp?.src || lastItem.src || lastItem.highdpi?.double_source || lastItem.webp?.src_source || lastItem.src_source);
         return cdnUrl(raw || '');
     }, [lastItem, isSource]);
 
@@ -201,29 +201,55 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                 <picture className="block absolute inset-0 w-full h-full z-10">
                     {/* WebP 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const rawWebpSrc = isSource
+                        const rawWebp1x = isSource
                             ? (item.webp?.src_source || item.src_source || item.webp?.src || item.src)
                             : (item.webp?.src || item.src || item.webp?.src_source || item.src_source);
-                        const webpSrc = cdnUrl(rawWebpSrc);
-                        return webpSrc ? (
+                        const rawWebp2x = isSource
+                            ? (item.webp?.highdpi?.double_source || item.highdpi?.double_source || item.webp?.highdpi?.double || item.highdpi?.double)
+                            : (item.highdpi?.double || item.webp?.highdpi?.double || item.highdpi?.double_source || item.webp?.highdpi?.double_source);
+
+                        const webp1x = cdnUrl(rawWebp1x);
+                        const webp2x = cdnUrl(rawWebp2x);
+
+                        let srcSet = webp1x;
+                        if (webp1x && webp2x && webp1x !== webp2x) {
+                            srcSet = `${webp1x} 1x, ${webp2x} 2x`;
+                        } else if (!webp1x && webp2x) {
+                            srcSet = webp2x;
+                        }
+
+                        return srcSet ? (
                             <source
                                 key={`webp-${index}`}
                                 type="image/webp"
-                                srcSet={webpSrc}
+                                srcSet={srcSet}
                                 media={item.media}
                             />
                         ) : null;
                     })}
                     {/* JPG/PNG 响应式图片源 */}
                     {normalizedMetaList.map((item, index) => {
-                        const rawImgSrc = isSource
+                        const rawImg1x = isSource
                             ? (item.src_source || item.src)
                             : (item.src || item.src_source);
-                        const imgSrc = cdnUrl(rawImgSrc);
-                        return imgSrc ? (
+                        const rawImg2x = isSource
+                            ? (item.highdpi?.double_source || item.highdpi?.double)
+                            : (item.highdpi?.double || item.highdpi?.double_source);
+
+                        const img1x = cdnUrl(rawImg1x);
+                        const img2x = cdnUrl(rawImg2x);
+
+                        let srcSet = img1x;
+                        if (img1x && img2x && img1x !== img2x) {
+                            srcSet = `${img1x} 1x, ${img2x} 2x`;
+                        } else if (!img1x && img2x) {
+                            srcSet = img2x;
+                        }
+
+                        return srcSet ? (
                             <source
                                 key={`src-${index}`}
-                                srcSet={imgSrc}
+                                srcSet={srcSet}
                                 media={item.media}
                             />
                         ) : null;

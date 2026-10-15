@@ -200,8 +200,24 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
         });
     };
 
-    // 详情页头图优先使用 videos 的 list_img 中尺寸最大的图片（优先取 highdpi.double 2倍高清图）
+    // 详情页头图元数据提取：
+    // 若 channel.data_crawl_type === 1（源站直链片商如 DorcelClub、Project1 矩阵），优先读取 video_detail.list_img_large_meta 中的专属大图
+    // 若 data_crawl_type !== 1（如 Vixen 系列片商），或未采集到大图时，取 videos.list_img 中尺寸最大的高清图兜底
     const headerImgMeta = useMemo<ImageMeta[] | string>(() => {
+        const isDataCrawlType1 = video?.channel?.data_crawl_type === 1;
+
+        // 1. 若为源站直链片商 (data_crawl_type === 1)，优先展示 video_detail.list_img_large_meta
+        if (isDataCrawlType1) {
+            const largeMeta = video?.video_detail?.list_img_large_meta;
+            if (Array.isArray(largeMeta) && largeMeta.length > 0) {
+                return largeMeta as ImageMeta[];
+            }
+            if (typeof largeMeta === 'string' && largeMeta.trim().length > 0) {
+                return largeMeta;
+            }
+        }
+
+        // 2. data_crawl_type !== 1 (例如 Vixen 系列本地存储片商) 或 list_img_large_meta 为空时，从 videos.list_img 取最大尺寸高清图
         const listImg = video?.list_img;
 
         if (Array.isArray(listImg) && listImg.length > 0) {
@@ -239,7 +255,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
         }
 
         return [];
-    }, [video?.list_img, video?.video_detail?.list_img_large_meta]);
+    }, [video?.channel?.data_crawl_type, video?.list_img, video?.video_detail?.list_img_large_meta]);
 
     return (
         <div className="w-full mx-auto pb-8 sm:py-6 xl:py-8 bg-background min-h-screen">
