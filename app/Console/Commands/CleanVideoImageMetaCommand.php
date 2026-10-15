@@ -18,6 +18,7 @@ class CleanVideoImageMetaCommand extends Command
      */
     protected $signature = 'video:clean-image-meta
                             {channel? : 指定片商 slug（可选，未指定则默认处理所有 data_crawl_type=1 的源站直链片商）}
+                            {--id= : 指定单个或多个视频 ID 进行清理（多个用逗号分隔，如 --id=123 或 --id=1,2,3）}
                             {--all : 强制处理所有片商（包括不同 crawl_type 的片商）}
                             {--chunk=500 : 批量分块处理的记录数，防止大表内存溢出}
                             {--dry-run : 演练模式，仅输出清理对比样例与统计，不实际修改数据库}
@@ -36,36 +37,50 @@ class CleanVideoImageMetaCommand extends Command
     public function handle(): int
     {
         $channelSlug = $this->argument('channel');
+        $targetIdOption = $this->option('id');
         $allChannels = (bool) $this->option('all');
         $chunkSize = max(50, (int) $this->option('chunk'));
         $dryRun = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
+
+        // 解析指定视频 ID
+        $targetIds = [];
+        if (!empty($targetIdOption)) {
+            $targetIds = array_values(array_filter(array_map('intval', explode(',', (string) $targetIdOption))));
+        }
 
         $this->info("==================================================");
         $this->info("🚀 开始执行视频封面与大图元数据清理脚本");
         $this->line("🛡️ 运行模式: " . ($dryRun ? "<comment>演练模式 (Dry-Run，不修改数据库)</comment>" : "<info>正式清理模式 (写库)</info>"));
         $this->line("📦 分块大小: {$chunkSize}");
 
-        // 1. 确定目标片商
-        $channelQuery = Channel::query();
-        if (!empty($channelSlug)) {
-            $channelQuery->where('slug', $channelSlug);
-        } elseif (!$allChannels) {
-            // 默认针对 data_crawl_type = 1 (源站直链片商如 Project1 矩阵与 DorcelClub)
-            $channelQuery->where('data_crawl_type', 1);
+        // 1. 确定目标片商（若指定了 --id 且未显式指定 channel，则无需强行筛选片商）
+        $channelIds = [];
+        if (!empty($channelSlug) || empty($targetIds)) {
+            $channelQuery = Channel::query();
+            if (!empty($channelSlug)) {
+                $channelQuery->where('slug', $channelSlug);
+            } elseif (!$allChannels) {
+                // 默认针对 data_crawl_type = 1 (源站直链片商如 Project1 矩阵与 DorcelClub)
+                $channelQuery->where('data_crawl_type', 1);
+            }
+
+            $channels = $channelQuery->get();
+            if ($channels->isEmpty() && !empty($channelSlug)) {
+                $this->error("❌ 未找到指定的片商 [{$channelSlug}]！");
+                return self::FAILURE;
+            }
+
+            $channelIds = $channels->pluck('id')->toArray();
+            if (!empty($channelIds)) {
+                $this->line("🎯 目标片商 (" . count($channels) . " 个): " . $channels->pluck('slug')->implode(', '));
+            } else {
+                $this->line("🎯 目标片商: 全量片商 (--all)");
+            }
         }
 
-        $channels = $channelQuery->get();
-        if ($channels->isEmpty() && !empty($channelSlug)) {
-            $this->error("❌ 未找到指定的片商 [{$channelSlug}]！");
-            return self::FAILURE;
-        }
-
-        $channelIds = $channels->pluck('id')->toArray();
-        if (!empty($channelIds)) {
-            $this->line("🎯 目标片商 (" . count($channels) . " 个): " . $channels->pluck('slug')->implode(', '));
-        } else {
-            $this->line("🎯 目标片商: 全量片商 (--all)");
+        if (!empty($targetIds)) {
+            $this->line("🎯 指定视频 ID (" . count($targetIds) . " 个): " . implode(', ', $targetIds));
         }
         $this->info("==================================================");
 
@@ -73,6 +88,9 @@ class CleanVideoImageMetaCommand extends Command
         $videoQuery = Video::query();
         if (!empty($channelIds)) {
             $videoQuery->whereIn('channel_id', $channelIds);
+        }
+        if (!empty($targetIds)) {
+            $videoQuery->whereIn('id', $targetIds);
         }
         $totalVideos = $videoQuery->count();
 
@@ -85,7 +103,10 @@ class CleanVideoImageMetaCommand extends Command
 
         // 3. 交互式确认
         if (!$dryRun && !$force) {
-            if (!$this->confirm("确认开始清理这批视频的图片元数据吗？", true)) {
+            $confirmPrompt = count($targetIds) === 1
+                ? "确认清理视频 [ID: {$targetIds[0]}] 的图片元数据吗？"
+                : "确认开始清理这批视频的图片元数据吗？";
+            if (!$this->confirm($confirmPrompt, true)) {
                 $this->info("操作已取消。");
                 return self::SUCCESS;
             }
@@ -108,6 +129,9 @@ class CleanVideoImageMetaCommand extends Command
         $chunkQuery = Video::query();
         if (!empty($channelIds)) {
             $chunkQuery->whereIn('channel_id', $channelIds);
+        }
+        if (!empty($targetIds)) {
+            $chunkQuery->whereIn('id', $targetIds);
         }
 
         $chunkQuery->select(['id', 'channel_id', 'list_img'])->chunkById($chunkSize, function ($videos) use (
