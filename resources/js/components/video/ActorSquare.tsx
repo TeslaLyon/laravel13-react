@@ -193,12 +193,13 @@ function ActorMenu({ actor }: { actor: Actor }) {
 // 主列表组件
 // --------------------------------------------------------
 export function ActorSquare({ actors }: ActorSquareProps) {
-    if (!actors || actors.length === 0) return null;
+    const safeActors: Actor[] = Array.isArray(actors) ? actors : (typeof actors === 'object' && actors !== null ? Object.values(actors) as Actor[] : []);
+    if (!safeActors || safeActors.length === 0) return null;
 
     return (
         <div className="w-full pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-                {actors.map((actor) => (
+                {safeActors.map((actor) => (
                     <div
                         key={actor.id}
                         className="flex items-center gap-4 p-2.5 rounded-2xl hover:bg-secondary/40 transition-colors duration-200 group"

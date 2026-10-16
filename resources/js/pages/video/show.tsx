@@ -49,13 +49,23 @@ interface VideoDetailPageProps {
     viewsCount?: number;
     channelSubscribersCount?: number;
     initialIsCollect: boolean;
-    recommendVideos: Video[];
+    recommendVideos?: Video[];
     actors?: Actor[];
     categories?: Category[];
     tags?: Tag[];
 }
 
 export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, channelSubscribersCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
+    // 侧边栏推荐视频安全解析（防御性处理：兼容数组、对象序列化及 Deferred 加载期间状态，彻底杜绝 map is not a function 异常）
+    const safeRecommendVideos: Video[] = useMemo(() => {
+        if (!recommendVideos) return [];
+        if (Array.isArray(recommendVideos)) return recommendVideos;
+        if (typeof recommendVideos === 'object') {
+            if (Array.isArray((recommendVideos as any).data)) return (recommendVideos as any).data;
+            return Object.values(recommendVideos);
+        }
+        return [];
+    }, [recommendVideos]);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [canExpandDescription, setCanExpandDescription] = useState(false);
     const descriptionRef = useRef<HTMLParagraphElement>(null);
@@ -729,7 +739,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                 <VideoSkeleton key={index} />
                             ))
                         }>
-                            {recommendVideos?.map((video: any) => (
+                            {safeRecommendVideos.map((video: any) => (
                                 <Link href={show({ video: video.id, slug: video.slug })} key={video.id}>
                                     <VideoCard key={video.id} video={video} />
                                 </Link>

@@ -127,6 +127,17 @@ export default function YoutubeVideoGrid({
     const [isActorSearching, setIsActorSearching] = useState(false);
     const [filterData, setFilterData] = useState<FilterGroupData>(initialFilterOptions);
 
+    // 横向快捷分类安全解析（防御性处理：兼容数组、对象序列化及 Deferred 加载期间状态）
+    const safeQuickFilters: QuickFilterItem[] = useMemo(() => {
+        if (!quickFilters) return [];
+        if (Array.isArray(quickFilters)) return quickFilters;
+        if (typeof quickFilters === 'object') {
+            if (Array.isArray((quickFilters as any).data)) return (quickFilters as any).data;
+            return Object.values(quickFilters);
+        }
+        return [];
+    }, [quickFilters]);
+
     // 解析当前 URL 参数作为高级筛选面板的默认状态
     const initialSelectedState: SelectedFilterState = useMemo(() => ({
         actors: parseUrlIds(filters.actors),
@@ -352,7 +363,7 @@ export default function YoutubeVideoGrid({
             {/* 横向快捷分类栏（Deferred 异步加载） */}
             <Deferred data="quickFilters" fallback={<QuickFilterSkeleton />}>
                 <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none snap-x">
-                    {quickFilters.map((item) => {
+                    {safeQuickFilters.map((item) => {
                         const active = isQuickFilterActive(item);
                         return (
                             <button

@@ -69,12 +69,16 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
         if (typeof imgMetaList === 'string') {
             try {
                 const parsed = JSON.parse(imgMetaList);
-                return Array.isArray(parsed) ? parsed : [];
+                if (Array.isArray(parsed)) return parsed;
+                if (typeof parsed === 'object' && parsed !== null) return Object.values(parsed);
+                return [];
             } catch {
                 return [];
             }
         }
-        return Array.isArray(imgMetaList) ? imgMetaList : [];
+        if (Array.isArray(imgMetaList)) return imgMetaList;
+        if (typeof imgMetaList === 'object' && imgMetaList !== null) return Object.values(imgMetaList);
+        return [];
     }, [imgMetaList]);
 
     // 播放器状态管理

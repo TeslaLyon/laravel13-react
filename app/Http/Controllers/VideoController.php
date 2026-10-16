@@ -218,13 +218,15 @@ class VideoController extends Controller
             ? app(ChannelSubscriptionService::class)->getSubscribersCount($video->channel)
             : 0;
 
-        // 4. 获取侧边栏推荐视频（增加 5 分钟缓存，避免每次详情页高并发频繁扫表）
-        $recommendVideos = Cache::remember('video_show_recommend_videos_v1', 300, function () {
+        // 4. 获取侧边栏推荐视频（增加 5 分钟缓存，确保返回纯索引数组，避免反序列化为对象导致前端 map 报错）
+        $recommendVideos = Cache::remember('video_show_recommend_videos_v2', 300, function () {
             return Video::with('channel:id,name,slug,avatar,data_crawl_type')
                 ->latestPublished()
                 ->select('id', 'name', 'name_zh', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at', 'country')
                 ->take(10)
-                ->get();
+                ->get()
+                ->values()
+                ->all();
         });
 
         // 5. 渲染 Inertia 页面
