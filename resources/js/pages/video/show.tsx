@@ -50,9 +50,9 @@ interface VideoDetailPageProps {
     channelSubscribersCount?: number;
     initialIsCollect: boolean;
     recommendVideos: Video[];
-    actors: Actor[];
-    categories: Category[];
-    tags: Tag[];
+    actors?: Actor[];
+    categories?: Category[];
+    tags?: Tag[];
 }
 
 export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, channelSubscribersCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {

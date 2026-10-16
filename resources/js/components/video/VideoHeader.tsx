@@ -16,12 +16,21 @@ export interface ImageMeta {
         src: string;
         src_source?: string;
         placeholder?: string;
+        highdpi?: {
+            double?: string;
+            double_source?: string;
+        };
     };
     media?: string;
     width?: number;
     height?: number;
     src_source?: string;
     placeholder?: string;
+    placeholder_source?: string;
+    highdpi?: {
+        double?: string;
+        double_source?: string;
+    };
 }
 
 interface VideoHeaderProps {

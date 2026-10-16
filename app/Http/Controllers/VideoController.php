@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Services\VideoViewService;
 use App\Services\VideoInteractionService;
 use App\Services\ChannelSubscriptionService;
+use Illuminate\Support\Facades\DB;
 
 
 class VideoController extends Controller
@@ -57,22 +58,45 @@ class VideoController extends Controller
                 'country'
             ]);
 
-        // 应用筛选条件 (保持原有逻辑) ...
+        // 2. 应用筛选条件 (使用中间表直接索引过滤，避免多表 JOIN 与子查询 orWhere 性能损耗)
         if (!empty($categoryName) && $categoryName !== '全部') {
-            $query->whereHas('categories', function ($q) use ($categoryName) {
-                $q->where('name', $categoryName)->orWhere('slug', $categoryName);
-            });
-        }
-        if (!empty($actorsRaw)) {
-            $actorIds = array_filter(explode(',', $actorsRaw));
-            if (!empty($actorIds)) {
-                $query->whereHas('actors', function ($q) use ($actorIds) {
-                    $q->whereIn('actors.id', $actorIds);
-                });
+            $catId = Category::where('slug', $categoryName)->orWhere('name', $categoryName)->value('id');
+            if ($catId) {
+                $query->whereIn('id', DB::table('category_video')->where('category_id', $catId)->select('video_id'));
             }
         }
+
+        if (!empty($actorsRaw)) {
+            $actorIds = array_filter(array_map('intval', explode(',', (string) $actorsRaw)));
+            if (!empty($actorIds)) {
+                $query->whereIn('id', DB::table('actor_video')->whereIn('actor_id', $actorIds)->select('video_id'));
+            }
+        }
+
+        if (!empty($tagsRaw)) {
+            $rawTagList = array_filter(explode(',', (string) $tagsRaw));
+            $tagIds = [];
+            $catIdsFromTags = [];
+            foreach ($rawTagList as $rawTag) {
+                if (str_starts_with($rawTag, 'cat_')) {
+                    $catIdsFromTags[] = (int) str_replace('cat_', '', $rawTag);
+                } elseif (str_starts_with($rawTag, 'tag_')) {
+                    $tagIds[] = (int) str_replace('tag_', '', $rawTag);
+                } else {
+                    $tagIds[] = (int) $rawTag;
+                }
+            }
+
+            if (!empty($tagIds)) {
+                $query->whereIn('id', DB::table('tag_video')->whereIn('tag_id', $tagIds)->select('video_id'));
+            }
+            if (!empty($catIdsFromTags)) {
+                $query->whereIn('id', DB::table('category_video')->whereIn('category_id', $catIdsFromTags)->select('video_id'));
+            }
+        }
+
         if (!empty($channelsRaw)) {
-            $channelIds = array_filter(explode(',', $channelsRaw));
+            $channelIds = array_filter(array_map('intval', explode(',', (string) $channelsRaw)));
             if (!empty($channelIds)) {
                 $query->whereIn('channel_id', $channelIds);
             }
@@ -89,49 +113,51 @@ class VideoController extends Controller
             ],
             'filters' => $request->only(['category', 'actors', 'tags', 'channels']),
 
-            // 🎯 2. 使用 Inertia::defer 延迟加载横向快捷分类数组
+            // 🎯 3. 使用 Inertia::defer 延迟加载横向快捷分类数组，并添加 1 小时缓存
             'quickFilters' => Inertia::defer(function () {
-                $topCategories = Category::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name', 'slug']);
-                $topTags = Tag::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name']);
-                $topActors = Actor::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name']);
+                return Cache::remember('video_index_quick_filters_v2', 3600, function () {
+                    $topCategories = Category::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name', 'slug']);
+                    $topTags = Tag::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name']);
+                    $topActors = Actor::query()->orderByDesc('follow_num')->limit(2)->get(['id', 'name']);
 
-                $quickFilters = [
-                    [
-                        'id' => 'all',
-                        'name' => '全部',
-                        'type' => 'all',
-                        'value' => '',
-                    ]
-                ];
-
-                foreach ($topCategories as $cat) {
-                    $quickFilters[] = [
-                        'id' => 'cat_' . $cat->id,
-                        'name' => $cat->name,
-                        'type' => 'category',
-                        'value' => $cat->name,
+                    $quickFilters = [
+                        [
+                            'id' => 'all',
+                            'name' => '全部',
+                            'type' => 'all',
+                            'value' => '',
+                        ]
                     ];
-                }
 
-                foreach ($topTags as $tag) {
-                    $quickFilters[] = [
-                        'id' => 'tag_' . $tag->id,
-                        'name' => $tag->name,
-                        'type' => 'tag',
-                        'value' => (string) $tag->id,
-                    ];
-                }
+                    foreach ($topCategories as $cat) {
+                        $quickFilters[] = [
+                            'id' => 'cat_' . $cat->id,
+                            'name' => $cat->name,
+                            'type' => 'category',
+                            'value' => $cat->name,
+                        ];
+                    }
 
-                foreach ($topActors as $actor) {
-                    $quickFilters[] = [
-                        'id' => 'actor_' . $actor->id,
-                        'name' => $actor->name,
-                        'type' => 'actor',
-                        'value' => (string) $actor->id,
-                    ];
-                }
+                    foreach ($topTags as $tag) {
+                        $quickFilters[] = [
+                            'id' => 'tag_' . $tag->id,
+                            'name' => $tag->name,
+                            'type' => 'tag',
+                            'value' => (string) $tag->id,
+                        ];
+                    }
 
-                return $quickFilters;
+                    foreach ($topActors as $actor) {
+                        $quickFilters[] = [
+                            'id' => 'actor_' . $actor->id,
+                            'name' => $actor->name,
+                            'type' => 'actor',
+                            'value' => (string) $actor->id,
+                        ];
+                    }
+
+                    return $quickFilters;
+                });
             }),
 
             'videos' => Inertia::defer(function () use ($videos) {
@@ -155,8 +181,6 @@ class VideoController extends Controller
 
         // ]);
         // dd($video->toArray());
-
-        $actors = Actor::select('id', 'name', 'slug')->limit(30)->get();
 
         /** @var \App\Models\User|null $user */
         $user = $request->user();
@@ -194,19 +218,16 @@ class VideoController extends Controller
             ? app(ChannelSubscriptionService::class)->getSubscribersCount($video->channel)
             : 0;
 
-        // 4. 获取侧边栏推荐视频
-        $recommendVideos = Video::with('channel:id,name,slug,avatar,data_crawl_type')
-            ->latestPublished()
-            ->select('id', 'name', 'name_zh', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at', 'country')
-            ->take(10)
-            ->get();
+        // 4. 获取侧边栏推荐视频（增加 5 分钟缓存，避免每次详情页高并发频繁扫表）
+        $recommendVideos = Cache::remember('video_show_recommend_videos_v1', 300, function () {
+            return Video::with('channel:id,name,slug,avatar,data_crawl_type')
+                ->latestPublished()
+                ->select('id', 'name', 'name_zh', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at', 'country')
+                ->take(10)
+                ->get();
+        });
 
-        $categories = Category::select('id', 'name', 'slug')->limit(30)->get();
-        $tags = Tag::select('id', 'name', 'slug')->limit(30)->get();
-
-        // Sleep::for(2000)->milliseconds();
-
-        // 4. 渲染 Inertia 页面
+        // 5. 渲染 Inertia 页面
         return Inertia::render('video/show', [
             'breadcrumbs' => [
                 ['title' => '首页', 'href' => route('home')],
@@ -232,9 +253,6 @@ class VideoController extends Controller
             'viewsCount' => $realViewsCount,
             'channelSubscribersCount' => $channelSubscribersCount,
             'initialIsCollect' => $isCollect,
-            'categories' => $categories,
-            'tags' => $tags,
-            'actors' => $actors,
         ]);
     }
 
@@ -566,9 +584,7 @@ class VideoController extends Controller
         $videoQuery = Video::query();
 
         if (!empty($selectedActors)) {
-            $videoQuery->whereHas('actors', function ($q) use ($selectedActors) {
-                $q->whereIn('actors.id', $selectedActors);
-            });
+            $videoQuery->whereIn('id', DB::table('actor_video')->whereIn('actor_id', $selectedActors)->select('video_id'));
         }
 
         if (!empty($selectedChannels)) {
@@ -576,25 +592,22 @@ class VideoController extends Controller
         }
 
         if (!empty($selectedCatIds)) {
-            $videoQuery->whereHas('categories', function ($q) use ($selectedCatIds) {
-                $q->whereIn('categories.id', $selectedCatIds);
-            });
+            $videoQuery->whereIn('id', DB::table('category_video')->whereIn('category_id', $selectedCatIds)->select('video_id'));
         }
 
         if (!empty($selectedTagIds)) {
-            $videoQuery->whereHas('tags', function ($q) use ($selectedTagIds) {
-                $q->whereIn('tags.id', $selectedTagIds);
-            });
+            $videoQuery->whereIn('id', DB::table('tag_video')->whereIn('tag_id', $selectedTagIds)->select('video_id'));
         }
 
         $hasVideoFilters = !empty($selectedActors) || !empty($selectedChannels) || !empty($selectedCatIds) || !empty($selectedTagIds);
 
-        // 1. 动态检索或级联获取可用演员
+        // 1. 动态检索或级联获取可用演员（改用数据库内部子查询，彻底杜绝把成千上万个 ID 载入 PHP 内存）
         $actorQuery = Actor::query();
         if ($hasVideoFilters) {
-            $matchingVideoIds = $videoQuery->pluck('id');
-            $actorQuery->whereHas('videos', function ($q) use ($matchingVideoIds) {
-                $q->whereIn('videos.id', $matchingVideoIds);
+            $actorQuery->whereIn('id', function ($sub) use ($videoQuery) {
+                $sub->select('actor_id')
+                    ->from('actor_video')
+                    ->whereIn('video_id', (clone $videoQuery)->select('videos.id'));
             });
         }
         if (!empty($actorSearch)) {
@@ -626,33 +639,41 @@ class VideoController extends Controller
             }
         }
 
-        // 2. 获取片商与标签的级联数据
+        // 2. 获取片商与标签的级联数据（直接走中间表索引与数据库去重，零内存消耗）
         if ($hasVideoFilters) {
-            if (!isset($matchingVideoIds)) {
-                $matchingVideoIds = $videoQuery->pluck('id');
-            }
+            $availableChannelIds = (clone $videoQuery)->whereNotNull('channel_id')->distinct()->pluck('channel_id');
+            $availableChannels = Channel::whereIn('id', $availableChannelIds)->select('id', 'name')->get()->toArray();
 
-            $availableChannels = Channel::whereHas('videos', function ($q) use ($matchingVideoIds) {
-                $q->whereIn('videos.id', $matchingVideoIds);
-            })->select('id', 'name')->get()->toArray();
+            $availableCategoryIds = DB::table('category_video')
+                ->whereIn('video_id', (clone $videoQuery)->select('videos.id'))
+                ->distinct()
+                ->pluck('category_id');
 
-            $availableCategories = Category::whereHas('videos', function ($q) use ($matchingVideoIds) {
-                $q->whereIn('videos.id', $matchingVideoIds);
-            })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
-                return [
-                    'id' => 'cat_' . $item->id,
-                    'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
-                ];
-            });
+            $availableCategories = Category::whereIn('id', $availableCategoryIds)
+                ->select('id', 'name', 'name_zh')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => 'cat_' . $item->id,
+                        'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
+                    ];
+                });
 
-            $availableTags = Tag::whereHas('videos', function ($q) use ($matchingVideoIds) {
-                $q->whereIn('videos.id', $matchingVideoIds);
-            })->select('id', 'name', 'name_zh')->get()->map(function ($item) {
-                return [
-                    'id' => 'tag_' . $item->id,
-                    'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
-                ];
-            });
+            $availableTagIds = DB::table('tag_video')
+                ->whereIn('video_id', (clone $videoQuery)->select('videos.id'))
+                ->distinct()
+                ->limit(50)
+                ->pluck('tag_id');
+
+            $availableTags = Tag::whereIn('id', $availableTagIds)
+                ->select('id', 'name', 'name_zh')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => 'tag_' . $item->id,
+                        'name' => !empty($item->name_zh) ? "{$item->name} ({$item->name_zh})" : $item->name,
+                    ];
+                });
         } else {
             $defaultData = $this->fetchDefaultFilterData();
             return [
