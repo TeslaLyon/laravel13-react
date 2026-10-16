@@ -121,6 +121,16 @@ class Video extends Model implements ReactableInterface
     }
 
     /**
+     * 针对 slug 的访问器：若数据库中 slug 为空，自动兜底为 (string) id
+     */
+    protected function slug(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => !empty($value) ? $value : (string) ($this->id ?? 'video')
+        );
+    }
+
+    /**
      * 针对 list_img 的访问器
      * 当 channel.data_crawl_type 为 2 (Vixen 系列) 时，若 src 为空，则自动回退至 highdpi.double
      */

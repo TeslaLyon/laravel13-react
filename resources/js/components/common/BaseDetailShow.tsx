@@ -509,11 +509,15 @@ export default function BaseDetailShow({
                                     <Deferred data="latestVideos" fallback={<VideoSkeletonGrid count={4} />}>
                                         {latestVideos && latestVideos.length > 0 ? (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-5">
-                                                {latestVideos.map((v) => (
-                                                    <Link href={show({ video: v.id, slug: v.slug })} key={v.id}>
-                                                        <VideoCard video={v} />
-                                                    </Link>
-                                                ))}
+                                                {latestVideos.map((v) => {
+                                                    const vId = v?.id ?? 0;
+                                                    const vSlug = v?.slug || String(vId || 'video');
+                                                    return (
+                                                        <Link href={show({ video: vId, slug: vSlug })} key={v.id}>
+                                                            <VideoCard video={v} />
+                                                        </Link>
+                                                    );
+                                                })}
                                             </div>
                                         ) : (
                                             <EmptyState
@@ -560,11 +564,15 @@ export default function BaseDetailShow({
                                     {paginatedVideos?.data && paginatedVideos.data.length > 0 ? (
                                         <>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-5">
-                                                {paginatedVideos.data.map((video: any) => (
-                                                    <Link href={show({ video: video.id, slug: video.slug })} key={video.id}>
-                                                        <VideoCard video={video} />
-                                                    </Link>
-                                                ))}
+                                                {paginatedVideos.data.map((video: any) => {
+                                                    const videoId = video?.id ?? 0;
+                                                    const videoSlug = video?.slug || String(videoId || 'video');
+                                                    return (
+                                                        <Link href={show({ video: videoId, slug: videoSlug })} key={video.id}>
+                                                            <VideoCard video={video} />
+                                                        </Link>
+                                                    );
+                                                })}
                                             </div>
 
                                             {paginatedVideos?.links && (

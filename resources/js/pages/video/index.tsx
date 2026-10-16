@@ -405,11 +405,15 @@ export default function YoutubeVideoGrid({
                         <VideoSkeleton key={index} />
                     ))
                 }>
-                    {videos?.data?.map((video) => (
-                        <Link href={show({ video: video.id, slug: video.slug })} key={video.id}>
-                            <VideoCard key={video.id} video={video} />
-                        </Link>
-                    ))}
+                    {videos?.data?.map((video) => {
+                        const videoId = video?.id ?? 0;
+                        const videoSlug = video?.slug || String(videoId || 'video');
+                        return (
+                            <Link href={show({ video: videoId, slug: videoSlug })} key={video.id}>
+                                <VideoCard key={video.id} video={video} />
+                            </Link>
+                        );
+                    })}
                 </Deferred>
             </div>
 

@@ -219,7 +219,7 @@ class VideoController extends Controller
             : 0;
 
         // 4. 获取侧边栏推荐视频（增加 5 分钟缓存，确保返回纯索引数组，避免反序列化为对象导致前端 map 报错）
-        $recommendVideos = Cache::remember('video_show_recommend_videos_v2', 300, function () {
+        $recommendVideos = Cache::remember('video_show_recommend_videos_v3', 300, function () {
             return Video::with('channel:id,name,slug,avatar,data_crawl_type')
                 ->latestPublished()
                 ->select('id', 'name', 'name_zh', 'slug', 'channel_id', 'list_img', 'preview', 'release_at', 'is_4k', 'is_vr', 'has_zh_subtitles', 'has_downloads', 'likes_count', 'favorites_count', 'views_count', 'created_at', 'country')
