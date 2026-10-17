@@ -9,8 +9,10 @@ use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Throwable;
 
 class DorcelScreenImgCrawlerService
@@ -183,7 +185,7 @@ class DorcelScreenImgCrawlerService
             $articleTitle = $article['title'];
 
             // 标题相似度校验（避免无关匹配）
-            if (!$this->isTitleMatch($video->name, $articleTitle)) {
+            if (!$this->isTitleMatch($video->name, $articleTitle, $video)) {
                 continue;
             }
 
@@ -436,7 +438,7 @@ class DorcelScreenImgCrawlerService
     /**
      * 校验文章标题与视频片名是否匹配（宽松归一化比对）
      */
-    protected function isTitleMatch(string $videoTitle, string $articleTitle): bool
+    protected function isTitleMatch(string $videoTitle, string $articleTitle, ?Video $video = null): bool
     {
         $vWords = $this->extractKeyTokens($videoTitle);
         $aWords = $this->extractKeyTokens($articleTitle);
@@ -452,8 +454,30 @@ class DorcelScreenImgCrawlerService
             }
         }
 
-        // 核心片名词汇至少匹配 60%
-        return ($matched / count($vWords)) >= 0.6;
+        // 核心片名词汇至少匹配 50% (如 4 个词匹配 2 个：shared fantasy)
+        if (($matched / count($vWords)) >= 0.5) {
+            return true;
+        }
+
+        // 或者：若文章中包含视频的演员名字，且至少命中了 1 个片名核心词汇
+        if ($video && $video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
+            $artLower = strtolower($articleTitle);
+            $hasActor = false;
+            foreach ($video->actors as $actor) {
+                $actorParts = array_filter(explode(' ', strtolower(preg_replace('/[^a-zA-Z0-9]+/', ' ', (string) $actor->name))), fn($p) => strlen($p) >= 3);
+                foreach ($actorParts as $part) {
+                    if (str_contains($artLower, $part)) {
+                        $hasActor = true;
+                        break 2;
+                    }
+                }
+            }
+            if ($hasActor && $matched >= 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -496,6 +520,198 @@ class DorcelScreenImgCrawlerService
         }
 
         return '';
+    }
+
+    /**
+     * 判断指定视频是否处于剧照搜索失败冷却期内（近期未搜到，避免频繁重复请求）
+     */
+    public function isCoolingDown(int $videoId): bool
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                $exists = Redis::exists("crawler:dorcel:screen_img:cooldown:{$videoId}");
+                if ($exists) {
+                    return true;
+                }
+            }
+        } catch (Throwable) {}
+
+        return Cache::has("crawler:dorcel:screen_img:cooldown:{$videoId}");
+    }
+
+    /**
+     * 将搜索未匹配/无相册的视频加入冷却期（默认 7 天）
+     */
+    public function markCoolingDown(int $videoId, int $days = 7): void
+    {
+        if ($days <= 0) {
+            return;
+        }
+
+        $ttlSeconds = $days * 86400;
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::setex("crawler:dorcel:screen_img:cooldown:{$videoId}", $ttlSeconds, '1');
+            }
+        } catch (Throwable) {}
+
+        Cache::put("crawler:dorcel:screen_img:cooldown:{$videoId}", '1', $ttlSeconds);
+    }
+
+    /**
+     * 清除指定视频的剧照冷却期标记（例如匹配成功或手动重新测试时）
+     */
+    public function clearCoolingDown(int $videoId): void
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::del("crawler:dorcel:screen_img:cooldown:{$videoId}");
+            }
+        } catch (Throwable) {}
+
+        Cache::forget("crawler:dorcel:screen_img:cooldown:{$videoId}");
+    }
+
+    /**
+     * 一键清空所有视频的剧照冷却期标记
+     */
+    public function clearAllCoolingDown(): int
+    {
+        $count = 0;
+        try {
+            if (class_exists(Redis::class)) {
+                /** @var array<int, string> $keys */
+                $keys = (array) Redis::keys('*crawler:dorcel:screen_img:cooldown:*');
+                if (!empty($keys)) {
+                    foreach ($keys as $k) {
+                        if (preg_match('/crawler:dorcel:screen_img:cooldown:(\d+)$/', $k, $m)) {
+                            Redis::del("crawler:dorcel:screen_img:cooldown:{$m[1]}");
+                        } else {
+                            Redis::del($k);
+                        }
+                        $count++;
+                    }
+                }
+            }
+        } catch (Throwable) {}
+
+        return $count;
+    }
+
+    /**
+     * 获取当前处于剧照冷静期中的视频总数量
+     */
+    public function getCoolingDownCount(): int
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                /** @var array<int, string> $keys */
+                $keys = (array) Redis::keys('*crawler:dorcel:screen_img:cooldown:*');
+                return count($keys);
+            }
+        } catch (Throwable) {}
+
+        return 0;
+    }
+
+    /**
+     * 发送 Telegram 抓取汇总报告（含未匹配相册的视频 ID 与 Slug 列表，自动长消息分批推送）
+     */
+    public function sendTelegramSummary(array $stats, array $unmatchedVideos = []): bool
+    {
+        $botToken = config('services.telegram.bot_token');
+        $chatId = config('services.telegram.chat_id');
+
+        if (empty($botToken) || empty($chatId)) {
+            Log::info("未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID，跳过 Telegram 通知发送。");
+            return false;
+        }
+
+        $formattedDuration = $stats['duration'] ?? '-';
+        $totalVideos = $stats['total_videos'] ?? 0;
+        $processedVideos = $stats['processed_videos'] ?? 0;
+        $successVideos = $stats['success_videos'] ?? 0;
+        $u4pSolved = $stats['u4p_solved'] ?? 0;
+        $psSolved = $stats['ps_solved'] ?? 0;
+        $emptyVideos = $stats['empty_videos'] ?? 0;
+        $totalImages = $stats['total_images'] ?? 0;
+
+        // 1. 构建主汇总消息
+        $lines = [
+            "📸 <b>DorcelClub 剧照抓取执行报告</b>",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "📊 <b>目标视频总数</b>: {$totalVideos} 部",
+            "⚡ <b>实际处理视频</b>: {$processedVideos} 部",
+            "✅ <b>成功抓取相册</b>: {$successVideos} 部",
+            "   ├─ Ultra4kPorn: {$u4pSolved} 部",
+            "   └─ Perfect-Stockings: {$psSolved} 部",
+            "⚠️ <b>未搜到剧照相册</b>: {$emptyVideos} 部",
+            "🖼️ <b>抓取切片图片总量</b>: {$totalImages} 张",
+            "⏱️ <b>任务执行总耗时</b>: {$formattedDuration}",
+        ];
+
+        if (empty($unmatchedVideos)) {
+            $lines[] = "";
+            $lines[] = "🎉 <b>太棒了！所有处理的视频均成功匹配到了相册剧照！</b>";
+            return $this->sendTelegramMessage($botToken, $chatId, implode("\n", $lines));
+        }
+
+        $unmatchedCount = count($unmatchedVideos);
+        $lines[] = "";
+        $lines[] = "📋 <b>未搜到相册的视频清单 (共 {$unmatchedCount} 部):</b>";
+
+        // Telegram 单条限制 4096 字符，每条列表分批发送（每批 35 部）
+        $chunks = array_chunk($unmatchedVideos, 35);
+
+        // 发送首条主消息包含第一批列表
+        $firstBatch = $chunks[0];
+        foreach ($firstBatch as $item) {
+            $slug = htmlspecialchars($item['slug'] ?? 'video', ENT_QUOTES);
+            $name = htmlspecialchars($item['name'] ?? '', ENT_QUOTES);
+            $lines[] = "• <code>[{$item['id']}]</code> {$slug}" . (!empty($name) ? " (<i>{$name}</i>)" : "");
+        }
+
+        if (count($chunks) > 1) {
+            $lines[] = "";
+            $lines[] = "<i>(未完待续，剩余清单将在接下来的消息中推送...)</i>";
+        }
+
+        $firstResult = $this->sendTelegramMessage($botToken, $chatId, implode("\n", $lines));
+
+        // 发送后续批次
+        for ($i = 1; $i < count($chunks); $i++) {
+            $batchLines = [
+                "📋 <b>未搜到相册的视频清单 (续 " . ($i + 1) . "/" . count($chunks) . "):</b>",
+            ];
+            foreach ($chunks[$i] as $item) {
+                $slug = htmlspecialchars($item['slug'] ?? 'video', ENT_QUOTES);
+                $name = htmlspecialchars($item['name'] ?? '', ENT_QUOTES);
+                $batchLines[] = "• <code>[{$item['id']}]</code> {$slug}" . (!empty($name) ? " (<i>{$name}</i>)" : "");
+            }
+            $this->sendTelegramMessage($botToken, $chatId, implode("\n", $batchLines));
+        }
+
+        return $firstResult;
+    }
+
+    /**
+     * 发送单条 Telegram HTML 消息
+     */
+    protected function sendTelegramMessage(string $botToken, string $chatId, string $htmlContent): bool
+    {
+        try {
+            $response = Http::timeout(15)->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                'chat_id'                  => $chatId,
+                'text'                     => $htmlContent,
+                'parse_mode'               => 'HTML',
+                'disable_web_page_preview' => true,
+            ]);
+
+            return $response->successful();
+        } catch (Throwable $e) {
+            Log::warning("发送 Telegram 消息失败: " . $e->getMessage());
+            return false;
+        }
     }
 }
 
