@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\CrawlDorcelVideosJob;
 use App\Jobs\CrawlProject1VideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
@@ -38,6 +39,16 @@ Schedule::job(new TranslateVideoTitlesJob(60))
  */
 Schedule::job(new CrawlVixenDailyJob())
     ->dailyAt('02:00')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * DorcelClub 厂牌视频每日增量定时爬取任务
+ * 每天北京时间凌晨 02:30 自动投递任务至 Horizon 队列
+ * 默认抓取第 1 页并开启 skipExisting，仅对新上架视频抓取详情并入库，耗时约数十秒
+ */
+Schedule::job(new CrawlDorcelVideosJob(page: 1, skipExisting: true))
+    ->dailyAt('02:30')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
 
