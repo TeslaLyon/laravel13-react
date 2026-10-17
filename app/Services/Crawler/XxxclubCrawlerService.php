@@ -155,15 +155,142 @@ class XxxclubCrawlerService
     }
 
     /**
-     * 将搜索未匹配/无资源的视频加入冷却期（默认 7 天）
+     * 根据视频发布时间（release_at）智能计算“智能阶梯动态冷静期”
+     *
+     * 阶梯规则：
+     * 1. 发布在 2 天内（<= 48小时）: 冷静期 1 小时 (极速追踪黄金期)
+     * 2. 发布在 3 ~ 7 天内: 冷静期 1 天 (首周快速跟进)
+     * 3. 发布在 8 ~ 30 天内: 冷静期 3 天 (次新片补种跟踪)
+     * 4. 发布在 1 个月 ~ 1 年内 (31 ~ 365天): 冷静期 15 天 (常规片低频复查)
+     * 5. 发布在 1 年 ~ 3 年内 (366 ~ 1095天): 冷静期 60 天 (老片季度级维护)
+     * 6. 发布在 3 年以上 / 十年前历史片 (> 1095天): 冷静期 180 天 (远古片超长休眠，需人工介入)
+     * 7. 缺失发布日期或解析异常: 回退至默认 7 天
+     *
+     * @return array{seconds: int, text: string, tier: string}
      */
-    public function markCoolingDown(int $videoId, int $days = 7): void
+    public function calculateDynamicCooldown(Video $video, ?int $fixedDays = null): array
     {
-        if ($days <= 0) {
-            return;
+        // 若显式传入了大于 0 的固定天数，则强制采用固定天数
+        if ($fixedDays !== null && $fixedDays > 0) {
+            $seconds = $fixedDays * 86400;
+            return [
+                'seconds' => $seconds,
+                'text'    => "{$fixedDays}天",
+                'tier'    => "固定 {$fixedDays} 天冷静期",
+            ];
         }
 
-        $ttlSeconds = $days * 86400;
+        if (empty($video->release_at)) {
+            return [
+                'seconds' => 7 * 86400,
+                'text'    => '7天',
+                'tier'    => '无发布日期 (默认7天)',
+            ];
+        }
+
+        try {
+            $releaseDate = Carbon::parse($video->release_at)->startOfDay();
+            $now = Carbon::now();
+
+            // 若发布时间是未来（未上映片或预售片），按 1 小时极速冷却
+            if ($releaseDate->isFuture()) {
+                return [
+                    'seconds' => 3600,
+                    'text'    => '1小时',
+                    'tier'    => '未来预售片 (1小时极速冷却)',
+                ];
+            }
+
+            // 计算已发布天数
+            $daysSinceRelease = $releaseDate->diffInDays($now);
+
+            // 阶梯 1: 发布在 2 天内 (<= 48小时)
+            if ($daysSinceRelease <= 2) {
+                return [
+                    'seconds' => 3600, // 1 小时
+                    'text'    => '1小时',
+                    'tier'    => '2天内新片 (1小时极速追踪)',
+                ];
+            }
+
+            // 阶梯 2: 发布在 3 ~ 7 天内
+            if ($daysSinceRelease <= 7) {
+                return [
+                    'seconds' => 86400, // 1 天
+                    'text'    => '1天',
+                    'tier'    => '首周新片 (1天冷却)',
+                ];
+            }
+
+            // 阶梯 3: 发布在 8 ~ 30 天内
+            if ($daysSinceRelease <= 30) {
+                return [
+                    'seconds' => 3 * 86400, // 3 天
+                    'text'    => '3天',
+                    'tier'    => '次新片 (3天冷却)',
+                ];
+            }
+
+            // 阶梯 4: 发布在 1 个月 ~ 1 年内 (31 ~ 365天)
+            if ($daysSinceRelease <= 365) {
+                return [
+                    'seconds' => 15 * 86400, // 15 天
+                    'text'    => '15天',
+                    'tier'    => '常规片 (15天冷却)',
+                ];
+            }
+
+            // 阶梯 5: 发布在 1 年 ~ 3 年内 (366 ~ 1095天)
+            if ($daysSinceRelease <= 1095) {
+                return [
+                    'seconds' => 60 * 86400, // 60 天
+                    'text'    => '60天',
+                    'tier'    => '早期老片 (60天冷却)',
+                ];
+            }
+
+            // 阶梯 6: 发布在 3 年以上 / 十年前历史远古片
+            return [
+                'seconds' => 180 * 86400, // 180 天 (半年)
+                'text'    => '180天',
+                'tier'    => '远古历史老片 (180天休眠/需人工配置)',
+            ];
+        } catch (Throwable) {
+            return [
+                'seconds' => 7 * 86400,
+                'text'    => '7天',
+                'tier'    => '日期解析异常 (默认7天)',
+            ];
+        }
+    }
+
+    /**
+     * 将搜索未匹配/无资源的视频加入冷却期（支持智能阶梯动态计算或固定天数）
+     *
+     * @param int|Video $video 视频 ID 或 Video 模型实例
+     * @param int|null $customDays 强制指定固定天数（若为 null，且传入的是 Video 对象，则自动套用智能阶梯动态冷静期）
+     * @return array{seconds: int, text: string, tier: string} 冷却期详情
+     */
+    public function markCoolingDown(int|Video $video, ?int $customDays = null): array
+    {
+        if ($video instanceof Video) {
+            $videoId = $video->id;
+            $cooldownInfo = $this->calculateDynamicCooldown($video, $customDays);
+        } else {
+            $videoId = (int) $video;
+            $days = ($customDays !== null && $customDays > 0) ? $customDays : 7;
+            $cooldownInfo = [
+                'seconds' => $days * 86400,
+                'text'    => "{$days}天",
+                'tier'    => "固定 {$days} 天冷静期",
+            ];
+        }
+
+        $ttlSeconds = $cooldownInfo['seconds'];
+        if ($ttlSeconds <= 0) {
+            return $cooldownInfo;
+        }
+
         try {
             if (class_exists(Redis::class)) {
                 Redis::setex("crawler:xxxclub:cooldown:{$videoId}", $ttlSeconds, '1');
@@ -171,6 +298,8 @@ class XxxclubCrawlerService
         } catch (Throwable) {}
 
         Cache::put("crawler:xxxclub:cooldown:{$videoId}", '1', $ttlSeconds);
+
+        return $cooldownInfo;
     }
 
     /**

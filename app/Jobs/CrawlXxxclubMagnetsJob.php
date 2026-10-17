@@ -52,9 +52,9 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     public bool $onlyReleased;
 
     /**
-     * 未搜到/未匹配视频的冷却天数（默认 7 天）
+     * 未搜到/未匹配视频的冷却天数（null 为智能阶梯动态冷静期）
      */
-    public int $cooldownDays;
+    public ?int $cooldownDays;
 
     /**
      * 排序方式（desc 为最新片源优先，asc 为历史老片优先）
@@ -81,7 +81,7 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
         ?string $proxy = null,
         ?string $flaresolverrUrl = null,
         bool $onlyReleased = true,
-        int $cooldownDays = 7,
+        ?int $cooldownDays = null,
         string $order = 'desc'
     ) {
         $this->limit = $limit;
@@ -107,7 +107,7 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
             $this->channel ?: 'all-channels',
             "limit:{$this->limit}",
             $this->onlyReleased ? 'only-released' : null,
-            "cooldown:{$this->cooldownDays}d",
+            $this->cooldownDays !== null ? "cooldown:{$this->cooldownDays}d" : 'cooldown:dynamic',
         ]);
     }
 
@@ -116,16 +116,20 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
      */
     public function handle(): void
     {
+        $cooldownDesc = $this->cooldownDays !== null ? "{$this->cooldownDays}天" : "智能阶梯动态";
         Log::info("🚀 Horizon 队列开始执行 xxxclub 磁力爬取任务 [CrawlXxxclubMagnetsJob]"
             . ($this->channel ? " [片商: {$this->channel}]" : " [全部片商]")
-            . " [上限: {$this->limit} 部, 延迟: {$this->requestDelay}s, 冷却: {$this->cooldownDays}天, 仅已上映: " . ($this->onlyReleased ? '是' : '否') . "]");
+            . " [上限: {$this->limit} 部, 延迟: {$this->requestDelay}s, 冷却: {$cooldownDesc}, 仅已上映: " . ($this->onlyReleased ? '是' : '否') . "]");
 
         $params = [
-            '--limit'         => $this->limit,
-            '--delay'         => $this->requestDelay,
-            '--cooldown-days' => $this->cooldownDays,
-            '--order'         => $this->order,
+            '--limit' => $this->limit,
+            '--delay' => $this->requestDelay,
+            '--order' => $this->order,
         ];
+
+        if ($this->cooldownDays !== null) {
+            $params['--cooldown-days'] = $this->cooldownDays;
+        }
 
         if ($this->onlyReleased) {
             $params['--only-released'] = true;

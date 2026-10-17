@@ -28,7 +28,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--include-unreleased : 包含尚未到排期日期的未来预售视频 (默认排除未来片，避免无效请求)}
                             {--only-released : 仅筛选已到发布日期的视频 (默认即为开启状态)}
                             {--include-today : 包含当天刚刚上架发布的视频 (默认排除当天视频，为种子压制做种留出沉淀缓冲期)}
-                            {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
+                            {--cooldown-days= : 搜索未匹配视频的冷却天数 (默认自动启用智能阶梯动态冷静期，指定数字如 --cooldown-days=7 则固定天数，0为不进入冷却)}
                             {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
                             {--clear-cooldown : 一键清空所有已记录的冷却期标记，使其立即重新具备候选资格}
                             {--clear-cooldown-id= : 清除指定视频ID的冷静期标记 (例如 --clear-cooldown-id=102)}
@@ -87,7 +87,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         $onlyReleased = !$includeUnreleased;
         $includeToday = (bool) $this->option('include-today');
         $beforeToday = !$includeToday;
-        $cooldownDays = max(0, (int) $this->option('cooldown-days'));
+        $rawCooldown = $this->option('cooldown-days');
+        $cooldownDays = ($rawCooldown !== null && $rawCooldown !== '') ? max(0, (int) $rawCooldown) : null;
         $ignoreCooldown = (bool) $this->option('ignore-cooldown');
         $clearCooldown = (bool) $this->option('clear-cooldown');
         $order = strtolower((string) $this->option('order')) === 'asc' ? 'asc' : 'desc';
@@ -356,14 +357,16 @@ class CrawlXxxclubMagnetsCommand extends Command
                     'reason'     => $reason,
                 ];
 
-                // 标记进入冷却期
-                if ($cooldownDays > 0 && !$videoId) {
-                    $crawlerService->markCoolingDown($video->id, $cooldownDays);
+                // 标记进入冷却期（支持智能阶梯动态计算）
+                $cooldownInfo = null;
+                if ($cooldownDays !== 0 && !$videoId) {
+                    $cooldownInfo = $crawlerService->markCoolingDown($video, $cooldownDays);
                 }
 
+                $cooldownLabel = $cooldownInfo ? " <fg=blue>[进入 {$cooldownInfo['text']} 冷却 ({$cooldownInfo['tier']})]</>" : "";
                 $this->newLine();
-                $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>" . ($cooldownDays > 0 ? " <fg=blue>[进入 {$cooldownDays} 天冷却]</>" : ""));
-                Log::info("磁力未检索到资源: 视频Code [{$videoCode}], 候选搜索词数 [" . count($keywords) . "], 首选词 [{$primaryKeyword}], 原因 [{$reason}]" . ($cooldownDays > 0 ? ", 已进入 {$cooldownDays} 天冷却期" : ""));
+                $this->line("⚠️  未匹配: <fg=yellow>{$videoCode}</> <fg=gray>({$reason})</>{$cooldownLabel}");
+                Log::info("磁力未检索到资源: 视频Code [{$videoCode}], 候选搜索词数 [" . count($keywords) . "], 首选词 [{$primaryKeyword}], 原因 [{$reason}]" . ($cooldownInfo ? ", 已进入 {$cooldownInfo['text']} 冷却期 ({$cooldownInfo['tier']})" : ""));
             }
 
             // 遵守请求延迟避免过频触发限流
