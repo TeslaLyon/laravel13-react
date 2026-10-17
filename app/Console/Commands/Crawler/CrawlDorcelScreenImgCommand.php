@@ -7,6 +7,7 @@ use App\Models\Video;
 use App\Services\Crawler\DorcelScreenImgCrawlerService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CrawlDorcelScreenImgCommand extends Command
