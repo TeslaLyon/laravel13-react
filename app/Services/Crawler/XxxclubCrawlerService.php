@@ -195,7 +195,8 @@ class XxxclubCrawlerService
         $count = 0;
         try {
             if (class_exists(Redis::class)) {
-                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                /** @var array<int, string> $keys */
+                $keys = (array) Redis::keys('*crawler:xxxclub:cooldown:*');
                 if (!empty($keys)) {
                     foreach ($keys as $k) {
                         if (preg_match('/crawler:xxxclub:cooldown:(\d+)$/', $k, $m)) {
@@ -219,7 +220,8 @@ class XxxclubCrawlerService
     {
         try {
             if (class_exists(Redis::class)) {
-                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                /** @var array<int, string> $keys */
+                $keys = (array) Redis::keys('*crawler:xxxclub:cooldown:*');
                 return count($keys);
             }
         } catch (Throwable) {}
@@ -236,7 +238,8 @@ class XxxclubCrawlerService
         $items = [];
         try {
             if (class_exists(Redis::class)) {
-                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                /** @var array<int, string> $keys */
+                $keys = (array) Redis::keys('*crawler:xxxclub:cooldown:*');
                 if (!empty($keys)) {
                     foreach ($keys as $k) {
                         if (preg_match('/crawler:xxxclub:cooldown:(\d+)$/', $k, $m)) {
@@ -1519,9 +1522,11 @@ class XxxclubCrawlerService
         }
 
         foreach ($query->with(['downloads', 'channel'])->cursor() as $video) {
+            /** @var Video $video */
             $stats['scanned']++;
 
             if ($dryRun) {
+                /** @var Video $cloned */
                 $cloned = clone $video;
                 $updates = $this->syncVideoQualities($cloned);
             } else {
