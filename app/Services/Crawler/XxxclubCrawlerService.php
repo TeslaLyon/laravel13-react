@@ -198,7 +198,11 @@ class XxxclubCrawlerService
                 $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
                 if (!empty($keys)) {
                     foreach ($keys as $k) {
-                        Redis::del($k);
+                        if (preg_match('/crawler:xxxclub:cooldown:(\d+)$/', $k, $m)) {
+                            Redis::del("crawler:xxxclub:cooldown:{$m[1]}");
+                        } else {
+                            Redis::del($k);
+                        }
                         $count++;
                     }
                 }
@@ -222,7 +226,7 @@ class XxxclubCrawlerService
                     foreach ($keys as $k) {
                         if (preg_match('/crawler:xxxclub:cooldown:(\d+)$/', $k, $m)) {
                             $vid = (int) $m[1];
-                            $ttl = (int) Redis::ttl($k);
+                            $ttl = (int) Redis::ttl("crawler:xxxclub:cooldown:{$vid}");
                             $items[$vid] = [
                                 'id'            => $vid,
                                 'ttl_seconds'   => $ttl,
