@@ -944,23 +944,38 @@ class CiligouCrawlerService
         // 2. 种子标题无日期（如 "DoctorAdventures - Nikki Sexx - You Cant Leave Til You Nut On My Beav"）
         //    或目标视频无日期：依据搜索关键词与标题内容进行高置信度比对
         if (strlen($wordNorm) >= 6) {
-            // A. 直接子串完全包含
-            if (str_contains($titleNorm, $wordNorm) || str_contains($wordNorm, $titleNorm)) {
-                return true;
-            }
-
-            // B. 词元匹配度 (Token Overlap >= 70%)
-            $tokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
-            if (!empty($tokens)) {
-                $matchedTokens = 0;
-                foreach ($tokens as $tk) {
-                    if (str_contains(strtolower($torrentTitle), strtolower($tk))) {
-                        $matchedTokens++;
+            // 防误判核心守则：若视频拥有明确片名，种子标题中必须至少命中片名核心词，严禁仅凭“厂牌+演员名”串片！
+            $videoTitle = (string) ($video->name ?: '');
+            $titleWords = array_values(array_filter(preg_split('/[^a-zA-Z0-9]+/', $videoTitle), fn($w) => strlen($w) >= 3));
+            $hasTitleProof = empty($titleWords);
+            if (!empty($titleWords)) {
+                foreach ($titleWords as $tw) {
+                    if (str_contains(strtolower($torrentTitle), strtolower($tw))) {
+                        $hasTitleProof = true;
+                        break;
                     }
                 }
-                $ratio = $matchedTokens / count($tokens);
-                if ($ratio >= 0.70 && $matchedTokens >= 2) {
+            }
+
+            if ($hasTitleProof) {
+                // A. 直接子串完全包含
+                if (str_contains($titleNorm, $wordNorm) || str_contains($wordNorm, $titleNorm)) {
                     return true;
+                }
+
+                // B. 词元匹配度 (Token Overlap >= 70%)
+                $tokens = array_filter(preg_split('/[^a-zA-Z0-9]+/', $searchWord), fn($w) => strlen($w) >= 3);
+                if (!empty($tokens)) {
+                    $matchedTokens = 0;
+                    foreach ($tokens as $tk) {
+                        if (str_contains(strtolower($torrentTitle), strtolower($tk))) {
+                            $matchedTokens++;
+                        }
+                    }
+                    $ratio = $matchedTokens / count($tokens);
+                    if ($ratio >= 0.70 && $matchedTokens >= 2) {
+                        return true;
+                    }
                 }
             }
         }

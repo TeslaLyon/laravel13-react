@@ -38,12 +38,15 @@ class XxxclubCrawlerService
      * 构建目标视频查询构造器：
      * 1. 没有有效下载信息（has_downloads 为 false，或没有有效 video_downloads 记录）的视频；
      * 2. 标记为 4K（is_4k=true 或 max_quality=2160p），但现有有效 video_downloads 中缺失 4K/2160p 版本的视频。
+     *
+     * @param bool $beforeToday 默认 true，仅筛选今天之前已发布的视频 (release_at < today())，给种子压制做种留出缓冲期
      */
     public function getTargetVideosQuery(
         ?string $channel = null,
         ?int $videoId = null,
         bool $onlyReleased = true,
-        string $order = 'desc'
+        string $order = 'desc',
+        bool $beforeToday = true
     ): Builder {
         $query = Video::query()
             ->with(['actors:id,name,slug', 'channel:id,name,slug', 'downloads']);
@@ -53,10 +56,15 @@ class XxxclubCrawlerService
         }
 
         if ($onlyReleased) {
-            // 排除明确排期在未来的视频 (release_at > now())
-            $query->where(function (Builder $rq) {
-                $rq->whereNull('release_at')
-                   ->orWhere('release_at', '<=', now());
+            // 排除未来排期视频；默认过滤当天上架视频，为压制组做种预留沉淀时间
+            $query->where(function (Builder $rq) use ($beforeToday) {
+                if ($beforeToday) {
+                    $rq->whereNull('release_at')
+                       ->orWhere('release_at', '<', today());
+                } else {
+                    $rq->whereNull('release_at')
+                       ->orWhere('release_at', '<=', now());
+                }
             });
         }
 
@@ -95,13 +103,16 @@ class XxxclubCrawlerService
 
     /**
      * 判断视频是否属于未来尚未上映/发售的片源（双重校验，从 release_at 及 video_code 中识别未来排期）
+     *
+     * @param bool $beforeToday 默认 true，当天发布的视频也判定为未来/缓冲中，避免过早进入7天冷却
      */
-    public function isFutureVideo(Video $video): bool
+    public function isFutureVideo(Video $video, bool $beforeToday = true): bool
     {
         // 1. 检查 release_at 字段
         if (!empty($video->release_at)) {
             try {
-                if (Carbon::parse($video->release_at)->isFuture()) {
+                $dt = Carbon::parse($video->release_at);
+                if ($beforeToday ? ($dt->isToday() || $dt->isFuture()) : $dt->isFuture()) {
                     return true;
                 }
             } catch (Throwable) {}
@@ -116,7 +127,7 @@ class XxxclubCrawlerService
                 $day = (int) $matches[3];
                 if (checkdate($month, $day, $year)) {
                     $dt = Carbon::create($year, $month, $day)->startOfDay();
-                    if ($dt->isFuture()) {
+                    if ($beforeToday ? ($dt->isToday() || $dt->isFuture()) : $dt->isFuture()) {
                         return true;
                     }
                 }
@@ -299,13 +310,30 @@ class XxxclubCrawlerService
                 $fullYear = $yy > 70 ? 1900 + $yy : 2000 + $yy;
                 if (checkdate($mm, $dd, $fullYear)) {
                     $dt = Carbon::create($fullYear, $mm, $dd);
-                    $prevDate = $dt->copy()->subDay()->format('y.m.d');
-                    $nextDate = $dt->copy()->addDay()->format('y.m.d');
-
-                    // 容差 +-1 天完整词 (欧美发片时区偏差)
+                    // 策略 2: 容差前一天完整词 (欧美发片时区偏差)
                     if (!empty($afterDate)) {
                         $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
-                        $keywords[] = $this->limitKeywordWords("{$channel}.{$nextDate}.{$afterDate}", 10);
+                    }
+
+                    // 策略 3: 片商名字 + 其中一名女演员的名字 + 原片片名（使用空格拼接）
+                    $primaryActorName = null;
+                    if ($video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
+                        $primaryActorName = $video->actors->first()->name;
+                    }
+                    if (empty($primaryActorName)) {
+                        $tokens = explode('.', $afterDate);
+                        if (!empty($tokens[0])) {
+                            $primaryActorName = !empty($tokens[1]) && !in_array(strtolower($tokens[1]), ['and', 'the', 'in', 'part'])
+                                ? "{$tokens[0]} {$tokens[1]}"
+                                : $tokens[0];
+                        }
+                    }
+                    $movieTitleName = trim((string) ($video->name ?: $video->slug));
+                    if (!empty($primaryActorName) && !empty($movieTitleName)) {
+                        $cleanChannel = $channel ?: ($video->channel?->name ?: $video->channel?->slug);
+                        $cleanActor = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $primaryActorName));
+                        $cleanMovieTitle = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $movieTitleName));
+                        $keywords[] = $this->limitKeywordWords("{$cleanChannel} {$cleanActor} {$cleanMovieTitle}", 10);
                     }
 
                     // 厂牌 + 日期 (如 Deeper.26.10.09 / Deeper.26.10.08)

@@ -27,6 +27,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--delay=2 : 每次网络请求间隔延迟秒数 (默认2秒，避免频繁请求被风控)}
                             {--include-unreleased : 包含尚未到排期日期的未来预售视频 (默认排除未来片，避免无效请求)}
                             {--only-released : 仅筛选已到发布日期的视频 (默认即为开启状态)}
+                            {--include-today : 包含当天刚刚上架发布的视频 (默认排除当天视频，为种子压制做种留出沉淀缓冲期)}
                             {--cooldown-days=7 : 搜索未匹配视频的冷却天数 (默认7天内跳过不重复请求，0为不进入冷却)}
                             {--ignore-cooldown : 忽略冷却期，强制扫描所有候选视频}
                             {--clear-cooldown : 一键清空所有已记录的冷却期标记，使其立即重新具备候选资格}
@@ -75,6 +76,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         // 默认自动排除未来排期未上映视频；只有显式指定 --include-unreleased 时才允许处理未来片
         $includeUnreleased = (bool) $this->option('include-unreleased');
         $onlyReleased = !$includeUnreleased;
+        $includeToday = (bool) $this->option('include-today');
+        $beforeToday = !$includeToday;
         $cooldownDays = max(0, (int) $this->option('cooldown-days'));
         $ignoreCooldown = (bool) $this->option('ignore-cooldown');
         $clearCooldown = (bool) $this->option('clear-cooldown');
@@ -123,10 +126,10 @@ class CrawlXxxclubMagnetsCommand extends Command
         // =========================================================================
         // 模式 B：在线网络抓取与补充
         // =========================================================================
-        $this->info("🔍 正在筛选目标视频（无下载资源，或为 4K 片源但缺失 4K 下载项）...");
+        $this->info("🔍 正在筛选目标视频（无下载资源，或为 4K 片源但缺失 4K 下载项" . ($beforeToday ? "，且已排除当天发布的片源" : "") . "）...");
 
         try {
-            $query = $crawlerService->getTargetVideosQuery($channel, $videoId, $onlyReleased, $order);
+            $query = $crawlerService->getTargetVideosQuery($channel, $videoId, $onlyReleased, $order, $beforeToday);
             $totalAvailable = $query->count();
         } catch (Throwable $e) {
             $this->error("❌ 查询数据库失败: " . $e->getMessage());
@@ -167,11 +170,11 @@ class CrawlXxxclubMagnetsCommand extends Command
         foreach ($query->cursor() as $video) {
             $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
 
-            // 0. 未上映未来排期片检测（双重校验：release_at 或 video_code 中的未来日期）
-            if ($onlyReleased && !$videoId && $crawlerService->isFutureVideo($video)) {
+            // 0. 未上映未来排期或当天新片检测（为压制做种留出沉淀缓冲时间）
+            if ($onlyReleased && !$videoId && $crawlerService->isFutureVideo($video, $beforeToday)) {
                 $stats['future_skipped']++;
                 $this->newLine();
-                $this->line("⏭️  跳过未上映视频: <fg=gray>{$videoCode}</> <fg=yellow>[排期在未来，暂无种子]</>");
+                $this->line("⏭️  跳过未上映或当天新片: <fg=gray>{$videoCode}</> <fg=yellow>[为压制组做种留出缓冲期]</>");
                 continue;
             }
 
