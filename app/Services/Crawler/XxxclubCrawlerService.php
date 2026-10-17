@@ -310,6 +310,8 @@ class XxxclubCrawlerService
                 $fullYear = $yy > 70 ? 1900 + $yy : 2000 + $yy;
                 if (checkdate($mm, $dd, $fullYear)) {
                     $dt = Carbon::create($fullYear, $mm, $dd);
+                    $prevDate = $dt->copy()->subDay()->format('y.m.d');
+
                     // 策略 2: 容差前一天完整词 (欧美发片时区偏差)
                     if (!empty($afterDate)) {
                         $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
