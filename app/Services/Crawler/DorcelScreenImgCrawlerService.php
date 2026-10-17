@@ -193,14 +193,27 @@ class DorcelScreenImgCrawlerService
             $detailUrl = $article['url'];
             $articleTitle = $article['title'];
 
-            // 标题相似度校验（避免无关匹配）
-            if (!$this->isTitleMatch($video->name, $articleTitle, $video)) {
+            // 1. 尝试直接标题相似度校验（含核心词 ≥50%、多演员同台高置信度规则）
+            $isTitleMatched = $this->isTitleMatch($video->name, $articleTitle, $video);
+
+            // 检查文章标题或 URL 中命中的演员列表
+            $matchedActors = $this->getMatchedActors("{$articleTitle} {$detailUrl}", $video);
+
+            // 如果既不是标题直接匹配，也没有命中任何演员，直接跳过
+            if (!$isTitleMatched && empty($matchedActors)) {
                 continue;
             }
 
             $detailHtml = $this->fetchHtml($detailUrl, $proxy);
             if (empty($detailHtml)) {
                 continue;
+            }
+
+            // 若标题未直接匹配（例如第三方以单演员+场景重命名：Tabatha Lust in a Threesome），通过详情页正文/标签深度穿透验真
+            if (!$isTitleMatched) {
+                if (!$this->verifyArticleDetailMatch($detailHtml, $video, $articleTitle)) {
+                    continue;
+                }
             }
 
             $images = $this->parseUltra4kPornGallery($detailHtml);
@@ -211,7 +224,7 @@ class DorcelScreenImgCrawlerService
                     'article_url'  => $detailUrl,
                     'article_name' => $articleTitle,
                     'images'       => $images,
-                    'message'      => '命中 Ultra4kPorn 官方高清剧照相册',
+                    'message'      => '命中 Ultra4kPorn 官方高清剧照相册' . (!$isTitleMatched ? ' [详情页穿透验真]' : ''),
                 ];
             }
         }
@@ -475,25 +488,118 @@ class DorcelScreenImgCrawlerService
             }
         }
 
-        // 核心片名词汇至少匹配 50% (如 4 个词匹配 2 个：shared fantasy)
+        // 规则 1: 核心片名词汇至少匹配 50% (如 4 个词匹配 2 个：shared fantasy)
         if (($matched / count($vWords)) >= 0.5) {
             return true;
         }
 
-        // 或者：若文章中包含视频的演员名字，且至少命中了 1 个片名核心词汇
-        if ($video && $video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
-            $artLower = strtolower($articleTitle);
-            $hasActor = false;
-            foreach ($video->actors as $actor) {
-                $actorParts = array_filter(explode(' ', strtolower(preg_replace('/[^a-zA-Z0-9]+/', ' ', (string) $actor->name))), fn($p) => strlen($p) >= 3);
-                foreach ($actorParts as $part) {
-                    if (str_contains($artLower, $part)) {
-                        $hasActor = true;
-                        break 2;
+        // 规则 2: 文章标题中同时命中该视频的 2 个及以上演员（如 "Candee Licious & Bella Mur in a Threesome"）
+        $matchedActors = $this->getMatchedActors($articleTitle, $video);
+        if (count($matchedActors) >= 2) {
+            return true;
+        }
+
+        // 规则 3: 若文章中包含视频的演员名字，且至少命中了 1 个片名核心词汇
+        if (count($matchedActors) >= 1 && $matched >= 1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 计算文本（标题/URL）中命中的视频演员名字列表
+     *
+     * @return array<int, string>
+     */
+    protected function getMatchedActors(string $text, ?Video $video): array
+    {
+        if (!$video) {
+            return [];
+        }
+
+        $actors = $video->relationLoaded('actors') ? $video->actors : $video->actors()->get();
+        if ($actors->isEmpty()) {
+            return [];
+        }
+
+        $textLower = strtolower(preg_replace('/[^a-zA-Z0-9]+/', ' ', $text));
+        $matched = [];
+
+        foreach ($actors as $actor) {
+            $actorName = trim((string) $actor->name);
+            if (empty($actorName)) {
+                continue;
+            }
+
+            $cleanActor = strtolower(preg_replace('/[^a-zA-Z0-9]+/', ' ', $actorName));
+            // 完整全名匹配（如 "candee licious"）
+            if (str_contains($textLower, $cleanActor)) {
+                $matched[] = $actorName;
+                continue;
+            }
+
+            // 多词演员名分词匹配（若演员名由两个及以上单词组成，且每个部分 >= 3 字符，如 "bella mur"）
+            $parts = array_filter(explode(' ', $cleanActor), fn($p) => strlen($p) >= 3);
+            if (count($parts) >= 2) {
+                $allPartsPresent = true;
+                foreach ($parts as $p) {
+                    if (!str_contains($textLower, $p)) {
+                        $allPartsPresent = false;
+                        break;
                     }
                 }
+                if ($allPartsPresent) {
+                    $matched[] = $actorName;
+                }
             }
-            if ($hasActor && $matched >= 1) {
+        }
+
+        return array_values(array_unique($matched));
+    }
+
+    /**
+     * 针对改名文章（如单演员 + 动作描述），穿透检查详情页正文/标签与视频的真实关联
+     */
+    protected function verifyArticleDetailMatch(string $html, Video $video, string $articleTitle): bool
+    {
+        $htmlLower = strtolower($html);
+        $videoTitle = trim((string) $video->name);
+
+        // 1. 详情页正文中包含完整的原始片名（忽略标点与多余空格）
+        $cleanVideoTitle = strtolower(preg_replace('/[^a-zA-Z0-9\s]+/', ' ', $videoTitle));
+        $cleanVideoTitle = preg_replace('/\s+/', ' ', $cleanVideoTitle);
+        $cleanHtml = preg_replace('/\s+/', ' ', strtolower(preg_replace('/[^a-zA-Z0-9\s]+/', ' ', $html)));
+        if (!empty($cleanVideoTitle) && str_contains($cleanHtml, $cleanVideoTitle)) {
+            return true;
+        }
+
+        // 2. 详情页正文/标签中包含原始片名的核心关键词（如 voyeur, husband, guest）
+        $vTokens = $this->extractKeyTokens($videoTitle);
+        $matchedTokens = 0;
+        foreach ($vTokens as $token) {
+            if (str_contains($htmlLower, $token)) {
+                $matchedTokens++;
+            }
+        }
+        // 如果包含片名至少 1 个核心词（且已知标题中包含该演员），则确认关联
+        if (!empty($vTokens) && $matchedTokens >= 1) {
+            return true;
+        }
+
+        // 3. 厂牌与场景语义关联验证（如 DorcelClub + threesome 对应 among three / 3 people 等）
+        $isDorcel = str_contains($htmlLower, 'dorcel') || str_contains($htmlLower, 'dorcelclub');
+        if ($isDorcel) {
+            $threesomeSynonyms = ['threesome', 'three', 'trio', '3way', 'menage'];
+            $hasVideoThree = false;
+            foreach ($threesomeSynonyms as $syn) {
+                if (str_contains(strtolower($videoTitle), $syn)) {
+                    $hasVideoThree = true;
+                    break;
+                }
+            }
+            $hasArticleThree = str_contains(strtolower($articleTitle), 'threesome') || str_contains($htmlLower, 'threesome');
+            if ($hasVideoThree && $hasArticleThree) {
                 return true;
             }
         }
