@@ -312,12 +312,7 @@ class XxxclubCrawlerService
                     $dt = Carbon::create($fullYear, $mm, $dd);
                     $prevDate = $dt->copy()->subDay()->format('y.m.d');
 
-                    // 策略 2: 容差前一天完整词 (欧美发片时区偏差)
-                    if (!empty($afterDate)) {
-                        $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
-                    }
-
-                    // 策略 3: 片商名字 + 其中一名女演员的名字 + 原片片名（使用空格拼接）
+                    // 策略 2: 片商名字 + 其中一名女演员的名字 + 原片片名（使用空格拼接）
                     $primaryActorName = null;
                     if ($video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
                         $primaryActorName = $video->actors->first()->name;
@@ -336,6 +331,11 @@ class XxxclubCrawlerService
                         $cleanActor = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $primaryActorName));
                         $cleanMovieTitle = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $movieTitleName));
                         $keywords[] = $this->limitKeywordWords("{$cleanChannel} {$cleanActor} {$cleanMovieTitle}", 10);
+                    }
+
+                    // 策略 3: 容差前一天完整词 (欧美发片时区偏差)
+                    if (!empty($afterDate)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
                     }
 
                     // 厂牌 + 日期 (如 Deeper.26.10.09 / Deeper.26.10.08)
