@@ -1287,15 +1287,23 @@ class XxxclubCrawlerService
 
     /**
      * 将匹配出的下载项持久化到 video_downloads 表，并自动同步更新 videos.has_downloads
+     *
+     * @param bool $cleanOld 是否在写入最新匹配项前清空原有旧下载记录
      */
-    public function importDownloads(Video $video, array $items, bool $dryRun = false, bool $force = false): array
-    {
+    public function importDownloads(
+        Video $video,
+        array $items,
+        bool $dryRun = false,
+        bool $force = false,
+        bool $cleanOld = false
+    ): array {
         $stats = [
             'total'         => count($items),
             'matched'       => 0,
             'inserted'      => 0,
             'updated'       => 0,
             'skipped'       => 0,
+            'deleted_old'   => 0,
             'matched_items' => [],
         ];
 
@@ -1317,6 +1325,12 @@ class XxxclubCrawlerService
 
         if (empty($matchedItems) || $dryRun) {
             return $stats;
+        }
+
+        // 安全清理机制：仅在本次真正匹配到有效新种子、且开启了 cleanOld 时，先清空旧下载记录，再写入新数据
+        if ($cleanOld) {
+            $deletedCount = VideoDownload::where('video_id', $video->id)->delete();
+            $stats['deleted_old'] = $deletedCount;
         }
 
         $hasInsertedOrUpdated = false;

@@ -37,6 +37,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--sync-qualities : 回溯扫描所有已有下载项的视频，重新检测并同步更新 4K (is_4k/max_quality) 与 VR (is_vr) 标记}
                             {--force : 强制覆盖更新已存在的下载项}
+                            {--clean-old : 成功匹配到新下载项入库前，先清空移除该视频原有的旧下载数据 (防止错误旧数据残留)}
                             {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}
                             {--debug : 调试排查模式：详细输出每个关键词检索到的原始种子数据与打分明细}';
 
@@ -84,6 +85,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         $order = strtolower((string) $this->option('order')) === 'asc' ? 'asc' : 'desc';
         $exportUnmatched = $this->option('export-unmatched');
         $force = (bool) $this->option('force');
+        $cleanOld = (bool) $this->option('clean-old');
         $isDryRun = (bool) $this->option('dry-run');
 
         $this->info("================================================================================");
@@ -113,7 +115,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         // 模式 A1：本地 xxxclub HTML 文件离线解析导入（--file=path/to/file.html）
         // =========================================================================
         if (!empty($localFile)) {
-            return $this->handleLocalFileMode($crawlerService, $localFile, $videoId, $isDryRun, $force, $startTime);
+            return $this->handleLocalFileMode($crawlerService, $localFile, $videoId, $isDryRun, $force, $cleanOld, $startTime);
         }
 
         // =========================================================================
@@ -159,6 +161,7 @@ class CrawlXxxclubMagnetsCommand extends Command
             'inserted_magnets'    => 0,
             'updated_magnets'     => 0,
             'skipped_magnets'     => 0,
+            'deleted_magnets'     => 0,
         ];
 
         $unmatchedVideos = [];
@@ -277,7 +280,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                 }
 
                 if (!empty($items)) {
-                    $xxxResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
+                    $xxxResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force, $cleanOld);
                     if ($xxxResult['matched'] > 0) {
                         $matchedSource = 'xxxclub';
                         $importResult = $xxxResult;
@@ -300,7 +303,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                     }
                 }
                 if (!empty($ciligouItems)) {
-                    $ciligouResult = $crawlerService->importDownloads($video, $ciligouItems, $isDryRun, $force);
+                    $ciligouResult = $crawlerService->importDownloads($video, $ciligouItems, $isDryRun, $force, $cleanOld);
                     if ($ciligouResult['matched'] > 0) {
                         $matchedSource = 'ciligou';
                         $importResult = $ciligouResult;
@@ -315,9 +318,16 @@ class CrawlXxxclubMagnetsCommand extends Command
                 $stats['inserted_magnets'] += $importResult['inserted'];
                 $stats['updated_magnets'] += $importResult['updated'];
                 $stats['skipped_magnets'] += $importResult['skipped'];
+                $stats['deleted_magnets'] += $importResult['deleted_old'] ?? 0;
 
                 // 成功获取，清除可能存在的历史冷却标记
                 $crawlerService->clearCoolingDown($video->id);
+
+                // 提示是否清空了旧数据
+                if (!empty($importResult['deleted_old'])) {
+                    $this->newLine();
+                    $this->line("   🧹 <fg=yellow>已自动清空该视频名下的 {$importResult['deleted_old']} 条旧下载数据，写入全新匹配项！</>");
+                }
 
                 // 💡 单行输出匹配成功明细：视频code ➔ 磁力链接名称 (带来源标签)
                 $this->newLine();
@@ -391,6 +401,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                 ['新增下载项 (Inserted)', $stats['inserted_magnets']],
                 ['覆盖更新下载项 (Updated)', $stats['updated_magnets']],
                 ['跳过重复项 (Skipped)', $stats['skipped_magnets']],
+                ['清理旧下载项 (Cleaned Old)', $stats['deleted_magnets']],
                 ['⏱️ 运行总耗时 (Duration)', $formattedDuration . " ({$elapsedSeconds}s)"],
                 ['⚡ 平均每部耗时 (Avg Speed)', $avgPerVideo],
             ]
@@ -431,6 +442,7 @@ class CrawlXxxclubMagnetsCommand extends Command
         ?int $videoId,
         bool $isDryRun,
         bool $force,
+        bool $cleanOld = false,
         float $startTime = 0.0
     ): int {
         if (!file_exists($filePath)) {
@@ -497,7 +509,11 @@ class CrawlXxxclubMagnetsCommand extends Command
 
         $this->info("🎬 目标关联视频: [ID: {$video->id}] {$video->name} (编码: {$video->video_code})");
 
-        $importStats = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
+        $importStats = $crawlerService->importDownloads($video, $items, $isDryRun, $force, $cleanOld);
+
+        if (!empty($importStats['deleted_old'])) {
+            $this->line("   🧹 <fg=yellow>已自动清空该视频名下的 {$importStats['deleted_old']} 条旧下载数据，写入全新匹配项！</>");
+        }
 
         if (!empty($importStats['matched_items'])) {
             $videoCode = $video->video_code ?: ($video->name ?: "ID:{$video->id}");
@@ -518,6 +534,7 @@ class CrawlXxxclubMagnetsCommand extends Command
             ['成功新增 (Inserted)', $importStats['inserted']],
             ['覆盖更新 (Updated)', $importStats['updated']],
             ['跳过重复 (Skipped)', $importStats['skipped']],
+            ['清理旧下载项 (Cleaned Old)', $importStats['deleted_old'] ?? 0],
         ];
 
         if ($startTime > 0) {
