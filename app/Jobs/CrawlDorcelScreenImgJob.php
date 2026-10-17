@@ -165,6 +165,11 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
         }
 
         $exitCode = Artisan::call('crawler:dorcel-screen-img', $params);
+        $output = trim(Artisan::output());
+
+        if (!empty($output)) {
+            Log::info("DorcelClub 剧照抓取任务控制台输出汇总:\n" . $output);
+        }
 
         if ($exitCode === 0) {
             Log::info("🎉 DorcelClub 剧照抓取队列任务执行成功！");

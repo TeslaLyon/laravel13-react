@@ -198,6 +198,8 @@ class CrawlDorcelScreenImgCommand extends Command
                 $service->saveScreenshots($video, $result['images'], $isDryRun);
 
                 $sourceBadge = $result['source'] === 'ultra4kporn' ? '[Ultra4kPorn]' : '[Perfect-Stockings]';
+                Log::info("🎯 [DorcelClub 剧照抓取成功] 视频 [ID:{$video->id}] {$videoCode} 来源: {$sourceBadge}，获得 {$imgCount} 张切片图" . ($isDryRun ? " (演练)" : ""));
+
                 $this->newLine();
                 $this->line("🎯 <fg=green>✔ 抓取成功</> <fg=magenta>{$sourceBadge}</>: <fg=cyan>{$videoCode}</> ➔ 获得 <info>{$imgCount}</info> 张高清切片图" . ($isDryRun ? " <fg=yellow>[演练不入库]</>" : " <fg=green>[已持久化入库]</>"));
 
@@ -222,6 +224,9 @@ class CrawlDorcelScreenImgCommand extends Command
                     'video_code' => (string) $videoCode,
                     'reason'     => $result['message'] ?? '无匹配',
                 ];
+
+                $cooldownLog = ($cooldownDays > 0 && !$videoId) ? " [进入 {$cooldownDays} 天冷却]" : "";
+                Log::info("⚠️ [DorcelClub 剧照未匹配] 视频 [ID:{$video->id}] {$videoCode} ({$result['message']}){$cooldownLog}");
 
                 if ($isDebug) {
                     $this->newLine();
