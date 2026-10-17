@@ -7,6 +7,7 @@ use App\Models\Video;
 use App\Models\VideoDetail;
 use Carbon\Carbon;
 use DOMDocument;
+use DOMElement;
 use DOMXPath;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -47,7 +48,8 @@ class DorcelScreenImgCrawlerService
     public function getTargetVideosQuery(
         ?int $videoId = null,
         bool $force = false,
-        string $channelSlug = self::CHANNEL_SLUG
+        string $channelSlug = self::CHANNEL_SLUG,
+        string $orderBy = 'release_at'
     ): Builder {
         $channelId = Channel::where('slug', $channelSlug)->value('id');
 
@@ -77,7 +79,14 @@ class DorcelScreenImgCrawlerService
             });
         }
 
-        return $query->orderByDesc('id');
+        if ($orderBy === 'id') {
+            $query->orderByDesc('id');
+            return $query;
+        }
+
+        // 默认优先按发布时间倒序（最新视频优先，无发布日期的排在末尾），日期相同时按 ID 倒序
+        $query->orderByRaw('release_at DESC NULLS LAST')->orderByDesc('id');
+        return $query;
     }
 
     /**
@@ -226,6 +235,9 @@ class DorcelScreenImgCrawlerService
         $articles = [];
         $seen = [];
         foreach ($nodes as $node) {
+            if (!$node instanceof DOMElement) {
+                continue;
+            }
             $href = trim($node->getAttribute('href'));
             $title = trim($node->textContent);
 
@@ -261,15 +273,18 @@ class DorcelScreenImgCrawlerService
         $images = [];
         $seen = [];
         foreach ($nodes as $aNode) {
+            if (!$aNode instanceof DOMElement) {
+                continue;
+            }
             $largeUrl = trim($aNode->getAttribute('href'));
             if (empty($largeUrl) || isset($seen[$largeUrl])) {
                 continue;
             }
 
             $imgTag = $aNode->getElementsByTagName('img')->item(0);
-            $thumbUrl = $imgTag ? trim($imgTag->getAttribute('src')) : $largeUrl;
-            $thumbWidth = $imgTag && $imgTag->getAttribute('width') ? (int) $imgTag->getAttribute('width') : 350;
-            $thumbHeight = $imgTag && $imgTag->getAttribute('height') ? (int) $imgTag->getAttribute('height') : 233;
+            $thumbUrl = ($imgTag instanceof DOMElement) ? trim($imgTag->getAttribute('src')) : $largeUrl;
+            $thumbWidth = ($imgTag instanceof DOMElement && $imgTag->getAttribute('width')) ? (int) $imgTag->getAttribute('width') : 350;
+            $thumbHeight = ($imgTag instanceof DOMElement && $imgTag->getAttribute('height')) ? (int) $imgTag->getAttribute('height') : 233;
 
             // 过滤非图片资源
             if (!preg_match('/\.(jpe?g|png|webp|avif)/i', $largeUrl)) {
@@ -314,6 +329,9 @@ class DorcelScreenImgCrawlerService
         $links = $xpath->query('//a[contains(@class, "gal_link")] | //div[contains(@class, "content_wrapper")]//a');
 
         foreach ($links as $linkNode) {
+            if (!$linkNode instanceof DOMElement) {
+                continue;
+            }
             $href = trim($linkNode->getAttribute('href'));
             if (empty($href)) {
                 continue;
@@ -380,6 +398,9 @@ class DorcelScreenImgCrawlerService
         $seen = [];
 
         foreach ($items as $node) {
+            if (!$node instanceof DOMElement) {
+                continue;
+            }
             $href = trim($node->getAttribute('href'));
             if (empty($href)) {
                 continue;
@@ -391,7 +412,7 @@ class DorcelScreenImgCrawlerService
             }
 
             $imgNode = $node->getElementsByTagName('img')->item(0);
-            $thumbRel = $imgNode ? ($imgNode->getAttribute('data-src') ?: $imgNode->getAttribute('src')) : '';
+            $thumbRel = ($imgNode instanceof DOMElement) ? ($imgNode->getAttribute('data-src') ?: $imgNode->getAttribute('src')) : '';
             $thumbUrl = empty($thumbRel) ? $largeUrl : (str_starts_with($thumbRel, 'http') ? $thumbRel : $baseDir . ltrim($thumbRel, '/'));
 
             $seen[$largeUrl] = true;

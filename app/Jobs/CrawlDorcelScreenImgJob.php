@@ -72,6 +72,11 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
     public bool $noTelegram;
 
     /**
+     * 排序规则
+     */
+    public string $orderBy;
+
+    /**
      * 任务描述（Horizon 展示）
      */
     public string $task_name = 'DorcelClub 视频片段剧照切片抓取与补充';
@@ -94,7 +99,8 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
         bool $all = false,
         int $cooldownDays = 7,
         bool $ignoreCooldown = false,
-        bool $noTelegram = false
+        bool $noTelegram = false,
+        string $orderBy = 'release_at'
     ) {
         $this->videoId = $videoId;
         $this->limit = $limit;
@@ -106,6 +112,7 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
         $this->cooldownDays = $cooldownDays;
         $this->ignoreCooldown = $ignoreCooldown;
         $this->noTelegram = $noTelegram;
+        $this->orderBy = $orderBy;
         $this->dispatched_at = now()->toDateTimeString();
     }
 
@@ -128,12 +135,14 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
     public function handle(): void
     {
         $scopeDesc = $this->videoId ? " [视频 ID: {$this->videoId}]" : ($this->all ? " [全量处理]" : " [限制: {$this->limit} 部]");
-        Log::info("🚀 Horizon 队列开始执行 DorcelClub 剧照抓取任务 [CrawlDorcelScreenImgJob]{$scopeDesc}");
+        $orderDesc = $this->orderBy === 'release_at' ? " [最新发布优先]" : " [ID 倒序]";
+        Log::info("🚀 Horizon 队列开始执行 DorcelClub 剧照抓取任务 [CrawlDorcelScreenImgJob]{$scopeDesc}{$orderDesc}");
 
         $params = [
             '--limit' => $this->limit,
             '--delay' => $this->requestDelay,
             '--cooldown-days' => $this->cooldownDays,
+            '--order-by' => $this->orderBy,
         ];
 
         if ($this->all) {

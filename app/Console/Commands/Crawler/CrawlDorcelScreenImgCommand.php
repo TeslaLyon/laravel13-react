@@ -30,6 +30,7 @@ class CrawlDorcelScreenImgCommand extends Command
                             {--clear-cooldown-id= : 清除指定视频 ID 的剧照冷静期标记 (例如 --clear-cooldown-id=16715)}
                             {--count-cooldown : 快速查看当前正处于剧照冷静期中的视频总量}
                             {--export-unmatched= : 将未匹配到剧照的视频清单导出至指定文本文件 (例如 unmatched.txt)}
+                            {--order-by=release_at : 排序规则：release_at (最新发布日期优先) 或 id (按数据库自增ID降序)}
                             {--no-telegram : 禁用 Telegram 通知推送 (默认当 .env 配置了 Token 时自动推送)}
                             {--queue : 异步投递至 Horizon 队列后台执行}
                             {--dry-run : 演练模式：仅检索和匹配预览，不实际写入数据库}
@@ -81,6 +82,7 @@ class CrawlDorcelScreenImgCommand extends Command
         $cooldownDays = max(0, (int) $this->option('cooldown-days'));
         $ignoreCooldown = (bool) $this->option('ignore-cooldown');
         $exportUnmatched = $this->option('export-unmatched');
+        $orderBy = in_array($this->option('order-by'), ['id', 'release_at'], true) ? (string) $this->option('order-by') : 'release_at';
         $noTelegram = (bool) $this->option('no-telegram');
         $isDryRun = (bool) $this->option('dry-run');
         $isDebug = (bool) $this->option('debug') || ($videoId !== null);
@@ -97,13 +99,15 @@ class CrawlDorcelScreenImgCommand extends Command
                 all: $isAll,
                 cooldownDays: $cooldownDays,
                 ignoreCooldown: $ignoreCooldown,
-                noTelegram: $noTelegram
+                noTelegram: $noTelegram,
+                orderBy: $orderBy
             );
             dispatch($job);
 
             $this->info("================================================================================");
             $this->info("🚀 已成功将 DorcelClub 剧照抓取任务投递至 Horizon 队列后台执行！");
             $this->line("   - 目标范围: " . ($videoId ? "指定视频 ID: {$videoId}" : ($isAll || $limit === 0 ? "全量所有视频" : "批量前 {$limit} 部视频")));
+            $this->line("   - 排序规则: " . ($orderBy === 'release_at' ? "最新发布优先 (release_at desc)" : "数据库自增 ID 降序 (id desc)"));
             $this->line("   - 覆盖设置: " . ($force ? "强制覆盖已有截图" : "仅补充无截图视频"));
             $this->line("   - 冷静期: " . ($ignoreCooldown ? "忽略冷静期" : "未匹配进入 {$cooldownDays} 天冷却"));
             $this->line("   - 运行模式: " . ($isDryRun ? "演练模式 (Dry-Run)" : "正式入库"));
@@ -123,7 +127,7 @@ class CrawlDorcelScreenImgCommand extends Command
         $this->info("🔍 正在筛选目标视频（" . ($force ? "全部视频包含已存在截图" : "仅无截图或缺失截图的视频") . "）...");
 
         try {
-            $query = $service->getTargetVideosQuery($videoId, $force);
+            $query = $service->getTargetVideosQuery($videoId, $force, DorcelScreenImgCrawlerService::CHANNEL_SLUG, $orderBy);
             $totalAvailable = $query->count();
         } catch (Throwable $e) {
             $this->error("❌ 查询数据库失败: " . $e->getMessage());

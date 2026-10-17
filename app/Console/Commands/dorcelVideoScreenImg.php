@@ -27,6 +27,7 @@ class dorcelVideoScreenImg extends CrawlDorcelScreenImgCommand
                             {--clear-cooldown-id= : 清除指定视频 ID 的剧照抓取冷静期缓存标记}
                             {--count-cooldown : 快速查看当前正处于剧照冷静期中的视频总量}
                             {--export-unmatched= : 将未匹配到剧照的视频清单导出至指定文本文件 (例如 unmatched.txt)}
+                            {--order-by=release_at : 排序规则：release_at (最新发布日期优先) 或 id (按数据库自增ID降序)}
                             {--no-telegram : 禁用 Telegram 通知推送 (默认当 .env 配置了 Token 时自动推送)}
                             {--queue : 异步投递至 Horizon 队列后台执行}
                             {--dry-run : 演练模式：仅检索和匹配预览，不实际写入数据库}
