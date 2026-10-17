@@ -34,7 +34,7 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
     /**
      * 请求间隔延迟（秒）
      */
-    public int $delay;
+    public int $requestDelay;
 
     /**
      * 网络代理
@@ -87,7 +87,7 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
     public function __construct(
         ?int $videoId = null,
         int $limit = 50,
-        int $delay = 1,
+        int $requestDelay = 1,
         ?string $proxy = null,
         bool $force = false,
         bool $dryRun = false,
@@ -98,7 +98,7 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
     ) {
         $this->videoId = $videoId;
         $this->limit = $limit;
-        $this->delay = $delay;
+        $this->requestDelay = $requestDelay;
         $this->proxy = $proxy;
         $this->force = $force;
         $this->dryRun = $dryRun;
@@ -132,7 +132,7 @@ class CrawlDorcelScreenImgJob implements ShouldQueue
 
         $params = [
             '--limit' => $this->limit,
-            '--delay' => $this->delay,
+            '--delay' => $this->requestDelay,
             '--cooldown-days' => $this->cooldownDays,
         ];
 

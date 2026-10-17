@@ -89,7 +89,7 @@ class CrawlDorcelScreenImgCommand extends Command
             $job = new CrawlDorcelScreenImgJob(
                 videoId: $videoId,
                 limit: $limit,
-                delay: $delay,
+                requestDelay: $delay,
                 proxy: $proxy,
                 force: $force,
                 dryRun: $isDryRun,
