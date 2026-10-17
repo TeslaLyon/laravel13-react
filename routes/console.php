@@ -43,12 +43,15 @@ Schedule::job(new CrawlVixenDailyJob())
     ->withoutOverlapping();
 
 /**
- * DorcelClub 厂牌视频每日增量定时爬取任务
- * 每天北京时间凌晨 02:30 自动投递任务至 Horizon 队列
- * 默认抓取第 1 页并开启 skipExisting，仅对新上架视频抓取详情并入库，耗时约数十秒
+ * DorcelClub 厂牌视频增量定时爬取任务
+ * 每天在北京时间 02:30、08:30、14:30、20:30（每 6 小时错峰）自动投递任务至 Horizon 队列：
+ * 1. 对应法国巴黎当地时间约 19:30、01:30、07:30、13:30，全天候覆盖欧洲工作日与晚间黄金发布窗口；
+ * 2. 开启 skipExisting 极速增量模式：无新片时仅拉取 1 次列表比对 UUID，耗时仅 1~2 秒，零性能开销；
+ * 3. 一旦官网有新上架视频，最迟数小时内即可迅速捕获并自动入库；
+ * 4. 开启 withoutOverlapping 避免并发重叠。
  */
 Schedule::job(new CrawlDorcelVideosJob(page: 1, skipExisting: true))
-    ->dailyAt('02:30')
+    ->cron('30 2,8,14,20 * * *')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
 
