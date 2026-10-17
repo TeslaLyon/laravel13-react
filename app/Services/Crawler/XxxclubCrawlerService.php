@@ -1088,23 +1088,42 @@ class XxxclubCrawlerService
      */
     public function isMatch(Video $video, array $item): bool
     {
+        return $this->explainMatch($video, $item)['is_match'];
+    }
+
+    /**
+     * 详细分析种子与视频的匹配度，返回得分及各项特征命中明细（供调试与可视化展示）
+     */
+    public function explainMatch(Video $video, array $item): array
+    {
         $torrentTitle = $item['title'] ?? '';
         if (empty($torrentTitle)) {
-            return false;
+            return [
+                'is_match'        => false,
+                'score'           => 0,
+                'reason_summary'  => '标题为空',
+            ];
         }
 
         // 排除非视频资源（图片集/写真集 iMAGESET 等）
         if ($this->isImageSetTorrent($torrentTitle, $video)) {
-            return false;
+            return [
+                'is_match'        => false,
+                'score'           => 0,
+                'reason_summary'  => '图片/写真集合集拦截 (ImageSet)',
+            ];
         }
 
         // 0. 如果条目来自已完成严格日期/标题比对的外部搜索引擎（如 Ciligou）
         if (!empty($item['source']) && $item['source'] === 'ciligou') {
-            return true;
+            return [
+                'is_match'        => true,
+                'score'           => 100,
+                'reason_summary'  => '磁力狗来源 (已完成严格日期/片名校验)',
+            ];
         }
 
         $normalize = fn($s) => strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $s));
-
         $titleNorm = $normalize($torrentTitle);
 
         // 1. 如果已有 video_code，且包含在 torrent 标题中（如 BrazzersExxtra.26.10.08...）
@@ -1112,13 +1131,20 @@ class XxxclubCrawlerService
             $codeNorm = $normalize($video->video_code);
             if (!empty($codeNorm) && strlen($codeNorm) >= 8) {
                 if (str_contains($titleNorm, $codeNorm) || str_contains($codeNorm, $titleNorm)) {
-                    return true;
+                    return [
+                        'is_match'        => true,
+                        'score'           => 100,
+                        'reason_summary'  => 'video_code 完整吻合 (100分)',
+                    ];
                 }
             }
         }
 
         // 2. 复合特征打分验证
         $score = 0;
+        $reasons = [];
+        $featureBScore = 0;
+        $featureDScore = 0;
 
         // 特征 A: 发布日期吻合（YY.MM.DD 或 YYYY.MM.DD，支持时差偏差 +-1 天）
         $videoDate = null;
@@ -1143,9 +1169,11 @@ class XxxclubCrawlerService
 
             if (str_contains($titleNorm, $shortDate) || str_contains($titleNorm, $fullDate)) {
                 $score += 50;
+                $reasons[] = '日期当天吻合(+50)';
             } elseif (str_contains($titleNorm, $prevDate) || str_contains($titleNorm, $nextDate) || str_contains($titleNorm, $prevFull) || str_contains($titleNorm, $nextFull)) {
                 // 欧美发行时差偏差 1 天：赋予 40 分
                 $score += 40;
+                $reasons[] = '日期时差±1天(+40)';
             }
         }
 
@@ -1155,7 +1183,9 @@ class XxxclubCrawlerService
             $nameNorm = $normalize($rawVideoName);
             if (!empty($nameNorm) && strlen($nameNorm) >= 4) {
                 if (str_contains($titleNorm, $nameNorm)) {
+                    $featureBScore = 60;
                     $score += 60;
+                    $reasons[] = '片名全称吻合(+60)';
                 } else {
                     // 分词匹配
                     $nameWords = array_filter(explode(' ', strtolower(preg_replace('/[^a-zA-Z0-9]+/', ' ', $rawVideoName))));
@@ -1166,7 +1196,9 @@ class XxxclubCrawlerService
                         }
                     }
                     if (count($nameWords) > 0 && ($matchedWords / count($nameWords)) >= 0.7) {
+                        $featureBScore = 50;
                         $score += 50;
+                        $reasons[] = '片名分词重合≥70%(+50)';
                     }
                 }
             }
@@ -1178,6 +1210,7 @@ class XxxclubCrawlerService
                 $actorNorm = $normalize($actor->name);
                 if (!empty($actorNorm) && strlen($actorNorm) >= 4 && str_contains($titleNorm, $actorNorm)) {
                     $score += 40;
+                    $reasons[] = "演员吻合[{$actor->name}](+40)";
                     break;
                 }
             }
@@ -1195,13 +1228,31 @@ class XxxclubCrawlerService
                 }
                 $ratio = $matchedCodeWords / count($codeWords);
                 if ($ratio >= 0.5 && $matchedCodeWords >= 2) {
+                    $featureDScore = 45;
                     $score += 45;
+                    $reasons[] = "代码词元重合≥50%(+45)";
                 }
             }
         }
 
-        // 综合门槛：得分达到 80 分以上即确认为同部影片
-        return $score >= 80;
+        // 关键防御：防范“日期偏差(40分) + 演员相同(40分) = 80分”串片误判！
+        // 若片名(特征B)与代码词元(特征D)均无任何命中，严禁通过判定
+        if ($featureBScore === 0 && $featureDScore === 0) {
+            return [
+                'is_match'        => false,
+                'score'           => $score,
+                'reason_summary'  => (!empty($reasons) ? implode(', ', $reasons) . ' (但' : '') . '片名及词元零重合，触发串片防误判拦截',
+            ];
+        }
+
+        // 综合门槛：得分达到 80 分以上且通过片名交叉验证即确认为同部影片
+        $isMatch = $score >= 80;
+
+        return [
+            'is_match'        => $isMatch,
+            'score'           => $score,
+            'reason_summary'  => !empty($reasons) ? implode(', ', $reasons) : '特征不足',
+        ];
     }
 
     /**

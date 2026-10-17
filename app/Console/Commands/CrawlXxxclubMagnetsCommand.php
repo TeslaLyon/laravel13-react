@@ -36,7 +36,8 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--sync-qualities : 回溯扫描所有已有下载项的视频，重新检测并同步更新 4K (is_4k/max_quality) 与 VR (is_vr) 标记}
                             {--force : 强制覆盖更新已存在的下载项}
-                            {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}';
+                            {--dry-run : 演练模式：仅抓取和匹配，不实际写入数据库}
+                            {--debug : 调试排查模式：详细输出每个关键词检索到的原始种子数据与打分明细}';
 
     /**
      * 命令描述
@@ -183,9 +184,28 @@ class CrawlXxxclubMagnetsCommand extends Command
 
             $stats['processed_videos']++;
 
+            $isDebug = (bool) $this->option('debug') || ($videoId !== null);
+
             // 1. 智能生成 xxxclub 多策略搜索候选词列表
             $keywords = $crawlerService->buildSearchKeywords($video);
             $primaryKeyword = $keywords[0] ?? $crawlerService->buildSearchKeyword($video);
+
+            if ($isDebug) {
+                $this->newLine();
+                $this->info("================================================================================");
+                $this->info("🎯 [定向排查/调试] 目标视频 ID: {$video->id}");
+                $this->line("   - 视频番号 (Code): <fg=cyan>{$videoCode}</>");
+                $this->line("   - 视频标题 (Name): <fg=yellow>{$video->name}</>");
+                $this->line("   - 所属厂牌: " . ($video->channel?->name ?? '无'));
+                $this->line("   - 发布日期: " . ($video->release_at ? substr((string) $video->release_at, 0, 10) : '无'));
+                $actorsStr = $video->actors->pluck('name')->implode(', ');
+                $this->line("   - 关联演员: " . ($actorsStr ?: '无'));
+                $this->line("   - 候选关键词列表 (共 " . count($keywords) . " 个策略):");
+                foreach ($keywords as $idx => $kw) {
+                    $this->line("     [" . ($idx + 1) . "] <comment>{$kw}</comment>");
+                }
+                $this->info("================================================================================");
+            }
 
             // 2. 逐个候选关键词请求 xxxclub，首个匹配即停
             $matchedSource = null;
@@ -195,6 +215,10 @@ class CrawlXxxclubMagnetsCommand extends Command
                 // 仅首个关键词失败后，如果继续尝试备选词，增加短延迟
                 if ($kwIdx > 0 && $delay > 0) {
                     sleep(min(2, $delay));
+                }
+
+                if ($isDebug) {
+                    $this->line("🔎 [xxxclub] 正在检索关键词 [" . ($kwIdx + 1) . "/" . count($keywords) . "]: <comment>{$kw}</comment> ...");
                 }
 
                 $fetchResult = $crawlerService->fetchSearchHtml(
@@ -217,11 +241,38 @@ class CrawlXxxclubMagnetsCommand extends Command
                 }
 
                 if (!$fetchResult['success'] || empty($fetchResult['html'])) {
+                    if ($isDebug) {
+                        $this->line("   ↳ ⚠️ 请求未成功返回 HTML: " . ($fetchResult['message'] ?? '网络异常'));
+                    }
                     continue;
                 }
 
                 // 解析当前候选词的搜索结果 HTML
                 $items = $crawlerService->parseSearchHtml($fetchResult['html']);
+                $itemCount = count($items);
+
+                if ($isDebug) {
+                    if ($itemCount === 0) {
+                        $this->line("   ↳ 📭 xxxclub 返回结果: 0 个种子");
+                    } else {
+                        $this->line("   ↳ 📦 xxxclub 成功返回 <info>{$itemCount}</info> 个种子候选项:");
+                        foreach ($items as $itemIdx => $tItem) {
+                            $matchInfo = $crawlerService->explainMatch($video, $tItem);
+                            $badge = $matchInfo['is_match']
+                                ? "<fg=green;options=bold>✔ [匹配通过 - {$matchInfo['score']}分]</>"
+                                : "<fg=red>✘ [不匹配 - {$matchInfo['score']}分]</>";
+                            $this->line(sprintf(
+                                "     (%d) %s %s | 大小: %s | 依据: <fg=gray>%s</>",
+                                $itemIdx + 1,
+                                $badge,
+                                $tItem['title'],
+                                $tItem['size_str'] ?? '未知',
+                                $matchInfo['reason_summary']
+                            ));
+                        }
+                    }
+                }
+
                 if (!empty($items)) {
                     $xxxResult = $crawlerService->importDownloads($video, $items, $isDryRun, $force);
                     if ($xxxResult['matched'] > 0) {
@@ -234,7 +285,17 @@ class CrawlXxxclubMagnetsCommand extends Command
 
             // 4. 💡 备选搜索引擎兜底：如果 xxxclub 未搜到或未匹配到，调用磁力狗 (ciligou.net) 进行二次检索与日期精准比对
             if (empty($matchedSource)) {
+                if ($isDebug) {
+                    $this->newLine();
+                    $this->comment("🔄 [xxxclub 未匹配] 启动备用引擎 [磁力狗 ciligou.net] 兜底检索...");
+                }
                 $ciligouItems = $ciligouService->searchAndMatch($video, $proxy);
+                if ($isDebug) {
+                    $this->line("   ↳ 磁力狗候选匹配返回: " . count($ciligouItems) . " 条有效种子");
+                    foreach ($ciligouItems as $cIdx => $cItem) {
+                        $this->line("     (" . ($cIdx + 1) . ") <fg=green>✔ [磁力狗命中]</> {$cItem['title']} (大小: {$cItem['size_str']})");
+                    }
+                }
                 if (!empty($ciligouItems)) {
                     $ciligouResult = $crawlerService->importDownloads($video, $ciligouItems, $isDryRun, $force);
                     if ($ciligouResult['matched'] > 0) {

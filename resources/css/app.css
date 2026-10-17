@@ -15,9 +15,14 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        -apple-system, BlinkMacSystemFont, 'SF Pro SC', 'SF Pro Text', 'SF Pro Display',
+        'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue',
+        Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --font-mono:
+        'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+        monospace;
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -346,10 +351,11 @@ button:not([disabled]),
 
 @layer base {
     body {
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-        /* 开启苹果级抗锯齿渲染 */
+        font-family: var(--font-sans);
+        /* 开启苹果级抗锯齿渲染与字距字形优化 */
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
     }
 }
 
