@@ -213,6 +213,21 @@ class XxxclubCrawlerService
     }
 
     /**
+     * 获取当前处于冷静期中的视频总数量（快速统计，不查数据库）
+     */
+    public function getCoolingDownCount(): int
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                $keys = Redis::keys('*crawler:xxxclub:cooldown:*');
+                return count($keys);
+            }
+        } catch (Throwable) {}
+
+        return 0;
+    }
+
+    /**
      * 获取所有当前正处于冷静期中的视频列表（含剩余冷静时间 TTL）
      * @return array<int, array{id: int, ttl_seconds: int, ttl_formatted: string, video: ?Video}>
      */

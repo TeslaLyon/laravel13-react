@@ -33,6 +33,7 @@ class CrawlXxxclubMagnetsCommand extends Command
                             {--clear-cooldown : 一键清空所有已记录的冷却期标记，使其立即重新具备候选资格}
                             {--clear-cooldown-id= : 清除指定视频ID的冷静期标记 (例如 --clear-cooldown-id=102)}
                             {--list-cooldown : 查看当前所有正处于冷静期中的视频列表及剩余冷静时间}
+                            {--count-cooldown : 快速查看当前正处于冷静期中的视频总量}
                             {--order=desc : 排序方式：desc（最新片源优先）或 asc（最早历史片优先）}
                             {--export-unmatched= : 将未匹配的视频 Code 导出至指定文件 (例如 unmatched_videos.txt)}
                             {--sync-qualities : 回溯扫描所有已有下载项的视频，重新检测并同步更新 4K (is_4k/max_quality) 与 VR (is_vr) 标记}
@@ -52,6 +53,13 @@ class CrawlXxxclubMagnetsCommand extends Command
     public function handle(XxxclubCrawlerService $crawlerService, CiligouCrawlerService $ciligouService): int
     {
         $startTime = microtime(true);
+
+        // 快捷选项：快速统计冷静期视频总量
+        if ((bool) $this->option('count-cooldown')) {
+            $count = $crawlerService->getCoolingDownCount();
+            $this->info("❄️  当前处于冷静期中的视频总数: <fg=cyan;options=bold>{$count}</> 部");
+            return self::SUCCESS;
+        }
 
         // 快捷选项：查看冷静期列表
         if ((bool) $this->option('list-cooldown')) {
