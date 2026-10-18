@@ -442,20 +442,25 @@ class TpdbApiService
         }
 
         // 3. 写入或增量合并到 actor_details 表
-        $detail = ActorDetail::firstOrNew(['actor_id' => $actor->id]);
+        try {
+            $detail = ActorDetail::firstOrNew(['actor_id' => $actor->id]);
 
-        $existingBasic = is_array($detail->basic_info) ? $detail->basic_info : [];
-        $existingPhysical = is_array($detail->physical_info) ? $detail->physical_info : [];
-        $existingSocials = is_array($detail->socials) ? $detail->socials : [];
+            $existingBasic = is_array($detail->basic_info) ? $detail->basic_info : [];
+            $existingPhysical = is_array($detail->physical_info) ? $detail->physical_info : [];
+            $existingSocials = is_array($detail->socials) ? $detail->socials : [];
 
-        // 增量合并：优先保留现有非空数据，用 API 数据补充缺失字段
-        $detail->basic_info = array_merge($extractedBasic, $existingBasic);
-        $detail->physical_info = array_merge($extractedPhysical, $existingPhysical);
-        $detail->socials = array_merge($socials, $existingSocials);
+            // 增量合并：优先保留现有非空数据，用 API 数据补充缺失字段
+            $detail->basic_info = array_merge($extractedBasic, $existingBasic);
+            $detail->physical_info = array_merge($extractedPhysical, $existingPhysical);
+            $detail->socials = array_merge($socials, $existingSocials);
 
-        $detail->save();
+            $detail->save();
 
-        return $detail;
+            return $detail;
+        } catch (Throwable $e) {
+            Log::warning("[TPDB API] 同步演员 [{$actor->name}] 扩展详情至 actor_details 异常: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
