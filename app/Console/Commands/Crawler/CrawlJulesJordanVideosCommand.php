@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Crawler;
 
+use App\Jobs\CrawlJulesJordanVideosJob;
 use App\Models\Video;
 use App\Services\Crawler\JulesJordanCrawlerService;
 use Illuminate\Console\Command;
@@ -22,6 +23,8 @@ class CrawlJulesJordanVideosCommand extends Command
                             {--delay=1 : 抓取单部详情页间隔秒数，防触发频繁风控（默认 1 秒）}
                             {--skip-existing : 若本地数据库已存在该视频，跳过详情抓取（极速日常增量模式）}
                             {--dry-run : 演练模式，仅打印解析与性别推导结果，不写入数据库}
+                            {--queue : 异步投递至 Horizon 队列后台执行}
+                            {--stagger=5 : 多页入队时的递增延迟间隔秒数（默认 5 秒），防止瞬时并发打崩源站}
                             {--file= : 指定本地列表页 HTML 文件（如 jules-list.html）进行离线测试}
                             {--detail-file= : 指定本地详情页 HTML 文件（如 jules-detail.html）进行离线测试}';
 
@@ -60,6 +63,47 @@ class CrawlJulesJordanVideosCommand extends Command
         $dryRun = (bool) $this->option('dry-run');
         $localListFile = $this->option('file');
         $localDetailFile = $this->option('detail-file');
+
+        // 异步队列投递模式
+        if ($this->option('queue')) {
+            if ($localListFile || $localDetailFile) {
+                $this->error('❌ 本地离线文件模式不支持 --queue 投递队列，请移除 --queue 参数进行本地控制台执行。');
+                return Command::FAILURE;
+            }
+
+            $targetPages = $crawlAll ? range($startPage, $maxPage) : [$startPage];
+            $totalPages = count($targetPages);
+            $stagger = max(0, (int) ($this->option('stagger') ?? 5));
+
+            $this->info("==================================================");
+            $this->info("🚀 正在将 Jules Jordan 抓取任务批量投递至 Horizon 队列...");
+            $this->line("🎯 目标页码范围: <info>第 {$startPage} 页 至 第 {$maxPage} 页 (共 {$totalPages} 个任务)</info>");
+            $this->line("⏱️ 入队递增延迟: <comment>{$stagger} 秒/页</comment> (防并发瞬时冲击)");
+            $this->line("⏩ 跳过已入库: <comment>" . ($skipExisting ? '开启 (极速增量)' : '关闭 (全量比对)') . "</comment>");
+            $this->line("🛡️ 运行模式: <comment>" . ($dryRun ? '演练模式 (Dry-Run)' : '正式入库') . "</comment>");
+            $this->info("==================================================");
+
+            foreach ($targetPages as $index => $page) {
+                $delaySeconds = $index * $stagger;
+                $job = new CrawlJulesJordanVideosJob(
+                    page: $page,
+                    skipExisting: $skipExisting,
+                    crawlDelay: $delay,
+                    limit: $limit,
+                    dryRun: $dryRun
+                );
+
+                if ($delaySeconds > 0) {
+                    $job->delay(now()->addSeconds($delaySeconds));
+                }
+
+                dispatch($job);
+            }
+
+            $this->info("✅ 成功将 {$totalPages} 个任务派发至队列！");
+            $this->line("💡 您可以在 Horizon 控制面板实时查看任务消费进度与消费状态。");
+            return Command::SUCCESS;
+        }
 
         $this->info("==================================================");
         $this->info("🚀 启动 Jules Jordan 视频抓取服务");
