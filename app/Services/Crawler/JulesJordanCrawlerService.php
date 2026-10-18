@@ -542,7 +542,7 @@ class JulesJordanCrawlerService
                 $videoCode .= '.' . substr(md5($sourceUuid), 0, 4);
             }
 
-            // 2. 插入或更新 Video 主表记录
+            // 2. 插入或增量补充 Video 主表记录（数据库中已有值的字段绝不覆盖）
             $videoData = [
                 'name'               => $videoName,
                 'slug'               => $slug,
@@ -559,12 +559,23 @@ class JulesJordanCrawlerService
                 'status'             => 1,
             ];
 
-            $video = Video::updateOrCreate(
-                ['source_uuid' => $sourceUuid],
-                $videoData
-            );
+            $existingVideo = Video::where('source_uuid', $sourceUuid)->first();
+            if ($existingVideo) {
+                $updateData = [];
+                foreach ($videoData as $key => $val) {
+                    if ($val !== null && $val !== '' && ($existingVideo->{$key} === null || $existingVideo->{$key} === '')) {
+                        $updateData[$key] = $val;
+                    }
+                }
+                if (!empty($updateData)) {
+                    $existingVideo->update($updateData);
+                }
+                $video = $existingVideo;
+            } else {
+                $video = Video::create(array_merge(['source_uuid' => $sourceUuid], $videoData));
+            }
 
-            // 3. 插入或更新 VideoDetail 详情表记录
+            // 3. 插入或增量补充 VideoDetail 详情表记录（数据库中已有值的字段绝不覆盖）
             $detailData = [
                 'video_id'            => $video->id,
                 'movie_length'        => $detailItem['movie_length'] ?? 0,
@@ -574,10 +585,20 @@ class JulesJordanCrawlerService
                 'list_img_large_meta' => !empty($listImgLargeMeta) ? $listImgLargeMeta : null,
             ];
 
-            VideoDetail::updateOrCreate(
-                ['video_id' => $video->id],
-                $detailData
-            );
+            $existingDetail = VideoDetail::where('video_id', $video->id)->first();
+            if ($existingDetail) {
+                $updateDetailData = [];
+                foreach ($detailData as $key => $val) {
+                    if ($val !== null && $val !== '' && ($existingDetail->{$key} === null || $existingDetail->{$key} === '')) {
+                        $updateDetailData[$key] = $val;
+                    }
+                }
+                if (!empty($updateDetailData)) {
+                    $existingDetail->update($updateDetailData);
+                }
+            } else {
+                VideoDetail::create($detailData);
+            }
 
             // 4. 【多级漏斗性别推导引擎】：只采用「1. 本地数据库反查」与「2. ThePornDB API」
             $actorIds = [];
@@ -740,15 +761,14 @@ class JulesJordanCrawlerService
                     $this->log("✨ [TPDB API] 为本地演员 [{$name}] 补齐性别: " . $this->formatGenderName($gender), 'info');
                 }
 
-                // 2. 🎯 头像 avatar 选用 TPDB 的 "face" 字段，且仅 avatar 转码 AVIF 上传至 R2
-                $faceUrl = $performer['face'] ?? ($performer['image'] ?? null);
-                if (!empty($faceUrl)) {
-                    $expectedSubPath = "images/actors/{$actorSlug}/" . sha1(explode('?', $faceUrl)[0]) . ".avif";
-                    if (empty($localActor->avatar) || $localActor->avatar !== $expectedSubPath) {
+                // 2. 🎯 头像 avatar 选用 TPDB 的 "face" 字段，且仅 avatar 转码 AVIF 上传至 R2（已有值绝不更新）
+                if (empty($localActor->avatar)) {
+                    $faceUrl = $performer['face'] ?? ($performer['image'] ?? null);
+                    if (!empty($faceUrl)) {
                         $avifPath = $this->tpdbService->storeAvatarAsAvif($actorSlug, $faceUrl);
-                        if ($avifPath && $avifPath !== $localActor->avatar) {
+                        if ($avifPath) {
                             $updates['avatar'] = $avifPath;
-                            $this->log("🖼️ [头像更新] 演员 [{$name}] 转码 face 字段为 AVIF 并入库 R2: {$avifPath}", 'info');
+                            $this->log("🖼️ [头像补充] 演员 [{$name}] 转码 face 字段为 AVIF 并入库 R2: {$avifPath}", 'info');
                         }
                     }
                 }
