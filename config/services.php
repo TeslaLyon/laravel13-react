@@ -86,8 +86,9 @@ return [
     |--------------------------------------------------------------------------
     */
     'tpdb' => [
-        'email'    => env('TPDB_EMAIL', 'yimaneilicj@gmail.com'),
-        'password' => env('TPDB_PASSWORD', '!UdgGXcL4!ZuyBD'),
+        'email'     => env('TPDB_EMAIL', 'yimaneilicj@gmail.com'),
+        'password'  => env('TPDB_PASSWORD', '!UdgGXcL4!ZuyBD'),
+        'api_token' => env('TPDB_API_TOKEN'),
     ],
 
     /*

@@ -12,7 +12,7 @@ import { FollowBtn, ModuleType } from '@/components/actor/FollowBtn';
 import { ActorAbout } from '@/components/actor/ActorAbout';
 import { EditActorDialog } from '@/components/actor/EditActorDialog';
 import { XIcon, InstagramIcon, YoutubeIcon, FacebookIcon, WebsiteIcon } from '@/components/BrandIcons';
-import { formatChineseUnit } from '@/lib/utils';
+import { formatChineseUnit, cdnUrl } from '@/lib/utils';
 import { VideoCard } from "@/components/video/Card";
 import { show } from '@/routes/videos';
 import { SubscribeButton, NotificationType } from '@/components/subscribe-button';
@@ -312,7 +312,7 @@ export default function BaseDetailShow({
                     <div className="w-full px-4 pt-4 sm:px-6 lg:px-8">
                         <div
                             className="w-full aspect-video md:aspect-[21/9] lg:aspect-[3/1] rounded-2xl bg-muted bg-cover bg-center shadow-inner"
-                            style={{ backgroundImage: `url(${entity?.banner})` }}
+                            style={{ backgroundImage: `url(${cdnUrl(entity?.banner)})` }}
                         />
                     </div>
                 )}
@@ -320,7 +320,7 @@ export default function BaseDetailShow({
                 {/* 个人/频道/分类/标签 信息头部 */}
                 <div className="px-4 sm:px-6 lg:px-8 mt-4 md:mt-6 flex flex-col md:flex-row items-start md:items-center gap-6">
                     <Avatar className="w-24 h-24 md:w-40 md:h-40 border-4 border-background shadow-md shrink-0">
-                        <AvatarImage src={entity?.avatar} alt={entity?.name} />
+                        <AvatarImage src={cdnUrl(entity?.avatar)} alt={entity?.name} />
                         <AvatarFallback className="text-3xl font-bold">
                             {entity?.name?.charAt(0)}
                         </AvatarFallback>

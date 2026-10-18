@@ -90,17 +90,35 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
         }
     };
 
+    // 智能获取图片比例 (优先使用元数据 width/height 计算，避免硬编码 aspect-video 导致 9:16 或 1:1 图片拉伸/截断)
+    const getImageAspectRatio = (item: PreviewImageItem): string | undefined => {
+        if (typeof item === 'object' && item !== null) {
+            const w = Number(item.width) || Number(item.full_width) || Number(item.default_width);
+            const h = Number(item.height) || Number(item.full_height) || Number(item.default_height);
+            if (w > 0 && h > 0) {
+                return `${w} / ${h}`;
+            }
+        }
+        return undefined;
+    };
+
     return (
         <div className="mt-6">
             <h3 className="text-base sm:text-lg font-bold text-foreground mb-3 px-1">精彩剧照</h3>
 
-            {/* 1. 缩略图网格布局：手机端 2 列，平板 3 列，桌面端 4 列，16:9 比例 */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 px-1">
+            {/* 1. 自适应瀑布流网格布局：
+                 - 移动端：2 列
+                 - 平板端：3 列
+                 - 桌面端：4 列
+                 - 针对 9:16 (竖版)、1:1 (方形)、16:9 (横版) 等多种尺寸自适应展示，防止画面被裁切变形
+            */}
+            <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 px-1 space-y-3">
                 {normalizedImages.map((item, index) => {
                     const thumbUrl = getThumbUrl(item);
                     const fallbackUrl = getFallbackUrl(item);
                     const fullUrl = getFullUrl(item);
                     const hasFullImage = Boolean(fullUrl);
+                    const aspectRatio = getImageAspectRatio(item);
 
                     return (
                         <div
@@ -110,9 +128,10 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
                                     handleImageClick(item);
                                 }
                             }}
-                            className={`relative w-full aspect-video overflow-hidden rounded-xl bg-muted border border-transparent transition-all duration-300 ${
+                            style={aspectRatio ? { aspectRatio } : undefined}
+                            className={`break-inside-avoid relative w-full overflow-hidden rounded-xl bg-muted/60 border border-transparent transition-all duration-300 ${
                                 hasFullImage
-                                    ? 'cursor-pointer hover:border-border/50 group'
+                                    ? 'cursor-pointer hover:border-border/60 hover:shadow-md group'
                                     : 'cursor-default'
                             }`}
                         >
@@ -125,13 +144,13 @@ export const VideoPreviews = ({ images, dataCrawlType }: VideoPreviewsProps) => 
                                         e.currentTarget.src = fallbackUrl;
                                     }
                                 }}
-                                className={`object-cover w-full h-full transition-all duration-300 ${
-                                    hasFullImage ? 'group-hover:scale-105 group-hover:opacity-90' : ''
+                                className={`w-full h-auto block transition-all duration-300 ${
+                                    hasFullImage ? 'group-hover:scale-[1.03] group-hover:opacity-95' : ''
                                 }`}
                             />
-                            {/* 悬浮时遮罩提示（仅在大图可用时展示） */}
+                            {/* 悬浮微光遮罩（仅在大图可用时展示） */}
                             {hasFullImage && (
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
                             )}
                         </div>
                     );

@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MoreHorizontal, Loader2, User } from 'lucide-react';
 import ActorController from '@/actions/App/Http/Controllers/ActorController';
 import { useRequireAuth } from '@/components/require-auth-provider';
+import { cdnUrl } from '@/lib/utils';
 
 interface ActorSquareProps {
     actors: Actor[];
@@ -31,7 +32,8 @@ function ActorAvatar({ src, name }: { src?: string | null; name: string }) {
         setHasError(false);
     }, [src]);
 
-    const hasValidSrc = Boolean(src && src.trim() && !hasError);
+    const resolvedSrc = cdnUrl(src);
+    const hasValidSrc = Boolean(resolvedSrc && !hasError);
 
     if (!hasValidSrc) {
         return (
@@ -49,7 +51,7 @@ function ActorAvatar({ src, name }: { src?: string | null; name: string }) {
 
     return (
         <img
-            src={src!}
+            src={resolvedSrc}
             alt={name}
             onError={() => setHasError(true)}
             className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-110"

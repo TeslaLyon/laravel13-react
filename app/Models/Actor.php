@@ -38,6 +38,25 @@ class Actor extends Model implements ReactableInterface
         'booty_img' => 'array',
     ];
 
+    /**
+     * 获取演员头像完整 CDN / 访问地址
+     */
+    public function getAvatarUrlAttribute(): string
+    {
+        if (empty($this->avatar)) {
+            return '';
+        }
+
+        if (str_starts_with($this->avatar, 'http://') || str_starts_with($this->avatar, 'https://') || str_starts_with($this->avatar, '//')) {
+            return $this->avatar;
+        }
+
+        $cdnUrl = rtrim((string) config('app.cdn_url', env('CDN_URL')), '/');
+        $cleanPath = ltrim($this->avatar, '/');
+
+        return $cdnUrl ? "{$cdnUrl}/{$cleanPath}" : asset($cleanPath);
+    }
+
     public function detail(): HasOne
     {
         return $this->hasOne(ActorDetail::class);

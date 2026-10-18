@@ -15,7 +15,7 @@ export interface ImageData extends ImageVariant {
 }
 
 interface ResponsiveImageProps extends ImgHTMLAttributes<HTMLImageElement> {
-    images: ImageData[];
+    images?: ImageData[] | string | any;
     alt: string;
 }
 
@@ -26,11 +26,42 @@ export function ResponsiveImage({
     ...props
 }: ResponsiveImageProps) {
     // 如果数据为空，不渲染
-    if (!images || images.length === 0) return null;
+    if (!images || (Array.isArray(images) && images.length === 0)) return null;
+
+    // 兼容单个字符串 URL
+    if (typeof images === "string") {
+        return (
+            <img
+                src={cdnUrl(images)}
+                alt={alt}
+                className={cn("w-full h-full object-cover", className)}
+                {...props}
+            />
+        );
+    }
+
+    // 标准化数组格式
+    const imageList = Array.isArray(images) ? images : [images];
+    const normalizedImages: ImageData[] = imageList
+        .map((img: any) => {
+            if (typeof img === "string") {
+                return { src: img, width: 500, height: 750 };
+            }
+            return {
+                src: img.src || "",
+                width: typeof img.width === "number" ? img.width : 500,
+                height: typeof img.height === "number" ? img.height : 750,
+                webp: img.webp,
+                highdpi: img.highdpi,
+                placeholder: img.placeholder,
+            };
+        })
+        .filter((img) => Boolean(img.src));
+
+    if (normalizedImages.length === 0) return null;
 
     // 2. 将图片按宽度从大到小排序 (Desktop First 逻辑)
-    // 这样浏览器会从上往下匹配 media 查询，找到第一个符合屏幕宽度的 source
-    const sortedImages = [...images].sort((a, b) => b.width - a.width);
+    const sortedImages = [...normalizedImages].sort((a, b) => (b.width || 0) - (a.width || 0));
 
     // 3. 选取最小的一张图作为默认的回退图 (Fallback)
     const fallbackImage = sortedImages[sortedImages.length - 1];

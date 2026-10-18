@@ -1,6 +1,7 @@
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { cdnUrl } from '@/lib/utils';
 
 interface ActorProps {
     actor: {
@@ -16,7 +17,7 @@ export default function ActorProfileCircle({ actor }: ActorProps) {
             {/* 左侧：头像与个人信息 */}
             <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
-                    <AvatarImage src={actor.avatar} alt={actor.name} className="object-cover" />
+                    <AvatarImage src={cdnUrl(actor.avatar)} alt={actor.name} className="object-cover" />
                     {/* 如果图片加载失败，显示名字的第一个字 */}
                     <AvatarFallback>{actor.name.charAt(0)}</AvatarFallback>
                 </Avatar>

@@ -19,7 +19,12 @@ export function ActorAbout({ actor }: { actor: any }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6">
                 {Object.entries(data).map(([key, value]) => {
                     // 忽略空值
-                    if (value === null || value === '') return null;
+                    if (value === null || value === '' || value === undefined) return null;
+
+                    let displayVal = String(value);
+                    if (typeof value === 'boolean') {
+                        displayVal = value ? '是' : '否';
+                    }
 
                     return (
                         <div key={key} className="flex flex-col border-b border-border/50 pb-2">
@@ -28,7 +33,7 @@ export function ActorAbout({ actor }: { actor: any }) {
                                 {translateActorKey(key)}
                             </span>
                             <span className="text-sm font-medium text-foreground">
-                                {String(value)}
+                                {displayVal}
                             </span>
                         </div>
                     );

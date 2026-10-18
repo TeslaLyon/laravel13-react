@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { VideoCard } from '@/components/video/Card';
+import { cdnUrl } from '@/lib/utils';
 
 // --- 类型定义 ---
 export interface SearchVideoItem {
@@ -282,7 +283,7 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
                                                 className="group flex flex-col items-center p-3.5 rounded-2xl border border-border/60 bg-card hover:border-border hover:shadow-md transition-all text-center"
                                             >
                                                 <Avatar className="size-16 rounded-full border border-border/50 group-hover:scale-105 transition-transform duration-200">
-                                                    <AvatarImage src={actor.avatar || ''} alt={actor.name} className="object-cover" />
+                                                    <AvatarImage src={cdnUrl(actor.avatar) || ''} alt={actor.name} className="object-cover" />
                                                     <AvatarFallback className="text-sm font-semibold bg-pink-500/10 text-pink-600">
                                                         {actor.name.slice(0, 2)}
                                                     </AvatarFallback>
@@ -319,7 +320,7 @@ export default function GlobalSearch({ query = '', groupedResults }: GlobalSearc
                                                 className="group flex flex-col items-center p-3.5 rounded-2xl border border-border/60 bg-card hover:border-border hover:shadow-md transition-all text-center"
                                             >
                                                 <Avatar className="size-16 rounded-2xl border border-border/50 group-hover:scale-105 transition-transform duration-200">
-                                                    <AvatarImage src={channel.logo || channel.avatar || ''} alt={channel.name} className="object-cover" />
+                                                    <AvatarImage src={cdnUrl(channel.logo || channel.avatar) || ''} alt={channel.name} className="object-cover" />
                                                     <AvatarFallback className="text-sm font-semibold bg-amber-500/10 text-amber-600">
                                                         {channel.name.slice(0, 2)}
                                                     </AvatarFallback>

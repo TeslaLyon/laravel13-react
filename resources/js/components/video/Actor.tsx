@@ -2,6 +2,7 @@ import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from '@inertiajs/react'; // 引入 Inertia 的 Link 组件用于路由跳转
+import { cdnUrl } from '@/lib/utils';
 
 // 定义单名演员的数据结构
 export interface ActorData {
@@ -43,7 +44,7 @@ export const Actor = ({ actors, variant = 'circle' }: ActorListProps) => {
                         >
                             {variant === 'circle' ? (
                                 <Avatar className="h-10 w-10 bg-muted border-none shrink-0">
-                                    <AvatarImage src={actor.avatar} alt={actor.name} className="object-cover" />
+                                    <AvatarImage src={cdnUrl(actor.avatar)} alt={actor.name} className="object-cover" />
                                     <AvatarFallback className="bg-transparent font-medium">
                                         {actor.name.charAt(0)}
                                     </AvatarFallback>
@@ -51,7 +52,7 @@ export const Actor = ({ actors, variant = 'circle' }: ActorListProps) => {
                             ) : (
                                 <div className="relative w-10 aspect-[9/16] overflow-hidden rounded-md bg-muted shrink-0">
                                     <img
-                                        src={actor.photo9x16}
+                                        src={cdnUrl(actor.photo9x16)}
                                         alt={actor.name}
                                         className="object-cover w-full h-full"
                                     />
