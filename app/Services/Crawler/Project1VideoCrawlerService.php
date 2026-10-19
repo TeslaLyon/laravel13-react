@@ -20,6 +20,53 @@ use Throwable;
 class Project1VideoCrawlerService
 {
     /**
+     * 官方支持的 Project1 体系片商配置字典（单一真理源 Single Source of Truth）
+     * 增添新平台时只需在此登记 slug 与配置，定时任务、命令、后台等全系统自动生效
+     */
+    public const SUPPORTED_CHANNELS = [
+        'brazzers' => [
+            'name'         => 'Brazzers',
+            'official_url' => 'https://www.brazzers.com',
+            'has_site_prefix' => true,
+        ],
+        'bangbros' => [
+            'name'         => 'BangBros',
+            'official_url' => 'https://bangbros.com',
+            'has_site_prefix' => true,
+        ],
+    ];
+
+    /**
+     * 获取所有受支持的 Project1 片商 slug 列表
+     *
+     * @return array<string>
+     */
+    public static function getSupportedSlugs(): array
+    {
+        return array_keys(self::SUPPORTED_CHANNELS);
+    }
+
+    /**
+     * 检查指定片商 slug 是否属于 Project1 体系
+     */
+    public static function isSupported(?string $slug): bool
+    {
+        if (empty($slug)) {
+            return false;
+        }
+
+        return isset(self::SUPPORTED_CHANNELS[strtolower($slug)]);
+    }
+
+    /**
+     * 获取指定片商配置
+     */
+    public static function getChannelConfig(string $slug): ?array
+    {
+        return self::SUPPORTED_CHANNELS[strtolower($slug)] ?? null;
+    }
+
+    /**
      * 执行指定片商或所有片商的视频列表爬取任务
      *
      * @param string|null $channelSlug 片商 slug（若为空则爬取所有支持的 Project1 片商）
@@ -45,9 +92,10 @@ class Project1VideoCrawlerService
             return $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken, $page);
         }
 
-        // 未指定片商时，遍历属于 Project1 体系的片商 (brazzers, bangbros)
+        // 未指定片商时，遍历属于 Project1 体系的全部受支持片商（基于 SUPPORTED_CHANNELS 单一真理源）
+        $supportedSlugs = self::getSupportedSlugs();
         $channels = Channel::where('data_crawl_type', 1)
-            ->whereIn('slug', ['brazzers', 'bangbros'])
+            ->whereIn('slug', $supportedSlugs)
             ->get();
         $totalStats = [
             'total_channels'     => $channels->count(),
@@ -952,5 +1000,105 @@ class Project1VideoCrawlerService
         } catch (Throwable $e) {
             // 忽略持久化失败本身，避免二次中断
         }
+    }
+
+    /**
+     * 严格校验片商是否符合 Project1 体系规范（自检 / 冒烟测试）
+     *
+     * @param Channel|string $channel 片商模型或 slug
+     * @return array{
+     *     success: bool,
+     *     slug: string,
+     *     checks: array<string, array{status: bool, message: string}>,
+     *     error: ?string
+     * }
+     */
+    public function verifyChannel(Channel|string $channel): array
+    {
+        $slug = $channel instanceof Channel ? $channel->slug : (string) $channel;
+        $channelModel = $channel instanceof Channel ? $channel : Channel::where('slug', $slug)->first();
+
+        $results = [
+            'success' => false,
+            'slug'    => $slug,
+            'checks'  => [],
+            'error'   => null,
+        ];
+
+        // 检查项 1：是否在受支持字典中登记
+        $isRegistered = self::isSupported($slug);
+        $results['checks']['registered'] = [
+            'status'  => $isRegistered,
+            'message' => $isRegistered ? "已在 SUPPORTED_CHANNELS 单一真理源登记" : "未在 SUPPORTED_CHANNELS 登记",
+        ];
+        if (!$isRegistered) {
+            $results['error'] = "片商 [{$slug}] 未在 SUPPORTED_CHANNELS 字典中注册";
+            return $results;
+        }
+
+        // 检查项 2：数据库记录是否存在
+        if (!$channelModel) {
+            $results['checks']['db_record'] = ['status' => false, 'message' => "数据库 channels 表未找到 slug=[{$slug}] 的记录"];
+            $results['error'] = "数据库 channels 表中无此片商，请先插入记录";
+            return $results;
+        }
+        $results['checks']['db_record'] = ['status' => true, 'message' => "数据库记录存在 (ID: {$channelModel->id}, 名称: {$channelModel->name})"];
+
+        // 检查项 3：data_crawl_type 是否为 1
+        $isType1 = (int) $channelModel->data_crawl_type === 1;
+        $results['checks']['crawl_type'] = [
+            'status'  => $isType1,
+            'message' => $isType1 ? "采集模式正确 (data_crawl_type = 1: 直链源站)" : "采集模式不匹配 (当前为 {$channelModel->data_crawl_type}，必须为 1)",
+        ];
+        if (!$isType1) {
+            $results['error'] = "片商 [{$slug}] 的 data_crawl_type 必须设置为 1";
+            return $results;
+        }
+
+        // 检查项 4：official_website_url 是否有效
+        $siteUrl = trim((string) $channelModel->official_website_url);
+        $hasUrl = !empty($siteUrl) && filter_var($siteUrl, FILTER_VALIDATE_URL) !== false;
+        $results['checks']['website_url'] = [
+            'status'  => $hasUrl,
+            'message' => $hasUrl ? "官网 URL 合法 ({$siteUrl})" : "未配置有效的 official_website_url",
+        ];
+        if (!$hasUrl) {
+            $results['error'] = "片商 [{$slug}] 未配置有效的 official_website_url，Token 提取将无法执行";
+            return $results;
+        }
+
+        // 检查项 5：官网连通性与 JWT Token 提取测试
+        $token = $this->fetchAndStoreChannelToken($channelModel);
+        $hasToken = !empty($token);
+        $results['checks']['jwt_token'] = [
+            'status'  => $hasToken,
+            'message' => $hasToken ? "官网 Token 提取成功 (JWT 长度: " . strlen($token) . ")" : "未能从官网提取到 JWT Token",
+        ];
+        if (!$hasToken) {
+            $results['error'] = "无法从官网 ({$siteUrl}) 提取到有效 JWT Token，请检查网页结构或防爬机制";
+            return $results;
+        }
+
+        // 检查项 6：API 接口实际连通性与数据探测 (releases limit=1)
+        try {
+            $apiData = $this->requestApiReleases($channelModel, $token, limit: 1, page: 1);
+            $hasApiReleases = !empty($apiData) && isset($apiData['result']);
+            $count = $hasApiReleases ? count($apiData['result']) : 0;
+            $results['checks']['api_connection'] = [
+                'status'  => $hasApiReleases,
+                'message' => $hasApiReleases ? "Project1 API 探测成功，获取到 {$count} 条视频数据" : "Project1 API 请求未返回预期的 result 列表",
+            ];
+            if (!$hasApiReleases) {
+                $results['error'] = "Project1 API 请求未返回有效数据，请检查片商权限或接口限制";
+                return $results;
+            }
+        } catch (Throwable $e) {
+            $results['checks']['api_connection'] = ['status' => false, 'message' => "API 请求发生异常: " . $e->getMessage()];
+            $results['error'] = "API 连通测试异常: " . $e->getMessage();
+            return $results;
+        }
+
+        $results['success'] = true;
+        return $results;
     }
 }

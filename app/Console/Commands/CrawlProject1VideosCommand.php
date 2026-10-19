@@ -26,7 +26,8 @@ class CrawlProject1VideosCommand extends Command
                             {--queue : 异步投递至 Horizon 队列后台执行}
                             {--stagger=5 : 多页入队时的递增延迟间隔秒数（默认 5 秒），防止瞬时并发打崩源站}
                             {--token= : 显式指定 API Token（留空则优先从 Redis/Cache 获取或自动抓取）}
-                            {--refresh-token : 强制从片商官网抓取最新 Token 并更新缓存}';
+                            {--refresh-token : 强制从片商官网抓取最新 Token 并更新缓存}
+                            {--verify : 严格自检/冒烟测试片商配置与接口连通性（不写入数据）}';
 
     /**
      * 控制台命令描述
@@ -43,22 +44,57 @@ class CrawlProject1VideosCommand extends Command
         DB::disableQueryLog();
 
         $channelArg = $this->argument('channel');
+
+        // 处理 --verify 自检与冒烟测试模式
+        if ($this->option('verify')) {
+            $slugsToVerify = $channelArg ? [$channelArg] : Project1VideoCrawlerService::getSupportedSlugs();
+            $this->info("🔍 开始对 Project1 体系片商执行规范化健康检查与冒烟测试...");
+
+            $hasFailure = false;
+            foreach ($slugsToVerify as $slug) {
+                $this->line("\n------------------------------------------------------------");
+                $this->info("👉 正在检验片商 [{$slug}]:");
+
+                $res = $crawlerService->verifyChannel($slug);
+                $rows = [];
+                foreach ($res['checks'] as $key => $check) {
+                    $rows[] = [
+                        $key,
+                        $check['status'] ? '✅ 通过 (PASS)' : '❌ 失败 (FAIL)',
+                        $check['message'],
+                    ];
+                }
+
+                $this->table(['检查项', '状态', '诊断详情'], $rows);
+
+                if ($res['success']) {
+                    $this->info("🎉 片商 [{$slug}] 完全符合规范，已具备稳定采集能力！");
+                } else {
+                    $this->error("💥 片商 [{$slug}] 检查未通过: " . ($res['error'] ?? '未知原因'));
+                    $hasFailure = true;
+                }
+            }
+
+            return $hasFailure ? self::FAILURE : self::SUCCESS;
+        }
+
         $limit = max(1, (int) ($this->option('limit') ?: 24));
         $delay = max(0, (int) ($this->option('delay') ?? 1));
         $token = $this->option('token');
         $refreshToken = (bool) $this->option('refresh-token');
 
-        // 确定待爬取的片商列表
+        // 确定待爬取的片商列表（基于 SUPPORTED_CHANNELS 单一真理源）
         if ($channelArg) {
             $targetChannels = [$channelArg];
         } else {
+            $supportedSlugs = Project1VideoCrawlerService::getSupportedSlugs();
             $targetChannels = Channel::where('data_crawl_type', 1)
-                ->whereIn('slug', ['brazzers', 'bangbros'])
+                ->whereIn('slug', $supportedSlugs)
                 ->pluck('slug')
                 ->toArray();
 
             if (empty($targetChannels)) {
-                $targetChannels = ['brazzers', 'bangbros'];
+                $targetChannels = $supportedSlugs;
             }
         }
 

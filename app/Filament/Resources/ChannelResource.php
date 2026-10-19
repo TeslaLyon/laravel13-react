@@ -9,6 +9,7 @@ use App\Jobs\CrawlJulesJordanVideosJob;
 use App\Jobs\CrawlProject1VideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Models\Channel;
+use App\Services\Crawler\Project1VideoCrawlerService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists;
@@ -318,7 +319,7 @@ class ChannelResource extends Resource
                     })
                     ->action(function (Channel $record) {
                         $slug = $record->slug;
-                        if (in_array($slug, ['brazzers', 'bangbros'])) {
+                        if (Project1VideoCrawlerService::isSupported($slug)) {
                             CrawlProject1VideosJob::dispatch(channel: $slug, limit: 24, page: 1);
                         } elseif ($slug === 'dorcelclub') {
                             CrawlDorcelVideosJob::dispatch(page: 1, skipExisting: true);
