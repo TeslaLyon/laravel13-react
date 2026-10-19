@@ -154,9 +154,11 @@ class VideoResource extends Resource
                         Forms\Components\Tabs\Tab::make('封面与媒体数据')
                             ->icon('heroicon-o-photo')
                             ->schema([
-                                Forms\Components\TextInput::make('preview')
+                                Forms\Components\Textarea::make('preview')
                                     ->label('鼠标悬停预览配置 (Preview)')
                                     ->placeholder('1<视频直链 或 2<动图 或 3<多张切片图片URL')
+                                    ->rows(3)
+                                    ->extraInputAttributes(['class' => 'font-mono text-xs [word-break:break-all]'])
                                     ->columnSpanFull(),
                                 Forms\Components\Placeholder::make('list_img_preview')
                                     ->label('封面预览')
@@ -345,6 +347,7 @@ class VideoResource extends Resource
                                     ->label('预告片 / 视频播放直链')
                                     ->copyable()
                                     ->placeholder('暂无播放直链')
+                                    ->extraAttributes(['class' => 'break-all [word-break:break-all]'])
                                     ->columnSpanFull(),
                             ]),
 
@@ -384,50 +387,66 @@ class VideoResource extends Resource
                         Infolists\Components\Tabs\Tab::make('多媒体与剧照')
                             ->icon('heroicon-o-photo')
                             ->schema([
-                                Infolists\Components\TextEntry::make('preview')
-                                    ->label('鼠标悬停预览 (Preview 原始配置)')
-                                    ->copyable()
-                                    ->placeholder('暂无预览配置')
+                                Infolists\Components\Section::make('鼠标悬停预览 (Preview 预览配置)')
+                                    ->icon('heroicon-o-play-circle')
+                                    ->description('展示前端卡片悬停时所触发的视频流、动态图或多图切片轮播配置')
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('preview_display')
+                                            ->label('')
+                                            ->state(fn (?Video $record): HtmlString => static::renderPreviewInfolist($record))
+                                            ->html()
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->collapsible()
+                                    ->collapsed(false)
                                     ->columnSpanFull(),
 
-                                Infolists\Components\TextEntry::make('screen_img_gallery')
-                                    ->label('剧照画廊 (Screen Images)')
-                                    ->state(function (?Video $record): HtmlString {
-                                        $screenImgs = $record?->videoDetail?->screen_img;
-                                        if (empty($screenImgs) || !is_array($screenImgs)) {
-                                            return new HtmlString('<span class="text-sm text-gray-400">暂无剧照数据</span>');
-                                        }
+                                Infolists\Components\Section::make('剧照画廊 (Screen Images)')
+                                    ->icon('heroicon-o-photo')
+                                    ->description('展示详情页精彩片段高清剧照')
+                                    ->schema([
+                                        Infolists\Components\TextEntry::make('screen_img_gallery')
+                                            ->label('')
+                                            ->state(function (?Video $record): HtmlString {
+                                                $screenImgs = $record?->videoDetail?->screen_img;
+                                                if (empty($screenImgs) || !is_array($screenImgs)) {
+                                                    return new HtmlString('<span class="text-sm text-gray-400">暂无剧照数据</span>');
+                                                }
 
-                                        $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
-                                        $html = '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mt-2">';
-                                        foreach ($screenImgs as $idx => $img) {
-                                            $thumb = $img['source_url'] ?? $img['url'] ?? $img['src'] ?? null;
-                                            $full = $img['full_source_url'] ?? $img['full_url'] ?? $thumb;
-                                            if (!$thumb) continue;
+                                                $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
+                                                $html = '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mt-1">';
+                                                foreach ($screenImgs as $idx => $img) {
+                                                    $thumb = $img['source_url'] ?? $img['url'] ?? $img['src'] ?? null;
+                                                    $full = $img['full_source_url'] ?? $img['full_url'] ?? $thumb;
+                                                    if (!$thumb) continue;
 
-                                            $cleanThumb = (str_starts_with($thumb, 'http://') || str_starts_with($thumb, 'https://'))
-                                                ? $thumb
-                                                : ($cdnUrl ? "{$cdnUrl}/" . ltrim($thumb, '/') : asset(ltrim($thumb, '/')));
+                                                    $cleanThumb = (str_starts_with($thumb, 'http://') || str_starts_with($thumb, 'https://'))
+                                                        ? $thumb
+                                                        : ($cdnUrl ? "{$cdnUrl}/" . ltrim($thumb, '/') : asset(ltrim($thumb, '/')));
 
-                                            $cleanFull = (str_starts_with($full, 'http://') || str_starts_with($full, 'https://'))
-                                                ? $full
-                                                : ($cdnUrl ? "{$cdnUrl}/" . ltrim($full, '/') : asset(ltrim($full, '/')));
+                                                    $cleanFull = (str_starts_with($full, 'http://') || str_starts_with($full, 'https://'))
+                                                        ? $full
+                                                        : ($cdnUrl ? "{$cdnUrl}/" . ltrim($full, '/') : asset(ltrim($full, '/')));
 
-                                            $w = $img['full_width'] ?? $img['width'] ?? 0;
-                                            $h = $img['full_height'] ?? $img['height'] ?? 0;
-                                            $dim = ($w && $h) ? "<div class=\"text-[11px] text-gray-500 text-center mt-1 font-mono\">{$w}×{$h}</div>" : '';
+                                                    $w = $img['full_width'] ?? $img['width'] ?? 0;
+                                                    $h = $img['full_height'] ?? $img['height'] ?? 0;
+                                                    $dim = ($w && $h) ? "<div class=\"text-[11px] text-gray-500 text-center mt-1 font-mono\">{$w}×{$h}</div>" : '';
 
-                                            $html .= "<div class=\"group relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-1\">
-                                                <a href=\"{$cleanFull}\" target=\"_blank\" class=\"block overflow-hidden rounded\">
-                                                    <img src=\"{$cleanThumb}\" class=\"w-full h-24 object-cover rounded hover:scale-105 transition-transform duration-200\" loading=\"lazy\" />
-                                                </a>
-                                                {$dim}
-                                            </div>";
-                                        }
-                                        $html .= '</div>';
-                                        return new HtmlString($html);
-                                    })
-                                    ->html()
+                                                    $html .= "<div class=\"group relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-1\">
+                                                        <a href=\"{$cleanFull}\" target=\"_blank\" class=\"block overflow-hidden rounded\">
+                                                            <img src=\"{$cleanThumb}\" class=\"w-full h-24 object-cover rounded hover:scale-105 transition-transform duration-200\" loading=\"lazy\" />
+                                                        </a>
+                                                        {$dim}
+                                                    </div>";
+                                                }
+                                                $html .= '</div>';
+                                                return new HtmlString($html);
+                                            })
+                                            ->html()
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->collapsible()
+                                    ->collapsed(false)
                                     ->columnSpanFull(),
 
                                 Infolists\Components\Section::make('原始 JSON 媒体元数据')
@@ -641,5 +660,131 @@ class VideoResource extends Resource
             'view'   => Pages\ViewVideo::route('/{record}'),
             'edit'   => Pages\EditVideo::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * 辅助方法：解析并渲染前端卡片悬停 Preview（支持 Type 1 视频直链、Type 2 动态图、Type 3 多图轮播，自适应防溢出与折叠）
+     */
+    public static function renderPreviewInfolist(?Video $record): HtmlString
+    {
+        $raw = trim((string) $record?->preview);
+        if (empty($raw)) {
+            return new HtmlString('<div class="text-sm text-gray-400 py-1 font-sans">暂无鼠标悬停预览配置</div>');
+        }
+
+        $type = null;
+        $content = $raw;
+        if (str_contains($raw, '<')) {
+            $parts = explode('<', $raw, 2);
+            if (is_numeric($parts[0])) {
+                $type = (int) $parts[0];
+                $content = trim($parts[1] ?? '');
+            }
+        }
+
+        $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
+        $resolveUrl = function (?string $url) use ($cdnUrl): string {
+            if (empty($url)) return '';
+            if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                return $url;
+            }
+            $clean = ltrim($url, '/');
+            return $cdnUrl ? "{$cdnUrl}/{$clean}" : asset($clean);
+        };
+
+        $typeBadge = '';
+        $previewComponentHtml = '';
+
+        if ($type === 1) {
+            // Type 1: 视频直链
+            $videoUrl = $resolveUrl($content);
+            $typeBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">Type 1: 视频直链预览</span>';
+            $previewComponentHtml = "
+                <div class=\"mt-3 max-w-xl\">
+                    <video controls preload=\"metadata\" src=\"{$videoUrl}\" class=\"w-full max-h-56 rounded-lg bg-black shadow border border-gray-200 dark:border-gray-700\"></video>
+                    <div class=\"mt-1 text-xs text-gray-500 truncate\">
+                        <a href=\"{$videoUrl}\" target=\"_blank\" class=\"hover:underline text-primary-600 dark:text-primary-400\">在新标签页中直接打开视频 &rarr;</a>
+                    </div>
+                </div>
+            ";
+        } elseif ($type === 2) {
+            // Type 2: 动图预览
+            $gifUrl = $resolveUrl($content);
+            $typeBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">Type 2: 动态动图预览 (GIF/WebP)</span>';
+            $previewComponentHtml = "
+                <div class=\"mt-3\">
+                    <a href=\"{$gifUrl}\" target=\"_blank\" class=\"inline-block\">
+                        <img src=\"{$gifUrl}\" class=\"max-h-56 rounded-lg shadow border border-gray-200 dark:border-gray-700 object-contain bg-gray-900\" alt=\"动态预览\" />
+                    </a>
+                </div>
+            ";
+        } elseif ($type === 3) {
+            // Type 3: 多图切片轮播
+            $imageUrls = [];
+            if (str_starts_with($content, '[') && str_ends_with($content, ']')) {
+                $decoded = json_decode($content, true);
+                if (is_array($decoded)) {
+                    $imageUrls = $decoded;
+                }
+            }
+            if (empty($imageUrls)) {
+                $imageUrls = array_values(array_filter(array_map('trim', explode(',', $content))));
+            }
+
+            $count = count($imageUrls);
+            $typeBadge = "<span class=\"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200\">Type 3: 多图切片轮播 (共 {$count} 张图片)</span>";
+
+            $maxThumbnails = 12;
+            $displaySlice = array_slice($imageUrls, 0, $maxThumbnails);
+            $moreCount = $count - count($displaySlice);
+
+            $thumbsHtml = '';
+            foreach ($displaySlice as $img) {
+                $fullImg = $resolveUrl($img);
+                $thumbsHtml .= "
+                    <a href=\"{$fullImg}\" target=\"_blank\" class=\"group block relative rounded overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-100 dark:bg-gray-800\">
+                        <img src=\"{$fullImg}\" class=\"w-full h-16 object-cover group-hover:scale-105 transition-transform duration-150\" loading=\"lazy\" />
+                    </a>
+                ";
+            }
+
+            $previewComponentHtml = "
+                <div class=\"mt-3\">
+                    <div class=\"text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium\">切片帧缩略图预览 (展示前 {$maxThumbnails} 张)：</div>
+                    <div class=\"grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-2\">
+                        {$thumbsHtml}
+                    </div>
+                    " . ($moreCount > 0 ? "<div class=\"text-xs text-gray-400 mt-1.5\">... 以及另外 {$moreCount} 张切片图片</div>" : "") . "
+                </div>
+            ";
+        } else {
+            $typeBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">标准文本/URL配置</span>';
+        }
+
+        $escapedRaw = e($raw);
+        $charCount = mb_strlen($raw);
+
+        return new HtmlString("
+            <div class=\"w-full overflow-hidden space-y-3\">
+                <div class=\"flex items-center gap-2 flex-wrap\">
+                    {$typeBadge}
+                    <span class=\"text-xs text-gray-400 font-mono\">长度: {$charCount} 字符</span>
+                </div>
+
+                {$previewComponentHtml}
+
+                <div class=\"mt-2 pt-2 border-t border-gray-100 dark:border-gray-800\">
+                    <details class=\"group text-xs text-gray-600 dark:text-gray-400\">
+                        <summary class=\"cursor-pointer font-medium hover:text-primary-600 dark:hover:text-primary-400 select-none py-1.5 flex items-center gap-1.5\">
+                            <span class=\"transition-transform group-open:rotate-90 inline-block font-mono\">&blacktriangleright;</span>
+                            <span>查看完整 Preview 原始配置字符串（已自适应折行防溢出）</span>
+                        </summary>
+                        <div class=\"mt-2 relative\">
+                            <pre class=\"p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-xs font-mono max-h-48 overflow-y-auto whitespace-pre-wrap [word-break:break-all] text-gray-800 dark:text-gray-200 select-all\">{$escapedRaw}</pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        ");
     }
 }
