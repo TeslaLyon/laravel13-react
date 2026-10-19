@@ -432,20 +432,40 @@ class VideoResource extends Resource
 
                                 Infolists\Components\Section::make('原始 JSON 媒体元数据')
                                     ->schema([
-                                        Infolists\Components\TextEntry::make('list_img')
+                                        Infolists\Components\TextEntry::make('list_img_raw')
                                             ->label('封面原始 JSON (list_img)')
-                                            ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))
-                                            ->fontFamily('mono')
+                                            ->state(function (?Video $record): ?HtmlString {
+                                                if (empty($record?->list_img)) {
+                                                    return new HtmlString('<span class="text-sm text-gray-400 font-sans">暂无封面数据</span>');
+                                                }
+                                                $json = e(json_encode($record->list_img, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                                                return new HtmlString("<pre class=\"p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-xs font-mono overflow-x-auto max-h-96 text-gray-800 dark:text-gray-200\">{$json}</pre>");
+                                            })
+                                            ->html()
                                             ->columnSpanFull(),
-                                        Infolists\Components\TextEntry::make('videoDetail.list_img_large_meta')
+                                        Infolists\Components\TextEntry::make('list_img_large_meta_raw')
                                             ->label('大图响应式元数据 (list_img_large_meta)')
-                                            ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))
-                                            ->fontFamily('mono')
+                                            ->state(function (?Video $record): ?HtmlString {
+                                                $meta = $record?->videoDetail?->list_img_large_meta;
+                                                if (empty($meta)) {
+                                                    return new HtmlString('<span class="text-sm text-gray-400 font-sans">暂无大图元数据</span>');
+                                                }
+                                                $json = e(json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                                                return new HtmlString("<pre class=\"p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-xs font-mono overflow-x-auto max-h-96 text-gray-800 dark:text-gray-200\">{$json}</pre>");
+                                            })
+                                            ->html()
                                             ->columnSpanFull(),
-                                        Infolists\Components\TextEntry::make('videoDetail.screen_img')
+                                        Infolists\Components\TextEntry::make('screen_img_raw')
                                             ->label('剧照原始元数据 (screen_img)')
-                                            ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))
-                                            ->fontFamily('mono')
+                                            ->state(function (?Video $record): ?HtmlString {
+                                                $screenImg = $record?->videoDetail?->screen_img;
+                                                if (empty($screenImg)) {
+                                                    return new HtmlString('<span class="text-sm text-gray-400 font-sans">暂无剧照元数据</span>');
+                                                }
+                                                $json = e(json_encode($screenImg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                                                return new HtmlString("<pre class=\"p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-xs font-mono overflow-x-auto max-h-96 text-gray-800 dark:text-gray-200\">{$json}</pre>");
+                                            })
+                                            ->html()
                                             ->columnSpanFull(),
                                     ])
                                     ->collapsible()
