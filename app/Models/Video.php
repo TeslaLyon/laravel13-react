@@ -195,6 +195,11 @@ class Video extends Model implements ReactableInterface
         return $this->belongsToMany(Category::class);
     }
 
+    public function sites(): BelongsToMany
+    {
+        return $this->belongsToMany(Site::class, 'site_video');
+    }
+
     public function bookmarks()
     {
         return $this->morphMany(Bookmark::class, 'bookmarkable');

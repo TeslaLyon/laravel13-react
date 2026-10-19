@@ -160,9 +160,9 @@ class SyncVideoSlugsCommand extends Command
                     $sourceSlug = Str::slug($video->name ?: $video->video_code);
                 }
 
-                // 4. 针对 DorcelClub，确保 source_uuid 规范化为 dorcelclub:{id}:{slug}
-                if ($channelSlug === 'dorcelclub' && !empty($sourceId)) {
-                    $targetUuid = "dorcelclub:{$sourceId}:{$sourceSlug}";
+                // 4. 针对 DorcelClub、Brazzers 与 BangBros，确保 source_uuid 规范化为 {channel_slug}:{id}:{slug}
+                if (in_array($channelSlug, ['dorcelclub', 'brazzers', 'bangbros']) && !empty($sourceId)) {
+                    $targetUuid = "{$channelSlug}:{$sourceId}:{$sourceSlug}";
                     $needUuidUpdate = ($currentUuid !== $targetUuid);
                 }
 

@@ -76,4 +76,9 @@ class Channel extends Model implements ReactableInterface
     {
         return $this->hasMany(Photo::class);
     }
+
+    public function sites(): HasMany
+    {
+        return $this->hasMany(Site::class);
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Services\Crawler;
 use App\Models\Actor;
 use App\Models\Category;
 use App\Models\Channel;
+use App\Models\Site;
 use App\Models\Video;
 use App\Models\VideoDetail;
 use Carbon\Carbon;
@@ -21,7 +22,7 @@ class Project1VideoCrawlerService
     /**
      * 执行指定片商或所有片商的视频列表爬取任务
      *
-     * @param string|null $channelSlug 片商 slug（若为空则爬取所有 data_crawl_type=1 的片商）
+     * @param string|null $channelSlug 片商 slug（若为空则爬取所有支持的 Project1 片商）
      * @param int $limit 每次拉取视频条数
      * @param string|null $explicitToken 显式传入的 token，未传则从 Redis/Cache 读取或自动从官网抓取
      * @param bool $forceRefreshToken 是否强制刷新 Token
@@ -44,8 +45,10 @@ class Project1VideoCrawlerService
             return $this->crawlSingleChannel($channel, $limit, $explicitToken, $forceRefreshToken, $page);
         }
 
-        // 未指定片商时，遍历所有配置为 data_crawl_type = 1 的片商
-        $channels = Channel::where('data_crawl_type', 1)->get();
+        // 未指定片商时，遍历属于 Project1 体系的片商 (brazzers, bangbros)
+        $channels = Channel::where('data_crawl_type', 1)
+            ->whereIn('slug', ['brazzers', 'bangbros'])
+            ->get();
         $totalStats = [
             'total_channels'     => $channels->count(),
             'channels_processed' => 0,
@@ -156,6 +159,10 @@ class Project1VideoCrawlerService
         $total = isset($meta['total']) ? (int) $meta['total'] : null;
         $totalPages = ($total !== null && $limit > 0) ? (int) ceil($total / $limit) : null;
 
+        if ($successCount > 0) {
+            $channel->update(['video_num' => Video::where('channel_id', $channel->id)->count()]);
+        }
+
         Log::info("片商 [{$channel->slug}] 第 {$page} 页爬取完成！成功: {$successCount}, 失败: {$failedCount}, 跳过: {$skippedCount}" . ($total !== null ? " (总计 {$total} 条 / {$totalPages} 页)" : ""));
 
         return [
@@ -184,7 +191,7 @@ class Project1VideoCrawlerService
         if ($sourceId === '') {
             throw new \InvalidArgumentException("视频缺少有效 id 字段");
         }
-        $sourceUUID = $this->handleSourceUUID($sourceId, $sourceSlug);
+        $sourceUUID = $this->handleSourceUUID($channel->slug, $sourceId, $sourceSlug);
         $releaseAt = $this->handleReleaseAt($item['dateReleased'] ?? null);
 
         $actorsData = is_array($item['actors'] ?? null) ? $item['actors'] : [];
@@ -222,6 +229,7 @@ class Project1VideoCrawlerService
             'release_at'         => $releaseAt,
             'channel_id'         => $channel->id,
             'video_code'         => $videoCode,
+            'is_4k'              => $this->handleIs4k($item),
             'is_trans_model'     => $isTransModel,
             'sexual_orientation' => $this->handleSexualOrientation($item['sexualOrientation'] ?? null),
             'status'             => 1,
@@ -238,6 +246,11 @@ class Project1VideoCrawlerService
             'description' => $item['description'] ?? '',
         ];
 
+        $movieLength = $this->handleMovieLength($item);
+        if ($movieLength > 0) {
+            $videoDetailData['movie_length'] = $movieLength;
+        }
+
         $listImgLargeMeta = $this->handleListImgLargeMeta($item, $channel->slug, $sourceId);
         if (!empty($listImgLargeMeta)) {
             $videoDetailData['list_img_large_meta'] = $listImgLargeMeta;
@@ -248,52 +261,79 @@ class Project1VideoCrawlerService
             $videoDetailData['screen_img'] = $screenImg;
         }
 
-        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item, $title, $channel, $sourceId) {
-            // 1. 查询现有视频记录（以 source_uuid 作为唯一标识）
-            $existingVideo = Video::where('source_uuid', $sourceUUID)->first();
+        return DB::transaction(function () use ($sourceUUID, $videoData, $videoDetailData, $femaleActors, $item, $title, $channel, $sourceId, $sourceSlug, $videoCode, $listImg, $releaseAt, $isTransModel) {
+            // 1. 严格以 source_uuid 作为唯一业务标识查询现有视频记录（兼容新规范及旧版本无片商前缀格式）
+            $existingVideo = Video::where('channel_id', $channel->id)
+                ->where(function ($q) use ($sourceUUID, $sourceId) {
+                    $q->where('source_uuid', $sourceUUID)
+                      ->orWhere('source_uuid', 'LIKE', "{$sourceId}:%")
+                      ->orWhere('source_uuid', $sourceId);
+                })
+                ->first();
 
             if ($existingVideo) {
                 $targetPrefix = "{$channel->slug}-{$sourceId}-";
+                $updates = [];
 
-                // 【核心防污染机制】：
-                // 1) 若新抓取的标题为空，坚决不覆盖原有标题
-                if (empty(trim($title))) {
-                    unset($videoData['name']);
-                    // 确保旧 slug 自动对齐 {channel}-{id}-{slug} 规范前缀
-                    if (!empty($existingVideo->slug) && !str_starts_with($existingVideo->slug, $targetPrefix)) {
-                        $rawSlug = preg_replace('/^(?:' . preg_quote($channel->slug, '/') . '-)?(?:' . preg_quote($sourceId, '/') . '-)?/i', '', $existingVideo->slug);
-                        $videoData['slug'] = "{$channel->slug}-{$sourceId}-{$rawSlug}";
-                    } else {
-                        unset($videoData['slug']);
+                // 1) 确保统一规范化升级 source_uuid（补齐片商前缀）
+                if ($existingVideo->source_uuid !== $sourceUUID) {
+                    $updates['source_uuid'] = $sourceUUID;
+                }
+
+                // 2) 标题 (name) 绝对保护：
+                // 库中已有有效名称坚决不覆盖（防止被接口空串、截断或脏数据污染）；仅在库中为空时补充
+                if (empty(trim($existingVideo->name)) && !empty(trim($title))) {
+                    $updates['name'] = $title;
+                }
+
+                // 3) slug 规范前缀对齐保护：保留旧 slug 的核心部分，仅对齐规范前缀
+                if (empty($existingVideo->slug)) {
+                    $updates['slug'] = $videoData['slug'];
+                } elseif (!str_starts_with($existingVideo->slug, $targetPrefix)) {
+                    $rawSlug = preg_replace('/^(?:' . preg_quote($channel->slug, '/') . '-)?(?:' . preg_quote($sourceId, '/') . '-)?/i', '', $existingVideo->slug);
+                    $updates['slug'] = "{$channel->slug}-{$sourceId}-{$rawSlug}";
+                }
+
+                // 4) video_code：新编号规则有效时才进行升级，防止退化为 P1S 默认编号
+                if (!empty($videoCode) && $existingVideo->video_code !== $videoCode) {
+                    if (!str_starts_with($videoCode, 'P1S.') || empty($existingVideo->video_code)) {
+                        $updates['video_code'] = $videoCode;
                     }
                 }
-                // 2) 若库中已有有效名称，且新抓取的标题与原名称不一致，不进行覆盖，防止数据污染
-                elseif (!empty(trim($existingVideo->name)) && $existingVideo->name !== $title) {
-                    Log::info("视频 [source_uuid: {$sourceUUID}] 抓取到新标题，已保护已有名称不被篡改污染", [
-                        'current_name' => $existingVideo->name,
-                        'crawled_name' => $title,
-                    ]);
-                    unset($videoData['name']);
-                    if (!empty($existingVideo->slug) && !str_starts_with($existingVideo->slug, $targetPrefix)) {
-                        $rawSlug = preg_replace('/^(?:' . preg_quote($channel->slug, '/') . '-)?(?:' . preg_quote($sourceId, '/') . '-)?/i', '', $existingVideo->slug);
-                        $videoData['slug'] = "{$channel->slug}-{$sourceId}-{$rawSlug}";
-                    } else {
-                        unset($videoData['slug']);
-                    }
+
+                // 5) 封面图片 (list_img)：库中已有有效图片坚决不覆盖；库中为空且新数据有效时补充
+                if (empty($existingVideo->list_img) && !empty($listImg)) {
+                    $updates['list_img'] = $listImg;
                 }
 
-                // 3) 其它重要字段的非空保护（新值为空时不冲掉旧值）
-                if (empty($videoData['preview']) && !empty($existingVideo->preview)) {
-                    unset($videoData['preview']);
-                }
-                if (empty($videoData['list_img']) && !empty($existingVideo->list_img)) {
-                    unset($videoData['list_img']);
-                }
-                if (empty($videoData['video_code']) && !empty($existingVideo->video_code)) {
-                    unset($videoData['video_code']);
+                // 6) 视频预览 (preview)：库中已有预览坚决不覆盖；库中为空且新数据有效时补充
+                if (empty($existingVideo->preview) && !empty($videoData['preview'])) {
+                    $updates['preview'] = $videoData['preview'];
                 }
 
-                $existingVideo->update($videoData);
+                // 7) 发布时间 (release_at)：仅在库中为空且新数据有效时补充
+                if (empty($existingVideo->release_at) && !empty($releaseAt)) {
+                    $updates['release_at'] = $releaseAt;
+                }
+
+                // 8) 4K 画质 (is_4k)：单向升级，绝不从 true 降级为 false
+                if (!$existingVideo->is_4k && !empty($videoData['is_4k'])) {
+                    $updates['is_4k'] = true;
+                }
+
+                // 9) 变性人演员 (is_trans_model)：单向升级，绝不从 true 降级为 false
+                if (!$existingVideo->is_trans_model && !empty($isTransModel)) {
+                    $updates['is_trans_model'] = true;
+                }
+
+                // 10) 性取向 (sexual_orientation)：库中为未知 (0) 时补充有效值
+                if (($existingVideo->sexual_orientation === 0 || empty($existingVideo->sexual_orientation)) && !empty($videoData['sexual_orientation'])) {
+                    $updates['sexual_orientation'] = $videoData['sexual_orientation'];
+                }
+
+                if (!empty($updates)) {
+                    $existingVideo->update($updates);
+                }
                 $video = $existingVideo;
             } else {
                 // 新建记录时若标题为空，兜底使用 video_code
@@ -304,27 +344,39 @@ class Project1VideoCrawlerService
                 $video = Video::create($videoData);
             }
 
-            // 2. 写入或更新详情附表（同样做非空防污染保护）
+            // 2. 写入或更新详情附表（逐字段防御性补充）
             $existingDetail = VideoDetail::where('video_id', $video->id)->first();
             if ($existingDetail) {
-                // 简介非空保护
-                if (empty(trim($videoDetailData['description'] ?? '')) && !empty(trim($existingDetail->description ?? ''))) {
-                    unset($videoDetailData['description']);
-                }
-                // 播放地址非空保护
-                if (empty($videoDetailData['video_urls']) && !empty($existingDetail->video_urls)) {
-                    unset($videoDetailData['video_urls']);
-                }
-                // 剧照非空保护
-                if (empty($videoDetailData['screen_img']) && !empty($existingDetail->screen_img)) {
-                    unset($videoDetailData['screen_img']);
-                }
-                // 大图元数据非空保护
-                if (empty($videoDetailData['list_img_large_meta']) && !empty($existingDetail->list_img_large_meta)) {
-                    unset($videoDetailData['list_img_large_meta']);
+                $detailUpdates = [];
+
+                // 简介保护：库中已有简介坚决不覆盖（防止冲掉已翻译或更完整的旧简介）；库中为空才补充
+                if (empty(trim($existingDetail->description ?? '')) && !empty(trim($videoDetailData['description'] ?? ''))) {
+                    $detailUpdates['description'] = $videoDetailData['description'];
                 }
 
-                $existingDetail->update($videoDetailData);
+                // 视频时长：库中若缺失 (0) 且新数据 > 0 时才更新补充
+                if ((empty($existingDetail->movie_length) || $existingDetail->movie_length == 0) && !empty($videoDetailData['movie_length'])) {
+                    $detailUpdates['movie_length'] = $videoDetailData['movie_length'];
+                }
+
+                // 播放直链：库中为空且新数据有效时才补充
+                if (empty($existingDetail->video_urls) && !empty($videoDetailData['video_urls'])) {
+                    $detailUpdates['video_urls'] = $videoDetailData['video_urls'];
+                }
+
+                // 剧照列表：库中已有剧照绝不被空数组覆盖；仅在库中为空且新剧照有效时补充
+                if (empty($existingDetail->screen_img) && !empty($videoDetailData['screen_img'])) {
+                    $detailUpdates['screen_img'] = $videoDetailData['screen_img'];
+                }
+
+                // 大图元数据：库中为空且新数据有效时才补充
+                if (empty($existingDetail->list_img_large_meta) && !empty($videoDetailData['list_img_large_meta'])) {
+                    $detailUpdates['list_img_large_meta'] = $videoDetailData['list_img_large_meta'];
+                }
+
+                if (!empty($detailUpdates)) {
+                    $existingDetail->update($detailUpdates);
+                }
             } else {
                 $videoDetailData['video_id'] = $video->id;
                 VideoDetail::create($videoDetailData);
@@ -378,6 +430,57 @@ class Project1VideoCrawlerService
                 $video->categories()->syncWithoutDetaching($categoryIds);
             }
 
+            // 5. 处理关联站点 / 系列 (Site)
+            $collections = is_array($item['collections'] ?? null) ? $item['collections'] : [];
+            $siteIds = [];
+            foreach ($collections as $collection) {
+                if (!is_array($collection) || empty($collection['name'])) {
+                    continue;
+                }
+                $siteName = trim($collection['name']);
+                $siteSlug = Str::slug($siteName);
+                if (empty($siteSlug)) {
+                    continue;
+                }
+
+                $site = Site::firstOrCreate(
+                    [
+                        'channel_id' => $channel->id,
+                        'slug'       => $siteSlug,
+                    ],
+                    [
+                        'name'        => $siteName,
+                        'short_name'  => $collection['shortName'] ?? null,
+                        'original_id' => $collection['id'] ?? null,
+                        'custom_url'  => $collection['customUrl'] ?? null,
+                        'status'      => 1,
+                    ]
+                );
+
+                $siteUpdates = [];
+                if (empty($site->original_id) && !empty($collection['id'])) {
+                    $siteUpdates['original_id'] = $collection['id'];
+                }
+                if (empty($site->short_name) && !empty($collection['shortName'])) {
+                    $siteUpdates['short_name'] = $collection['shortName'];
+                }
+                if (empty($site->custom_url) && !empty($collection['customUrl'])) {
+                    $siteUpdates['custom_url'] = $collection['customUrl'];
+                }
+                if (!empty($siteUpdates)) {
+                    $site->update($siteUpdates);
+                }
+
+                $siteIds[] = $site->id;
+            }
+            if (!empty($siteIds)) {
+                $video->sites()->syncWithoutDetaching($siteIds);
+                foreach ($siteIds as $siteId) {
+                    $count = DB::table('site_video')->where('site_id', $siteId)->count();
+                    Site::where('id', $siteId)->update(['video_num' => $count]);
+                }
+            }
+
             return $video;
         });
     }
@@ -401,10 +504,11 @@ class Project1VideoCrawlerService
                 'accept'          => 'application/json, text/plain, */*',
                 'authority'       => 'site-api.project1service.com',
             ])->timeout(30)->get('https://site-api.project1service.com/v2/releases', [
-                'orderBy' => '-dateReleased',
-                'type'    => 'scene',
-                'limit'   => $limit,
-                'offset'  => $offset,
+                'adaptiveStreamingOnly' => 'false',
+                'orderBy'               => '-dateReleased',
+                'type'                  => 'scene',
+                'limit'                 => $limit,
+                'offset'                => $offset,
             ]);
 
             return [
@@ -545,9 +649,9 @@ class Project1VideoCrawlerService
         }
     }
 
-    protected function handleSourceUUID(string $id, string $slug): string
+    protected function handleSourceUUID(string $channelSlug, string $id, string $slug): string
     {
-        return $id . ':' . $slug;
+        return "{$channelSlug}:{$id}:{$slug}";
     }
 
     protected function handleReleaseAt(?string $utc): string
@@ -584,14 +688,23 @@ class Project1VideoCrawlerService
 
     protected function handleVideoCode(array $item, array $femaleActors, string $slug, string $releaseAt): string
     {
-        $collectionName = $item['collections'][0]['name'] ?? 'P1S';
-        $collectionSlug = Str::slug($collectionName);
-        $videoCode = Str::studly($collectionSlug) . '.' . date('y.m.d', strtotime($releaseAt)) . '.';
+        $rawCollectionName = $item['collections'][0]['name'] ?? 'P1S';
+        // 移除非字母数字字符（如逗号、引号、空格等）并保留原始大小写
+        // 例如 "Big Tits, Round Asses" -> "BigTitsRoundAsses", "Dad's Love Porn" -> "DadsLovePorn", "BangBros 18" -> "BangBros18"
+        $collectionPrefix = preg_replace('/[^\p{L}\p{N}]+/u', '', $rawCollectionName);
+        if (empty($collectionPrefix)) {
+            $collectionPrefix = 'P1S';
+        }
+        $videoCode = $collectionPrefix . '.' . date('y.m.d', strtotime($releaseAt)) . '.';
 
         $slugWithPoint = [];
         foreach ($femaleActors as $actor) {
             if (($actor['gender'] ?? 0) !== 1) { // 非男性
-                $slugWithPoint[] = str_replace(' ', '.', trim(str_replace('.', '', $actor['name'] ?? '')));
+                $name = trim($actor['name'] ?? '');
+                if (!empty($name)) {
+                    $clean = preg_replace('/[^\p{L}\p{N}\s]+/u', '', $name);
+                    $slugWithPoint[] = str_replace(' ', '.', trim(preg_replace('/\s+/', ' ', $clean)));
+                }
             }
         }
 
@@ -600,10 +713,58 @@ class Project1VideoCrawlerService
         }
 
         $parts = explode('-', $slug);
-        $convertedParts = array_map(fn ($p) => ucfirst($p), $parts);
+        $convertedParts = [];
+        foreach ($parts as $p) {
+            $cleanPart = preg_replace('/[^\p{L}\p{N}]+/u', '', $p);
+            if (!empty($cleanPart)) {
+                $convertedParts[] = ucfirst($cleanPart);
+            }
+        }
         $videoCode .= implode('.', $convertedParts);
 
         return $videoCode;
+    }
+
+    /**
+     * 提取视频播放时长（秒）
+     */
+    protected function handleMovieLength(array $item): int
+    {
+        return (int) ($item['videos']['mediabook']['length'] ?? $item['length'] ?? 0);
+    }
+
+    /**
+     * 判断视频是否支持 4K 超高清
+     */
+    protected function handleIs4k(array $item): bool
+    {
+        // 1. 检查标签列表
+        $tags = $item['tags'] ?? [];
+        if (is_array($tags)) {
+            foreach ($tags as $tag) {
+                $tagName = strtolower(trim($tag['name'] ?? ''));
+                if ($tagName === '4k' || str_contains($tagName, '4k') || str_contains($tagName, '2160p')) {
+                    return true;
+                }
+            }
+        }
+
+        // 2. 检查视频文件格式
+        $videos = $item['videos'] ?? [];
+        if (is_array($videos)) {
+            foreach ($videos as $video) {
+                $files = $video['files'] ?? [];
+                if (is_array($files)) {
+                    foreach (array_keys($files) as $quality) {
+                        if (stripos((string) $quality, '4k') !== false || stripos((string) $quality, '2160') !== false) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
