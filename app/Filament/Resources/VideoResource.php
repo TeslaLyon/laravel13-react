@@ -11,6 +11,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 
 class VideoResource extends Resource
@@ -552,7 +553,8 @@ class VideoResource extends Resource
                 Tables\Columns\TextColumn::make('release_at')
                     ->label('发布时间')
                     ->dateTime('Y-m-d')
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw("release_at {$direction} NULLS LAST")->orderBy('id', 'desc'))
+                    ->placeholder('-'),
                 Tables\Columns\ToggleColumn::make('status')
                     ->label('上架状态'),
                 Tables\Columns\IconColumn::make('is_4k')
@@ -572,7 +574,7 @@ class VideoResource extends Resource
                     ->dateTime('Y-m-d H:i')
                     ->sortable(),
             ])
-            ->defaultSort('updated_at', 'desc')
+            ->defaultSort('release_at', 'desc')
             ->recordUrl(fn (Video $record): string => Pages\ViewVideo::getUrl([$record]))
             ->filters([
                 Tables\Filters\SelectFilter::make('channel_id')
