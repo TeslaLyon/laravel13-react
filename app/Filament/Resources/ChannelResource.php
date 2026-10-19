@@ -180,9 +180,9 @@ class ChannelResource extends Resource
 
                 Infolists\Components\Section::make('品牌视觉展示 (Avatar & Logo)')
                     ->schema([
-                        Infolists\Components\Placeholder::make('visual_display')
+                        Infolists\Components\TextEntry::make('visual_display')
                             ->label('视觉展示')
-                            ->content(function (?Channel $record): HtmlString {
+                            ->state(function (?Channel $record): HtmlString {
                                 $avatarUrl = static::resolveMediaUrl($record?->avatar);
                                 $logoUrl = static::resolveMediaUrl($record?->logo);
 
@@ -199,8 +199,9 @@ class ChannelResource extends Resource
                                         {$avatarHtml}
                                         {$logoHtml}
                                     </div>
-                                ");
+                                    ");
                             })
+                            ->html()
                             ->columnSpanFull(),
                         Infolists\Components\TextEntry::make('avatar')
                             ->label('头像原始路径 (avatar)')

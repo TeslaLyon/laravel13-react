@@ -390,9 +390,9 @@ class VideoResource extends Resource
                                     ->placeholder('暂无预览配置')
                                     ->columnSpanFull(),
 
-                                Infolists\Components\Placeholder::make('screen_img_gallery')
+                                Infolists\Components\TextEntry::make('screen_img_gallery')
                                     ->label('剧照画廊 (Screen Images)')
-                                    ->content(function (?Video $record): HtmlString {
+                                    ->state(function (?Video $record): HtmlString {
                                         $screenImgs = $record?->videoDetail?->screen_img;
                                         if (empty($screenImgs) || !is_array($screenImgs)) {
                                             return new HtmlString('<span class="text-sm text-gray-400">暂无剧照数据</span>');
@@ -427,6 +427,7 @@ class VideoResource extends Resource
                                         $html .= '</div>';
                                         return new HtmlString($html);
                                     })
+                                    ->html()
                                     ->columnSpanFull(),
 
                                 Infolists\Components\Section::make('原始 JSON 媒体元数据')
