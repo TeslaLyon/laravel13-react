@@ -1140,9 +1140,12 @@ class Project1VideoCrawlerService
             $data = json_decode($apiRes['body'], true);
             $hasApiReleases = is_array($data) && isset($data['result']) && is_array($data['result']);
             $count = $hasApiReleases ? count($data['result']) : 0;
+            $metaTotal = $data['meta']['total'] ?? null;
+            $totalDesc = $metaTotal !== null ? "，该片商源站共有约 " . number_format($metaTotal) . " 部视频" : "";
+
             $results['checks']['api_connection'] = [
                 'status'  => $hasApiReleases,
-                'message' => $hasApiReleases ? "Project1 API 探测成功，获取到 {$count} 条视频数据" : "Project1 API 响应未包含 result 列表: " . Str::limit($apiRes['body'], 120),
+                'message' => $hasApiReleases ? "Project1 API 探测成功（冒烟探活返回 {$count} 条样本{$totalDesc}）" : "Project1 API 响应未包含 result 列表: " . Str::limit($apiRes['body'], 120),
             ];
             if (!$hasApiReleases) {
                 $results['error'] = "Project1 API 请求未返回有效数据，请检查片商权限或接口限制";
