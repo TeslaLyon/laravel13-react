@@ -211,6 +211,22 @@ class Video extends Model implements ReactableInterface
     }
 
     /**
+     * 关联该视频收到的资料修正申请
+     */
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(VideoCorrection::class);
+    }
+
+    /**
+     * 关联该视频的所有资料修改与审计历史记录
+     */
+    public function histories(): HasMany
+    {
+        return $this->hasMany(VideoHistory::class)->orderByDesc('id');
+    }
+
+    /**
      * 获取该视频下的所有字幕记录（一对多）。
      * 包含 pending, approved, rejected 的所有状态。
      */

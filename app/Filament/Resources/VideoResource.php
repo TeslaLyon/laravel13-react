@@ -649,7 +649,10 @@ class VideoResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            VideoResource\RelationManagers\HistoriesRelationManager::class,
+            VideoResource\RelationManagers\FeedbackRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use App\Enums\VideoCorrectionStatus;
 
@@ -74,6 +75,14 @@ class VideoCorrection extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewer_id');
+    }
+
+    /**
+     * 关联审核通过后生成的变更记录
+     */
+    public function history(): HasOne
+    {
+        return $this->hasOne(VideoHistory::class, 'correction_id');
     }
 
 }
