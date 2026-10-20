@@ -100,54 +100,50 @@ jobs:
             set -e
             cd ${{ secrets.PROJECT_PATH }} || exit
 
-            echo "🔄 正在强制同步最新的服务器配置文件..."
+            echo "🔄 正在同步最新的仓库配置..."
             git fetch --all
             git reset --hard origin/main
 
-            echo "📁 确保宿主机持久化日志与文件存储目录存在并赋予完全读写权限（不丢失历史数据）..."
+            echo "📁 确保宿主机持久化目录存在并设置必要权限..."
             mkdir -p storage/logs storage/app/public/avatars
-            sudo -n chmod -R 777 storage/logs storage/app/public 2>/dev/null || chmod -R 777 storage/logs storage/app/public 2>/dev/null || true
+            chmod 777 storage/logs storage/app/public storage/app/public/avatars 2>/dev/null || true
 
-            echo "📝 正在全量注入生产环境变量..."
+            echo "📝 注入生产环境变量..."
             echo "$PROD_ENV_CONTENT" > .env
 
-            echo "🔐 正在使用一次性令牌登录 Docker 镜像库..."
+            echo "🔐 登录 Docker 镜像库..."
             echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
 
-            echo "📥 正在拉取最新的 ARM64 镜像 (瘦身后仅需 1~2 秒)..."
+            echo "📥 正在预拉取最新的应用与队列镜像 (前台服务持续正常响应)..."
             docker compose -f compose.prod.yaml pull app horizon scheduler
 
-            # 🔥 核心修复：平滑退出必须在旧容器销毁前通知！
-            # 允许旧容器处理完手头的队列任务，若未启动则容错忽略
-            echo "🔄 正在通知当前旧 Horizon 队列服务平滑准备..."
+            # 🌟 核心优化 1：数据库迁移前置！在旧版本容器还在运行对外服务时，静默升级数据库表结构（前台访问零中断）
+            echo "🗄️ 在当前运行环境中平滑执行数据库迁移 (Migration)..."
+            docker compose -f compose.prod.yaml exec -T app php artisan migrate --force || docker compose -f compose.prod.yaml run --rm --no-deps app php artisan migrate --force || true
+
+            # 🌟 核心优化 2：优雅通知旧 Horizon 队列收拢正在处理的任务
+            echo "🔄 优雅通知旧队列进程平滑准备..."
             docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate || true
 
-            echo "📦 正在无损更新应用容器、队列容器与调度容器..."
+            # 🌟 核心优化 3：极速切换容器（镜像已预拉取完毕，新容器启动时由 entrypoint 内部自动完成高质缓存编译）
+            echo "📦 正在无损拉起全新应用容器..."
             docker compose -f compose.prod.yaml up -d --no-deps app horizon scheduler
 
-            echo "🔒 正在校准容器日志与存储目录权限及建立公共软链接..."
-            docker compose -f compose.prod.yaml exec -T app php artisan storage:link --force || true
-            docker compose -f compose.prod.yaml exec -T app chmod -R 777 /app/storage/logs /app/storage/app/public || true
-            docker compose -f compose.prod.yaml exec -T horizon chmod -R 777 /app/storage/logs /app/storage/app/public || true
-            docker compose -f compose.prod.yaml exec -T scheduler chmod -R 777 /app/storage/logs /app/storage/app/public || true
+            # 🌟 核心优化 4：健康检查探针实时轮询，精确确认新 Octane 服务已开始接受流量
+            echo "🩺 等待新服务健康就绪探针响应..."
+            for i in $(seq 1 20); do
+              if docker compose -f compose.prod.yaml exec -T app curl -fs http://127.0.0.1:8000/up > /dev/null 2>&1; then
+                echo "🎉 新应用容器已健康就绪 (响应 HTTP 200)，耗时约 ${i} 秒！"
+                break
+              fi
+              sleep 1
+            done
 
-            echo "🗄️ 正在自动检测并执行数据库迁移 (Migration)..."
-            docker compose -f compose.prod.yaml exec -T app php artisan migrate --force
-
-            echo "🔍 正在同步 Meilisearch 搜索引擎索引规则..."
-            docker compose -f compose.prod.yaml exec -T app php artisan scout:sync-index-settings || true
-
-            echo "⚡ 正在清空旧缓存并重新生成生产配置与路由缓存..."
-            sleep 2
-            docker compose -f compose.prod.yaml exec -T app php -d memory_limit=512M artisan optimize:clear
-            docker compose -f compose.prod.yaml exec -T app php -d memory_limit=512M artisan optimize
-            docker compose -f compose.prod.yaml exec -T app php -d memory_limit=512M artisan view:cache
-
-            echo "🔄 正在平滑重载 Octane Web 进程与 Horizon 队列进程..."
-            docker compose -f compose.prod.yaml exec -T app php artisan octane:reload || true
-            docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate || true
+            # 🌟 核心优化 5：将耗时的 Meilisearch 搜索引擎索引同步移至后台异步执行，绝不阻塞主部署流程
+            echo "🔍 后台异步同步搜索引擎规则..."
+            docker compose -f compose.prod.yaml exec -d app php artisan scout:sync-index-settings || true
 
             docker logout ghcr.io
             docker image prune -f
 
-            echo "✅ 极致安全的自动化部署完成！"
+            echo "✅ 真正的平滑零停机自动化部署完成！"

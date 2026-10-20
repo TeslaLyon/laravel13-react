@@ -14,8 +14,8 @@ services:
     container_name: laravel_app
     restart: always
     logging: *default-logging # 引入全局日志限制
-    # 💡 优化：FrankenPHP 处理停止信号非常快，给它留出优雅处理现有请求的时间
-    stop_grace_period: 20s
+    # 💡 优化：FrankenPHP 处理停止信号极快，10秒足够平滑收拢在途请求，大幅缩短容器交接时间
+    stop_grace_period: 10s
     environment:
       - APP_ENV=production
       - DB_CONNECTION=pgsql
