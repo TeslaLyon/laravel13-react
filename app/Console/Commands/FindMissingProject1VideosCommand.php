@@ -5,9 +5,11 @@ namespace App\Console\Commands;
 use App\Models\Channel;
 use App\Models\Video;
 use App\Services\Crawler\Project1VideoCrawlerService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use ReflectionMethod;
 
 class FindMissingProject1VideosCommand extends Command
 {
@@ -39,18 +41,22 @@ class FindMissingProject1VideosCommand extends Command
 
         $this->info("🔍 正在加载本地库中 [{$channel->name}] (channel_id={$channel->id}) 的所有现有视频...");
 
-        // 1. 获取本地数据库中已存在的所有 source ID
+        // 1. 获取本地数据库中已存在的所有 source ID 及全局 video_code 映射
         $existingSourceIds = [];
-        Video::where('channel_id', $channel->id)
-            ->select(['id', 'source_uuid', 'slug'])
-            ->chunk(2000, function ($videos) use (&$existingSourceIds, $slug) {
+        $existingVideoCodes = [];
+        Video::select(['id', 'source_uuid', 'slug', 'video_code', 'channel_id'])
+            ->chunk(2000, function ($videos) use (&$existingSourceIds, &$existingVideoCodes, $slug, $channel) {
                 foreach ($videos as $video) {
-                    $uuid = $video->source_uuid;
-                    // 兼容提取 source_uuid 中的数字 ID，例如 "bangbros:12345:slug" 或 "12345"
-                    if (preg_match('/(?:' . preg_quote($slug, '/') . ':)?(\d+)/', $uuid, $matches)) {
-                        $existingSourceIds[$matches[1]] = true;
-                    } elseif (preg_match('/-(\d+)-/', $video->slug, $matches)) {
-                        $existingSourceIds[$matches[1]] = true;
+                    if (!empty($video->video_code)) {
+                        $existingVideoCodes[$video->video_code] = (int) $video->channel_id;
+                    }
+                    if ((int) $video->channel_id === (int) $channel->id) {
+                        $uuid = $video->source_uuid;
+                        if (preg_match('/(?:' . preg_quote($slug, '/') . ':)?(\d+)/', $uuid, $matches)) {
+                            $existingSourceIds[$matches[1]] = true;
+                        } elseif (preg_match('/-(\d+)-/', $video->slug, $matches)) {
+                            $existingSourceIds[$matches[1]] = true;
+                        }
                     }
                 }
             });
@@ -151,12 +157,45 @@ class FindMissingProject1VideosCommand extends Command
                             }
                         }
 
+                        $videoCodeCollision = false;
+                        $collisionDesc = '';
+                        // 推导该视频的预期 video_code 检查是否有全局唯一冲突
+                        try {
+                            $releaseAt = Carbon::parse($item['dateReleased'] ?? null)->setTimezone('Asia/Shanghai')->toDateTimeString();
+                            $femaleActors = [];
+                            foreach ($item['actors'] ?? [] as $actor) {
+                                if (is_array($actor)) {
+                                    $femaleActors[] = [
+                                        'name'   => $actor['name'] ?? '',
+                                        'gender' => match ($actor['gender'] ?? '') { 'male' => 1, 'female' => 2, 'trans' => 3, default => 0 },
+                                    ];
+                                }
+                            }
+                            $sourceSlug = Str::slug($item['title'] ?? '');
+                            $method = new ReflectionMethod($crawlerService, 'handleVideoCode');
+                            $expectedCode = $method->invoke($crawlerService, $item, $femaleActors, $sourceSlug, $releaseAt);
+
+                            if (isset($existingVideoCodes[$expectedCode])) {
+                                $codeOwnerChannel = $existingVideoCodes[$expectedCode];
+                                if ($codeOwnerChannel === (int) $channel->id) {
+                                    $videoCodeCollision = true;
+                                    $collisionDesc = '源站同一视频重复发布/多集合收录 (编号已存在)';
+                                } else {
+                                    $videoCodeCollision = true;
+                                    $collisionDesc = "跨片商编号冲突 (已被片商ID:{$codeOwnerChannel}收录)";
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            // 忽略推导异常
+                        }
+
                         $reason = match (true) {
                             $type !== 'scene'                                         => "非正片 (type='{$type}')",
                             $orientation === 'gay'                                    => '同性题材 (orientation=gay)',
                             in_array($orientation, ['trans', 'transgender'], true)    => '变性题材 (orientation=trans)',
                             $isTransActor                                             => '演员包含变性模特',
-                            default                                                   => '历史队列遗漏或去重合并',
+                            $videoCodeCollision                                       => $collisionDesc,
+                            default                                                   => '历史队列遗漏',
                         };
 
                         $missingItems[] = [
@@ -213,8 +252,7 @@ class FindMissingProject1VideosCommand extends Command
 
                 $this->line("👉 正在尝试补录 [{$id}] {$title}...");
                 try {
-                    $reflection = new \ReflectionMethod($crawlerService, 'saveVideoItem');
-                    $reflection->setAccessible(true);
+                    $reflection = new ReflectionMethod($crawlerService, 'saveVideoItem');
                     $savedVideo = $reflection->invoke($crawlerService, $channel, $rawItem);
                     $this->info("   ✅ 补录成功！新建视频 ID: {$savedVideo->id}, 番号: {$savedVideo->video_code}");
                     $fixedCount++;
