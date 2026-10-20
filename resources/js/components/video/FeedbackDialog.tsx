@@ -14,14 +14,50 @@ import { useHttp } from '@inertiajs/react';
 import FeedbackController from '@/actions/App/Http/Controllers/FeedbackController';
 import { Textarea } from '@/components/ui/textarea';
 
-const FEEDBACK_TYPES = [
+const VIDEO_FEEDBACK_TYPES = [
+    { id: 'screen_img_issue', label: '剧照有误/不匹配' },
+    { id: 'cover_issue', label: '封面模糊/无法显示' },
     { id: 'playback_issue', label: '播放卡顿/无法播放' },
-    { id: 'content_issue', label: '内容不完整/音画不同步' },
-    { id: 'subtitle_issue', label: '字幕错误/缺失' },
-    { id: 'inappropriate', label: '违规/不当内容' },
+    { id: 'preview_issue', label: '悬停预览/动图异常' },
+    { id: 'download_issue', label: '下载/磁力链接失效' },
+    { id: 'info_issue', label: '信息有误 (片名/编号/日期)' },
+    { id: 'metadata_issue', label: '演员/片商/系列错误' },
+    { id: 'content_issue', label: '音画不同步/内容残缺' },
+    { id: 'subtitle_issue', label: '字幕错误/缺失/不同步' },
     { id: 'other', label: '其他问题' },
-    { id: 'head_img_lost', label: '头图无法显示' },
 ];
+
+const DEFAULT_FEEDBACK_TYPES = [
+    { id: 'content_issue', label: '内容错误/失效' },
+    { id: 'image_issue', label: '图片显示异常' },
+    { id: 'playback_issue', label: '播放或资源失效' },
+    { id: 'other', label: '其他问题' },
+];
+
+const getPlaceholder = (selectedType: string) => {
+    switch (selectedType) {
+        case 'screen_img_issue':
+            return '例如：第几张剧照与本视频不符、剧照内容重复或无法加载等...';
+        case 'cover_issue':
+            return '例如：封面拉伸变形、模糊不清或无法显示等...';
+        case 'playback_issue':
+            return '例如：视频在几分几秒卡住、提示403或黑屏无法播放等...';
+        case 'preview_issue':
+            return '例如：鼠标悬停无预览动画、切片动图裂开等...';
+        case 'download_issue':
+            return '例如：磁力下载无速度/死链、提取码失效等...';
+        case 'info_issue':
+            return '例如：正确的番号/片名、实际时长或发行日期等...';
+        case 'metadata_issue':
+            return '例如：缺少某位演员、演员姓名有误、归属片商或系列不正确等...';
+        case 'content_issue':
+            return '例如：视频后半段缺失、音画不同步等...';
+        case 'subtitle_issue':
+            return '例如：中文字幕乱码、台词与声音慢了几秒、翻译错误等...';
+        default:
+            return '请提供更多细节，以便我们更快定位并修复问题...';
+    }
+};
 
 interface FeedbackDialogProps {
     modelType: 'video' | 'image' | 'studio' | 'category' | 'shop' | 'forum';
@@ -39,6 +75,8 @@ export function FeedbackDialog({
 }: FeedbackDialogProps) {
     const [selectedType, setSelectedType] = useState<string>('');
     const [content, setContent] = useState('');
+
+    const feedbackTypes = modelType === 'video' ? VIDEO_FEEDBACK_TYPES : DEFAULT_FEEDBACK_TYPES;
 
     const { post, processing, transform } = useHttp({
         model_type: '' as string,
@@ -117,7 +155,7 @@ export function FeedbackDialog({
                             问题类型 <span className="text-red-500">*</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
-                            {FEEDBACK_TYPES.map((type) => (
+                            {feedbackTypes.map((type) => (
                                 <button
                                     key={type.id}
                                     type="button"
@@ -140,7 +178,7 @@ export function FeedbackDialog({
                         <Textarea
                             value={content}
                             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
-                            placeholder="请提供更多细节，例如问题发生的时间点等，以便我们更快定位问题..."
+                            placeholder={getPlaceholder(selectedType)}
                             className="flex min-h-25 w-full rounded-xl border border-border/50 bg-muted/40 hover:bg-muted/60 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:bg-background dark:bg-muted/20 dark:hover:bg-muted/40 transition-colors resize-none"
                         />
                     </div>
