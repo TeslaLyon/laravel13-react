@@ -574,13 +574,13 @@ class Project1VideoCrawlerService
     protected function requestApiReleases(Channel $channel, string $token, int $limit, int $page = 1): array
     {
         try {
-            $origin = $channel->official_website_url ?: 'https://www.project1service.com';
+            $origin = rtrim($channel->official_website_url ?: 'https://www.project1service.com', '/');
             $page = max(1, $page);
             $offset = ($page - 1) * $limit;
 
             $response = Http::withHeaders([
                 'user-agent'      => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'referer'         => $origin,
+                'referer'         => $origin . '/',
                 'origin'          => $origin,
                 'instance'        => $token,
                 'accept-language' => 'zh-CN,zh;q=0.9,en;q=0.8',
@@ -1116,12 +1116,33 @@ class Project1VideoCrawlerService
 
         // 检查项 6：API 接口实际连通性与数据探测 (releases limit=1)
         try {
-            $apiData = $this->requestApiReleases($channelModel, $token, limit: 1, page: 1);
-            $hasApiReleases = !empty($apiData) && isset($apiData['result']);
-            $count = $hasApiReleases ? count($apiData['result']) : 0;
+            $apiRes = $this->requestApiReleases($channelModel, $token, limit: 1, page: 1);
+
+            // 如果首次请求遇到 401/403，尝试强制刷新官网 Token 并重试一次
+            if (in_array($apiRes['status'], [401, 403])) {
+                $newToken = $this->resolveChannelToken($channelModel, true);
+                if (!empty($newToken)) {
+                    $token = $newToken;
+                    $apiRes = $this->requestApiReleases($channelModel, $token, limit: 1, page: 1);
+                }
+            }
+
+            if (!$apiRes['successful']) {
+                $snippet = Str::limit(strip_tags($apiRes['body']), 120);
+                $results['checks']['api_connection'] = [
+                    'status'  => false,
+                    'message' => "API 请求失败 [HTTP {$apiRes['status']}]" . ($snippet ? ": {$snippet}" : ''),
+                ];
+                $results['error'] = "Project1 API 请求未通过 [HTTP {$apiRes['status']}]";
+                return $results;
+            }
+
+            $data = json_decode($apiRes['body'], true);
+            $hasApiReleases = is_array($data) && isset($data['result']) && is_array($data['result']);
+            $count = $hasApiReleases ? count($data['result']) : 0;
             $results['checks']['api_connection'] = [
                 'status'  => $hasApiReleases,
-                'message' => $hasApiReleases ? "Project1 API 探测成功，获取到 {$count} 条视频数据" : "Project1 API 请求未返回预期的 result 列表",
+                'message' => $hasApiReleases ? "Project1 API 探测成功，获取到 {$count} 条视频数据" : "Project1 API 响应未包含 result 列表: " . Str::limit($apiRes['body'], 120),
             ];
             if (!$hasApiReleases) {
                 $results['error'] = "Project1 API 请求未返回有效数据，请检查片商权限或接口限制";
