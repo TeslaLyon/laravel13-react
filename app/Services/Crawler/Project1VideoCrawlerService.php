@@ -34,6 +34,41 @@ class Project1VideoCrawlerService
             'official_url' => 'https://bangbros.com',
             'has_site_prefix' => true,
         ],
+        'realitykings' => [
+            'name'         => 'Reality Kings',
+            'official_url' => 'https://www.realitykings.com',
+            'has_site_prefix' => true,
+        ],
+        'mofos' => [
+            'name'         => 'Mofos',
+            'official_url' => 'https://www.mofos.com',
+            'has_site_prefix' => true,
+        ],
+        'digitalplayground' => [
+            'name'         => 'Digital Playground',
+            'official_url' => 'https://www.digitalplayground.com',
+            'has_site_prefix' => true,
+        ],
+        'twistys' => [
+            'name'         => 'Twistys',
+            'official_url' => 'https://www.twistys.com',
+            'has_site_prefix' => true,
+        ],
+        'babes' => [
+            'name'         => 'Babes',
+            'official_url' => 'https://www.babes.com',
+            'has_site_prefix' => true,
+        ],
+        'fakehub' => [
+            'name'         => 'FakeHub',
+            'official_url' => 'https://www.fakehub.com',
+            'has_site_prefix' => true,
+        ],
+        'propertysex' => [
+            'name'         => 'PropertySex',
+            'official_url' => 'https://www.propertysex.com',
+            'has_site_prefix' => true,
+        ],
     ];
 
     /**

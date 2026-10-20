@@ -96,7 +96,7 @@ class DorcelCrawlerService
         if (empty($this->channel->avatar) || $this->channel->avatar !== '/images/channels/dorcelclub-avatar.avif') {
             $updates['avatar'] = '/images/channels/dorcelclub-avatar.avif';
         }
-        if (empty($this->channel->logo) || $this->channel->logo !== '/images/channels/dorcelclub-logo.avif') {
+        if (empty($this->channel->logo)) {
             $updates['logo'] = '/images/channels/dorcelclub-logo.avif';
         }
         if (!empty($updates)) {
