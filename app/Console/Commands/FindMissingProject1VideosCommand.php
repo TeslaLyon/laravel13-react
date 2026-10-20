@@ -16,7 +16,8 @@ class FindMissingProject1VideosCommand extends Command
      */
     protected $signature = 'crawler:find-missing-videos
                             {channel=bangbros : 片商 slug (如 bangbros, brazzers 等)}
-                            {--limit=100 : 接口分页大小，最大推荐 100}';
+                            {--limit=100 : 接口分页大小，最大推荐 100}
+                            {--fix : 自动尝试将缺失的有效正片补写入库}';
 
     /**
      * The console command description.
@@ -165,6 +166,7 @@ class FindMissingProject1VideosCommand extends Command
                             'orientation' => $orientation ?: 'normal',
                             'reason'      => $reason,
                             'released'    => $item['dateReleased'] ?? '-',
+                            'raw_item'    => $item,
                         ];
                     }
                 }
@@ -197,6 +199,39 @@ class FindMissingProject1VideosCommand extends Command
         }, $missingItems);
 
         $this->table(['源站ID', '视频标题 (Title)', '类型 (Type)', '性取向', '未入库原因分析', '发布时间'], $rows);
+
+        // 如果开启了 --fix 模式，立即自动补录
+        if ($this->option('fix')) {
+            $this->info("\n🛠️ 已开启 --fix 模式，正在尝试自动补录这 " . count($missingItems) . " 部视频...");
+            $fixedCount = 0;
+            $failedCount = 0;
+
+            foreach ($missingItems as $m) {
+                $rawItem = $m['raw_item'];
+                $id = $m['id'];
+                $title = $m['title'];
+
+                $this->line("👉 正在尝试补录 [{$id}] {$title}...");
+                try {
+                    $reflection = new \ReflectionMethod($crawlerService, 'saveVideoItem');
+                    $reflection->setAccessible(true);
+                    $savedVideo = $reflection->invoke($crawlerService, $channel, $rawItem);
+                    $this->info("   ✅ 补录成功！新建视频 ID: {$savedVideo->id}, 番号: {$savedVideo->video_code}");
+                    $fixedCount++;
+                } catch (\Throwable $e) {
+                    $this->error("   ❌ 补录失败，详细异常: " . $e->getMessage());
+                    $failedCount++;
+                }
+            }
+
+            $this->info("\n🎉 补录执行完毕：成功 {$fixedCount} 部，失败 {$failedCount} 部。");
+            $newTotal = Video::where('channel_id', $channel->id)->count();
+            $channel->update(['video_num' => $newTotal]);
+            $this->info("📊 本地库内最新视频数量已更新为: {$newTotal} 部。");
+        } else {
+            $this->line("\n💡 提示：若需将以上未入库的正片视频自动尝试补写入库，可追加 --fix 执行：");
+            $this->comment("   php artisan crawler:find-missing-videos {$slug} --fix");
+        }
 
         return self::SUCCESS;
     }
