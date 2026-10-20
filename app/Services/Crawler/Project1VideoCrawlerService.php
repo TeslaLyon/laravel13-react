@@ -219,8 +219,33 @@ class Project1VideoCrawlerService
         $skippedCount = 0;
 
         foreach ($data['result'] as $item) {
-            // 过滤非 scene 类型或 gay 视频
-            if (($item['type'] ?? '') !== 'scene' || ($item['sexualOrientation'] ?? '') === 'gay') {
+            $type = (string) ($item['type'] ?? '');
+            $orientation = strtolower((string) ($item['sexualOrientation'] ?? ''));
+
+            // 1. 过滤非正片类型（预告片、花絮、剪辑合集等）
+            if ($type !== 'scene') {
+                $skippedCount++;
+                continue;
+            }
+
+            // 2. 过滤 Gay 同性题材
+            if ($orientation === 'gay') {
+                $skippedCount++;
+                continue;
+            }
+
+            // 3. 过滤 Trans（变性）题材：针对 sexualOrientation 为 trans/transgender 或演员列表中标注 trans 的视频
+            $isTrans = in_array($orientation, ['trans', 'transgender'], true);
+            if (!$isTrans && !empty($item['actors']) && is_array($item['actors'])) {
+                foreach ($item['actors'] as $actor) {
+                    if (is_array($actor) && strtolower((string) ($actor['gender'] ?? '')) === 'trans') {
+                        $isTrans = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isTrans) {
                 $skippedCount++;
                 continue;
             }

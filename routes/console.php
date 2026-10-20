@@ -26,6 +26,14 @@ Schedule::job(new CrawlProject1VideosJob())
     ->withoutOverlapping();
 
 /**
+ * 每日视频抓取数据汇总并自动推送至 Telegram
+ * 每天晚上 21:00（爬虫执行完毕后）生成当日数据大盘与各片商增量报告
+ */
+Schedule::command('crawler:send-daily-summary')
+    ->dailyAt('21:00')
+    ->timezone('Asia/Shanghai');
+
+/**
  * 视频中文标题 AI 自动翻译定时任务
  * 每 10 分钟投递一批翻译任务至 Horizon 队列，避免任务重叠
  */
