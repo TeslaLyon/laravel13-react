@@ -79,7 +79,7 @@ export function RequireAuthProvider({ children }: { children: ReactNode }) {
         'verify-email': {
             icon: <MailCheck className="h-5 w-5" />,
             title: '需要验证邮箱',
-            description: '为了保障账号安全并正常参与互动，请先完成邮箱验证。',
+            description: '为了保障账号安全并正常参与互动，请先完成邮箱验证。如收件箱未收到邮件，可能被系统误判，请检查「垃圾邮件」箱。',
             actionText: '去验证',
         },
     };

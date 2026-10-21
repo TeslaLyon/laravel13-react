@@ -12,13 +12,13 @@ export default function VerifyEmail({ status }: { status?: string }) {
             <Head title="邮箱验证" />
 
             {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    一个新的验证链接已经发送至您在注册时提供的电子邮件地址。
+                <div className="mb-4 rounded-xl border border-green-500/20 bg-green-50/80 p-3 text-center text-sm font-medium text-green-700 dark:bg-green-950/40 dark:text-green-300">
+                    新的验证链接已发送！若数分钟内收件箱未收到，可能被邮箱过滤，请检查「垃圾邮件」箱。
                 </div>
             )}
 
-            <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-                <strong>温馨提示：</strong> 邮件发送后，请先到<strong>垃圾邮件</strong>中查看是否收到来自“什么值得看”的邮件。如果被误判为垃圾邮件，请在邮件详情页中点击<strong>“这不是垃圾邮件”</strong>按钮，以确保后续能正常接收通知。
+            <div className="rounded-xl border border-amber-500/20 bg-amber-50/80 p-3.5 text-sm leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <strong>温馨提示：</strong>若未在收件箱中收到邮件，可能被系统误判，请前往<strong>「垃圾邮件 / 垃圾箱」</strong>中查找；若找到，建议点击<strong>「这不是垃圾邮件」</strong>以确保后续正常接收。
             </div>
 
             <Form {...send.form()} className="space-y-6 text-center">

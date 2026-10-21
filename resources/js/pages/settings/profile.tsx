@@ -117,14 +117,14 @@ export default function Profile({
                                             </Link>
                                         </p>
 
-                                        <div className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-                                            <strong>温馨提示：</strong> 邮件发送后，请先到<strong>垃圾邮件</strong>中查看是否收到来自“什么值得看”的邮件。如果被误判为垃圾邮件，请在邮件详情页中点击<strong>“这不是垃圾邮件”</strong>按钮，以确保后续能正常接收通知。
+                                        <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-50/80 p-3 text-sm leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                            <strong>温馨提示：</strong>若未在收件箱中收到邮件，可能被系统误判，请前往<strong>「垃圾邮件 / 垃圾箱」</strong>中查找；若找到，建议点击<strong>「这不是垃圾邮件」</strong>以确保后续正常接收。
                                         </div>
 
                                         {status ===
                                             'verification-link-sent' && (
                                                 <div className="mt-2 text-sm font-medium text-green-600">
-                                                    一个新的验证链接已经发送到你的电子邮件地址。
+                                                    新的验证链接已发送！若数分钟内收件箱未收到，可能被误判，请检查「垃圾邮件」箱。
                                                 </div>
                                             )}
                                     </div>

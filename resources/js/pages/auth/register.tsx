@@ -113,6 +113,10 @@ export default function Register({ passwordRules }: Props) {
                                 <InputError message={(errors as Record<string, string>)['cf-turnstile-response']} />
                             </div>
 
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-50/80 p-3 text-xs leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                <strong>提示：</strong>注册后将发送验证邮件，如收件箱未收到，可能被系统误判，请检查<strong>「垃圾邮件」</strong>箱。
+                            </div>
+
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
