@@ -652,6 +652,7 @@ class VideoResource extends Resource
         return [
             VideoResource\RelationManagers\HistoriesRelationManager::class,
             VideoResource\RelationManagers\FeedbackRelationManager::class,
+            VideoResource\RelationManagers\DownloadFeedbacksRelationManager::class,
         ];
     }
 

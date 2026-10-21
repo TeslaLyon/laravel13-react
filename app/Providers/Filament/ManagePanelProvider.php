@@ -37,6 +37,7 @@ class ManagePanelProvider extends PanelProvider
             ->navigationGroups([
                 '视频内容管理',
                 '片商与演员',
+                '反馈与审核',
                 '用户管理',
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
