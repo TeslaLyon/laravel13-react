@@ -321,7 +321,6 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                 download: selectedFeedbackDownload.id,
             }),
             {
-                preserveScroll: true,
                 onSuccess: (response: any) => {
                     const serverMessage = response?.data?.message || response?.message || "纠错反馈提交成功！感谢您的指正与贡献，我们会尽快核查处理。";
                     toast.success(serverMessage, {
