@@ -243,11 +243,11 @@ export function SubtitleDialog({ video }: SubtitleDialogProps) {
                 {/* 3. 修改处：移除 DialogTrigger，改成带有 onClick={handleOpenDialog} 的普通按钮 */}
                 <Button
                     variant="secondary"
-                    className="gap-1.5 h-9 px-3 sm:px-4 rounded-full text-xs sm:text-sm font-medium"
+                    className="gap-1.5 h-9 px-3 sm:px-3.5 rounded-full text-xs sm:text-sm font-medium shrink-0 bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-none cursor-pointer"
                     onClick={handleOpenDialog}
                 >
                     <Captions className="w-4 h-4" />
-                    字幕
+                    <span>字幕</span>
                 </Button>
 
                 <DialogContent

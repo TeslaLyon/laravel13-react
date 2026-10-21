@@ -11,6 +11,13 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetItem,
+    BottomSheetSeparator,
+} from '@/components/ui/bottom-sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -61,6 +68,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
     subscribedText = '已订阅',
     className = '',
 }) => {
+    const isMobile = useIsMobile();
     const [isSubscribed, setIsSubscribed] = useState(initialIsSubscribed);
     const [notificationType, setNotificationType] = useState<NotificationType>(initialNotificationType);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -188,6 +196,88 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
                     )}
                     <span>{isSubscribeProcessing ? '正在订阅...' : subscribeText}</span>
                 </Button>
+            ) : isMobile ? (
+                <>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={isProcessing}
+                        onClick={() => setIsMenuOpen(true)}
+                        className={`rounded-full px-4 sm:px-5 font-semibold bg-secondary/80 text-secondary-foreground hover:bg-secondary flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60 ${className}`}
+                    >
+                        {isProcessing ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        ) : (
+                            renderNotificationIcon()
+                        )}
+                        <span>{subscribedText}</span>
+                        <ChevronDown className="w-3.5 h-3.5 opacity-60 ml-0.5" />
+                    </Button>
+
+                    <BottomSheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+                        <BottomSheetContent title={name ? `${name} - 订阅设置` : "订阅设置"}>
+                            <div className="flex flex-col py-1">
+                                <BottomSheetItem
+                                    icon={<BellRing className="w-5 h-5" />}
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        handleNotificationChange('all');
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>全部通知</span>
+                                        {notificationType === 'all' && (
+                                            <Check className="w-5 h-5 text-primary" />
+                                        )}
+                                    </div>
+                                </BottomSheetItem>
+
+                                <BottomSheetItem
+                                    icon={<Bell className="w-5 h-5" />}
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        handleNotificationChange('personalized');
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>个性化通知</span>
+                                        {notificationType === 'personalized' && (
+                                            <Check className="w-5 h-5 text-primary" />
+                                        )}
+                                    </div>
+                                </BottomSheetItem>
+
+                                <BottomSheetItem
+                                    icon={<BellOff className="w-5 h-5 text-muted-foreground" />}
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        handleNotificationChange('none');
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>无通知</span>
+                                        {notificationType === 'none' && (
+                                            <Check className="w-5 h-5 text-primary" />
+                                        )}
+                                    </div>
+                                </BottomSheetItem>
+
+                                <BottomSheetSeparator className="my-2" />
+
+                                <BottomSheetItem
+                                    icon={<UserMinus className="w-5 h-5 text-destructive" />}
+                                    onClick={() => {
+                                        setIsMenuOpen(false);
+                                        setIsConfirmDialogOpen(true);
+                                    }}
+                                    className="text-destructive hover:bg-destructive/10"
+                                >
+                                    <span>取消{subscribeText}</span>
+                                </BottomSheetItem>
+                            </div>
+                        </BottomSheetContent>
+                    </BottomSheet>
+                </>
             ) : (
                 /* 已订阅状态：带有通知选择的复合下拉菜单 */
                 <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>

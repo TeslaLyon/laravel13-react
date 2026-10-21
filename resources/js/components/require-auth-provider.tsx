@@ -108,12 +108,12 @@ export function RequireAuthProvider({ children }: { children: ReactNode }) {
                     </AlertDialogHeader>
 
                     <AlertDialogFooter className="mt-5 flex flex-col-reverse gap-2.5 bg-transparent border-none p-0 sm:flex-row sm:justify-end sm:gap-3">
-                        <AlertDialogCancel className="mt-0 h-10 flex-1 rounded-xl px-4 text-sm font-medium border-border/60 bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground transition-all active:scale-[0.98]">
+                        <AlertDialogCancel className="mt-0 !h-12 min-h-12 sm:!h-10 sm:min-h-10 w-full sm:w-auto flex-1 rounded-xl px-4 text-base sm:text-sm font-semibold border-border/60 bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground transition-all active:scale-[0.98]">
                             先逛逛
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleConfirmAction}
-                            className="h-10 flex-1 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 transition-all active:scale-[0.98]"
+                            className="!h-12 min-h-12 sm:!h-10 sm:min-h-10 w-full sm:w-auto flex-1 rounded-xl bg-primary px-4 text-base sm:text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all active:scale-[0.98]"
                         >
                             {currentConfig?.actionText}
                         </AlertDialogAction>

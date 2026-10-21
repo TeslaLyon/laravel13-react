@@ -9,6 +9,13 @@ import {
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetItem,
+    BottomSheetSeparator,
+} from "@/components/ui/bottom-sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -97,6 +104,7 @@ export function FollowBtn({
     slug = '',
     initisFollowed = false
 }: FollowBtnProps) {
+    const isMobile = useIsMobile();
     const [isSubscribed, setIsSubscribed] = useState(initisFollowed);
     const { post, processing } = useHttp();
     const [isAnimating, setIsAnimating] = useState(false);
@@ -174,107 +182,218 @@ export function FollowBtn({
 
     return (
         <div className="relative inline-block w-full sm:w-auto">
-            <DropdownMenu
-                open={dropdownOpen}
-                onOpenChange={(open) => {
-                    if (isSubscribed) setDropdownOpen(open);
-                }}
-            >
-                <TooltipProvider>
-                    <Tooltip open={isSubscribed ? false : undefined}>
-                        <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                                {/* 动态绑定 layout */}
-                                <motion.div layout={enableAnim} className="w-full sm:w-auto">
-                                    <Button
-                                        onClick={(e) => {
-                                            if (!isSubscribed) {
-                                                e.preventDefault();
-                                                handleToggle();
-                                            }
-                                        }}
-                                        disabled={processing}
-                                        className={`w-full sm:w-auto rounded-full px-5 text-sm font-semibold ${enableAnim ? "transition-colors duration-300" : ""
-                                            } ${getDynamicStyles()}`}
+            {isMobile ? (
+                <>
+                    <motion.div layout={enableAnim} className="w-full sm:w-auto">
+                        <Button
+                            type="button"
+                            onClick={(e) => {
+                                if (!isSubscribed) {
+                                    e.preventDefault();
+                                    handleToggle();
+                                } else {
+                                    setDropdownOpen(true);
+                                }
+                            }}
+                            disabled={processing}
+                            className={`w-full sm:w-auto rounded-full px-5 text-sm font-semibold cursor-pointer ${enableAnim ? "transition-colors duration-300" : ""
+                                } ${getDynamicStyles()}`}
+                        >
+                            <motion.div layout={enableAnim} className="flex items-center justify-center gap-2 overflow-hidden">
+                                {processing && <Spinner />}
+
+                                {((isAnimating || isSubscribed) && !processing) && (
+                                    <motion.div
+                                        layout={enableAnim}
+                                        initial={{ opacity: 0, scale: 0, width: 0 }}
+                                        animate={{ opacity: 1, scale: 1, width: "auto" }}
+                                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
                                     >
-                                        <motion.div layout={enableAnim} className="flex items-center justify-center gap-2 overflow-hidden">
-                                            {processing && <Spinner />}
+                                        {getCurrentBellIcon()}
+                                    </motion.div>
+                                )}
 
-                                            {((isAnimating || isSubscribed) && !processing) && (
-                                                <motion.div
-                                                    layout={enableAnim}
-                                                    initial={{ opacity: 0, scale: 0, width: 0 }}
-                                                    animate={{ opacity: 1, scale: 1, width: "auto" }}
-                                                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                                                >
-                                                    {getCurrentBellIcon()}
-                                                </motion.div>
-                                            )}
+                                <motion.span layout={enableAnim} className="text-sm font-medium whitespace-nowrap">
+                                    {label}
+                                </motion.span>
 
-                                            <motion.span layout={enableAnim} className="text-sm font-medium whitespace-nowrap">
-                                                {label}
-                                            </motion.span>
+                                {((isAnimating || isSubscribed) && !processing) && (
+                                    <motion.div
+                                        layout={enableAnim}
+                                        initial={{ opacity: 0, x: -10, width: 0 }}
+                                        animate={{ opacity: 1, x: 0, width: "auto" }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        <ChevronDown className="w-4 h-4" />
+                                    </motion.div>
+                                )}
+                            </motion.div>
+                        </Button>
+                    </motion.div>
 
-                                            {((isAnimating || isSubscribed) && !processing) && (
-                                                <motion.div
-                                                    layout={enableAnim}
-                                                    initial={{ opacity: 0, x: -10, width: 0 }}
-                                                    animate={{ opacity: 1, x: 0, width: "auto" }}
-                                                    transition={{ duration: 0.2 }}
-                                                >
-                                                    <ChevronDown className="w-4 h-4" />
-                                                </motion.div>
-                                            )}
-                                        </motion.div>
-                                    </Button>
-                                </motion.div>
-                            </DropdownMenuTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                            <p>关注</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                    <BottomSheet open={dropdownOpen} onOpenChange={setDropdownOpen}>
+                        <BottomSheetContent title={slug ? `${slug} - 关注设置` : "关注设置"}>
+                            <div className="flex flex-col py-1">
+                                <BottomSheetItem
+                                    icon={<BellRing className="w-5 h-5 text-foreground" />}
+                                    onClick={() => {
+                                        setNotifyLevel('all');
+                                        setDropdownOpen(false);
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>全部</span>
+                                        {notifyLevel === 'all' && <Check className="w-5 h-5 text-primary" />}
+                                    </div>
+                                </BottomSheetItem>
 
-                {/* 下拉菜单内容区 */}
-                <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
-                    <DropdownMenuItem onClick={() => setNotifyLevel('all')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <BellRing className="w-5 h-5 text-foreground" />
-                            <span>全部</span>
-                        </div>
-                        {notifyLevel === 'all' && <Check className="w-5 h-5 text-foreground" />}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setNotifyLevel('personalized')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <Bell className="w-5 h-5 text-foreground" />
-                            <span>个性化</span>
-                        </div>
-                        {notifyLevel === 'personalized' && <Check className="w-5 h-5 text-foreground" />}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setNotifyLevel('none')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <BellOff className="w-5 h-5 text-foreground" />
-                            <span>无</span>
-                        </div>
-                        {notifyLevel === 'none' && <Check className="w-5 h-5 text-foreground" />}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="my-2" />
-                    <DropdownMenuItem
-                        onSelect={(e) => {
-                            e.preventDefault();
-                            setDropdownOpen(false);
-                            setTimeout(() => {
-                                setAlertOpen(true);
-                            }, 150);
-                        }}
-                        className="flex items-center gap-3 cursor-pointer p-3 text-base rounded-lg"
-                    >
-                        <UserX className="w-5 h-5 text-foreground" />
-                        <span>退订</span>
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                                <BottomSheetItem
+                                    icon={<Bell className="w-5 h-5 text-foreground" />}
+                                    onClick={() => {
+                                        setNotifyLevel('personalized');
+                                        setDropdownOpen(false);
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>个性化</span>
+                                        {notifyLevel === 'personalized' && <Check className="w-5 h-5 text-primary" />}
+                                    </div>
+                                </BottomSheetItem>
+
+                                <BottomSheetItem
+                                    icon={<BellOff className="w-5 h-5 text-muted-foreground" />}
+                                    onClick={() => {
+                                        setNotifyLevel('none');
+                                        setDropdownOpen(false);
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span>无</span>
+                                        {notifyLevel === 'none' && <Check className="w-5 h-5 text-primary" />}
+                                    </div>
+                                </BottomSheetItem>
+
+                                <BottomSheetSeparator className="my-2" />
+
+                                <BottomSheetItem
+                                    icon={<UserX className="w-5 h-5 text-destructive" />}
+                                    onClick={() => {
+                                        setDropdownOpen(false);
+                                        setTimeout(() => {
+                                            setAlertOpen(true);
+                                        }, 150);
+                                    }}
+                                    className="text-destructive hover:bg-destructive/10"
+                                >
+                                    <span>退订</span>
+                                </BottomSheetItem>
+                            </div>
+                        </BottomSheetContent>
+                    </BottomSheet>
+                </>
+            ) : (
+                <DropdownMenu
+                    open={dropdownOpen}
+                    onOpenChange={(open) => {
+                        if (isSubscribed) setDropdownOpen(open);
+                    }}
+                >
+                    <TooltipProvider>
+                        <Tooltip open={isSubscribed ? false : undefined}>
+                            <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                    {/* 动态绑定 layout */}
+                                    <motion.div layout={enableAnim} className="w-full sm:w-auto">
+                                        <Button
+                                            onClick={(e) => {
+                                                if (!isSubscribed) {
+                                                    e.preventDefault();
+                                                    handleToggle();
+                                                }
+                                            }}
+                                            disabled={processing}
+                                            className={`w-full sm:w-auto rounded-full px-5 text-sm font-semibold cursor-pointer ${enableAnim ? "transition-colors duration-300" : ""
+                                                } ${getDynamicStyles()}`}
+                                        >
+                                            <motion.div layout={enableAnim} className="flex items-center justify-center gap-2 overflow-hidden">
+                                                {processing && <Spinner />}
+
+                                                {((isAnimating || isSubscribed) && !processing) && (
+                                                    <motion.div
+                                                        layout={enableAnim}
+                                                        initial={{ opacity: 0, scale: 0, width: 0 }}
+                                                        animate={{ opacity: 1, scale: 1, width: "auto" }}
+                                                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                                    >
+                                                        {getCurrentBellIcon()}
+                                                    </motion.div>
+                                                )}
+
+                                                <motion.span layout={enableAnim} className="text-sm font-medium whitespace-nowrap">
+                                                    {label}
+                                                </motion.span>
+
+                                                {((isAnimating || isSubscribed) && !processing) && (
+                                                    <motion.div
+                                                        layout={enableAnim}
+                                                        initial={{ opacity: 0, x: -10, width: 0 }}
+                                                        animate={{ opacity: 1, x: 0, width: "auto" }}
+                                                        transition={{ duration: 0.2 }}
+                                                    >
+                                                        <ChevronDown className="w-4 h-4" />
+                                                    </motion.div>
+                                                )}
+                                            </motion.div>
+                                        </Button>
+                                    </motion.div>
+                                </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                                <p>关注</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    {/* 下拉菜单内容区 */}
+                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
+                        <DropdownMenuItem onClick={() => setNotifyLevel('all')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <BellRing className="w-5 h-5 text-foreground" />
+                                <span>全部</span>
+                            </div>
+                            {notifyLevel === 'all' && <Check className="w-5 h-5 text-foreground" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setNotifyLevel('personalized')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <Bell className="w-5 h-5 text-foreground" />
+                                <span>个性化</span>
+                            </div>
+                            {notifyLevel === 'personalized' && <Check className="w-5 h-5 text-foreground" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setNotifyLevel('none')} className="flex items-center justify-between cursor-pointer p-3 text-base rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <BellOff className="w-5 h-5 text-foreground" />
+                                <span>无</span>
+                            </div>
+                            {notifyLevel === 'none' && <Check className="w-5 h-5 text-foreground" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-2" />
+                        <DropdownMenuItem
+                            onSelect={(e) => {
+                                e.preventDefault();
+                                setDropdownOpen(false);
+                                setTimeout(() => {
+                                    setAlertOpen(true);
+                                }, 150);
+                            }}
+                            className="flex items-center gap-3 cursor-pointer p-3 text-base rounded-lg"
+                        >
+                            <UserX className="w-5 h-5 text-foreground" />
+                            <span>退订</span>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
 
             {/* 退订二次确认模态框 */}
             <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>

@@ -457,6 +457,8 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                 </div>
                                 <div className="shrink-0"><Save videoId={video?.id} slug={video?.slug} initialIsCollect={initialIsCollect} initialFavoritesCount={favoritesCount ?? video?.favorites_count ?? 0} /></div>
                                 <div className="shrink-0"><MoreOption video={video} /></div>
+                                {/* 移动端右侧滚动保护占位块，确保横滑到末尾时最后一个按钮不会紧贴屏幕边缘或被裁剪 */}
+                                <div className="shrink-0 w-3 sm:hidden pointer-events-none" aria-hidden="true" />
                             </div>
                         </div>
 
@@ -724,8 +726,8 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                 </div>
 
                 {/* 右侧：侧边推荐栏 */}
-                <div className="w-full xl:w-[350px] 2xl:w-[400px] shrink-0 flex flex-col gap-2 px-4 sm:px-0 mt-6 xl:mt-0">
-                    <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-none snap-x mb-2">
+                <div className="w-full xl:w-[350px] 2xl:w-[400px] shrink-0 flex flex-col gap-2 px-0 mt-6 xl:mt-0">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-none snap-x mb-2 px-3.5 sm:px-0">
                         {["全部", "来自 编码助手实验室", "为您推荐", "近期上传"].map((cat, i) => (
                             <button
                                 key={cat}
@@ -739,7 +741,7 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:flex xl:flex-col gap-y-4 gap-x-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:flex xl:flex-col gap-y-5 sm:gap-y-4 sm:gap-x-4">
                         <Deferred data="recommendVideos" fallback={
                             Array.from({ length: 10 }).map((_, index) => (
                                 <VideoSkeleton key={index} />

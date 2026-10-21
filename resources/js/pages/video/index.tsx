@@ -327,9 +327,9 @@ export default function YoutubeVideoGrid({
     };
 
     return (
-        <div className="container mx-auto p-4 md:p-8 bg-background min-h-screen">
+        <div className="container mx-auto px-0 py-4 sm:p-4 md:p-8 bg-background min-h-screen">
             {/* 顶部标题与高级筛选按钮 */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6 px-3.5 sm:px-0">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-primary">推荐视频</h1>
                     <p className="text-sm text-muted-foreground mt-1">根据你的喜好实时更新</p>
@@ -362,7 +362,7 @@ export default function YoutubeVideoGrid({
 
             {/* 横向快捷分类栏（Deferred 异步加载） */}
             <Deferred data="quickFilters" fallback={<QuickFilterSkeleton />}>
-                <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none snap-x">
+                <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none snap-x px-3.5 sm:px-0">
                     {safeQuickFilters.map((item) => {
                         const active = isQuickFilterActive(item);
                         return (
@@ -384,7 +384,7 @@ export default function YoutubeVideoGrid({
 
             {/* 高级筛选面板 */}
             {isFilterOpen && (
-                <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-300 px-3.5 sm:px-0">
                     <AdvancedFilterPanel
                         data={filterData}
                         initialSelected={currentSelected}
@@ -398,8 +398,8 @@ export default function YoutubeVideoGrid({
                 </div>
             )}
 
-            {/* 视频网格 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-8">
+            {/* 视频网格：移动端如同 YouTube App 无左右间距 100% 满宽，平板及以上保留网格边距 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-3 gap-y-5 sm:gap-y-8">
                 <Deferred data="videos" fallback={
                     Array.from({ length: 12 }).map((_, index) => (
                         <VideoSkeleton key={index} />
@@ -418,7 +418,7 @@ export default function YoutubeVideoGrid({
             </div>
 
             {/* 底部分页 */}
-            <div className="flex flex-col items-center justify-center mt-10 mb-12 gap-2">
+            <div className="flex flex-col items-center justify-center mt-10 mb-12 gap-2 px-3.5 sm:px-0">
                 <VideoPagination links={videos?.links} />
             </div>
         </div>

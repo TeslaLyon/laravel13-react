@@ -361,7 +361,7 @@ export function ResponsiveVideoImage({
     return (
         <div
             ref={containerRef}
-            className={`relative w-full h-full overflow-hidden rounded-xl ${
+            className={`relative w-full h-full overflow-hidden rounded-none sm:rounded-xl ${
                 isNonStandardAspect ? 'bg-background' : 'bg-muted'
             } group/image select-none`}
             onMouseEnter={handleMouseEnter}
@@ -393,7 +393,7 @@ export function ResponsiveVideoImage({
                     aria-hidden="true"
                     className={`absolute inset-0 w-full h-full ${
                         isNonStandardAspect ? 'object-contain' : 'object-cover scale-105'
-                    } rounded-xl transition-opacity duration-500 filter blur-md ${
+                    } rounded-none sm:rounded-xl transition-opacity duration-500 filter blur-md ${
                         isCoverLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
                     }`}
                 />
@@ -424,7 +424,7 @@ export function ResponsiveVideoImage({
                             onLoad={() => setIsCoverLoaded(true)}
                             className={`w-full h-full ${
                                 isNonStandardAspect ? 'object-contain' : 'object-cover'
-                            } rounded-xl transition-all duration-300 ${
+                            } rounded-none sm:rounded-xl transition-all duration-300 ${
                                 isCoverLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm'
                             }`}
                         />
@@ -454,7 +454,7 @@ export function ResponsiveVideoImage({
                             preload="auto"
                             onCanPlay={handleVideoCanPlay}
                             onWaiting={() => setIsPreviewLoading(true)}
-                            className={`w-full h-full rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
+                            className={`w-full h-full rounded-none sm:rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
 
@@ -462,7 +462,7 @@ export function ResponsiveVideoImage({
                         <img
                             src={previewData.url}
                             alt={`${alt} GIF预览`}
-                            className={`w-full h-full rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
+                            className={`w-full h-full rounded-none sm:rounded-xl ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
 
@@ -470,7 +470,7 @@ export function ResponsiveVideoImage({
                         <img
                             src={displayedImageUrl}
                             alt={`${alt} 预览图 ${activeImageIndex + 1}`}
-                            className={`w-full h-full rounded-xl transition-all duration-100 ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
+                            className={`w-full h-full rounded-none sm:rounded-xl transition-all duration-100 ${isNonStandardAspect ? 'object-contain' : 'object-cover'}`}
                         />
                     )}
                 </div>

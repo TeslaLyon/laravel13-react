@@ -2,12 +2,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export function VideoSkeleton() {
     return (
-        <div className="flex flex-col gap-3 rounded-2xl bg-card">
-            {/* 1. 封面图占位 (关键：使用 aspect-video 强制 16:9 比例) */}
-            <Skeleton className="w-full aspect-video rounded-xl bg-slate-100" />
+        <div className="flex flex-col gap-2.5 sm:gap-3 bg-card">
+            {/* 1. 封面图占位 (关键：移动端无圆角全宽，桌面端 rounded-xl) */}
+            <Skeleton className="w-full aspect-video rounded-none sm:rounded-xl bg-slate-100 dark:bg-muted" />
 
-            {/* 2. 底部信息区占位 (添加了左右 padding，使头像和文字不紧贴卡片边缘) */}
-            <div className="flex gap-3 mt-1 px-1">
+            {/* 2. 底部信息区占位 (移动端对齐 px-3.5，桌面端 px-1) */}
+            <div className="flex gap-3 mt-1 px-3.5 sm:px-1">
                 {/* 头像占位 */}
                 <Skeleton className="h-9 w-9 rounded-full shrink-0 bg-slate-100" />
 

@@ -11,9 +11,15 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetItem,
+} from "@/components/ui/bottom-sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MoreHorizontal, Loader2, User } from 'lucide-react';
+import { MoreHorizontal, Loader2, User, UserCheck, UserPlus } from 'lucide-react';
 import ActorController from '@/actions/App/Http/Controllers/ActorController';
 import { useRequireAuth } from '@/components/require-auth-provider';
 import { cdnUrl } from '@/lib/utils';
@@ -63,6 +69,7 @@ function ActorAvatar({ src, name }: { src?: string | null; name: string }) {
 // 子组件：菜单组件
 // --------------------------------------------------------
 function ActorMenu({ actor }: { actor: Actor }) {
+    const isMobile = useIsMobile();
     const { props } = usePage<any>();
     const user = props.auth?.user;
     const { get, post, processing } = useHttp();
@@ -133,10 +140,10 @@ function ActorMenu({ actor }: { actor: Actor }) {
     }, [isOpen, actor.id, user, hasFetched, get]);
 
     // 点击关注/取消关注的操作逻辑
-    const handleFollowAction = (e: Event) => {
-        e.preventDefault();
+    const handleFollowAction = (e?: React.SyntheticEvent) => {
+        if (e) e.preventDefault();
 
-        // 率先关闭下拉菜单，保证界面干净
+        // 率先关闭菜单，保证界面干净
         setIsOpen(false);
 
         // 使用 requireAuth 进行登录拦截
@@ -156,13 +163,59 @@ function ActorMenu({ actor }: { actor: Actor }) {
         });
     };
 
+    if (isMobile) {
+        return (
+            <>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsOpen(true)}
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                    <MoreHorizontal className="h-5 w-5" />
+                    <span className="sr-only">更多操作</span>
+                </Button>
+
+                <BottomSheet open={isOpen} onOpenChange={setIsOpen}>
+                    <BottomSheetContent title={actor.name}>
+                        {isCheckingStatus ? (
+                            <div className="flex items-center gap-4 px-4 py-3">
+                                <Skeleton className="h-5 w-5 rounded-full" />
+                                <Skeleton className="h-5 w-24 rounded-md" />
+                            </div>
+                        ) : (
+                            <div className="flex flex-col py-1">
+                                <BottomSheetItem
+                                    disabled={processing}
+                                    icon={
+                                        processing ? (
+                                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                        ) : isFollowing ? (
+                                            <UserCheck className="h-5 w-5 text-primary" />
+                                        ) : (
+                                            <UserPlus className="h-5 w-5" />
+                                        )
+                                    }
+                                    onClick={handleFollowAction}
+                                >
+                                    {isFollowing ? '取消关注' : '关注演员'}
+                                </BottomSheetItem>
+                            </div>
+                        )}
+                    </BottomSheetContent>
+                </BottomSheet>
+            </>
+        );
+    }
+
     return (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                     <MoreHorizontal className="h-5 w-5" />
                     <span className="sr-only">更多操作</span>

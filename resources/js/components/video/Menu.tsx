@@ -6,6 +6,12 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetItem,
+} from "@/components/ui/bottom-sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
     EllipsisVertical,
     Loader2,
     AlarmClockPlus,
@@ -30,6 +36,7 @@ interface ActionResponse {
 }
 
 export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) {
+    const isMobile = useIsMobile();
     const { auth } = usePage().props as any;
     const user = auth?.user;
 
@@ -69,7 +76,7 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
 
     // 3. 重构：切换稍后观看状态
     const handleToggleWatchLater = () => {
-        // 先关闭下拉菜单，保证 UI 简洁
+        // 先关闭菜单，保证 UI 简洁
         setIsOpen(false);
 
         // 使用 requireAuth 统一拦截
@@ -96,7 +103,7 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
 
     // 4. 重构：切换收藏状态
     const handleToggleFavorite = () => {
-        // 先关闭下拉菜单
+        // 先关闭菜单
         setIsOpen(false);
 
         // 使用 requireAuth 统一拦截
@@ -121,11 +128,91 @@ export function VideoMenu({ videoId, slug }: { videoId: number, slug: string }) 
         });
     };
 
+    // 📱 移动端：展示类似 YouTube App 风格的 Bottom Sheet（底部抽屉，带手势下拉与大触控热区）
+    if (isMobile) {
+        return (
+            <>
+                <button
+                    type="button"
+                    className="p-1.5 hover:bg-muted rounded-full transition-colors outline-none cursor-pointer"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(true);
+                    }}
+                >
+                    <EllipsisVertical className="w-5 h-5 text-primary" />
+                </button>
+
+                <BottomSheet open={isOpen} onOpenChange={setIsOpen}>
+                    <BottomSheetContent onClick={(e) => e.stopPropagation()}>
+                        {isGetting ? (
+                            <div className="flex flex-col gap-2 p-2">
+                                <div className="flex items-center gap-4 px-3 py-3">
+                                    <Skeleton className="h-5 w-5 rounded-full" />
+                                    <Skeleton className="h-5 w-36 rounded-md" />
+                                </div>
+                                <div className="flex items-center gap-4 px-3 py-3">
+                                    <Skeleton className="h-5 w-5 rounded-full" />
+                                    <Skeleton className="h-5 w-32 rounded-md" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col py-1">
+                                <BottomSheetItem
+                                    disabled={isWatchLaterProcessing}
+                                    icon={
+                                        isWatchLaterProcessing ? (
+                                            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                                        ) : isWatchLater ? (
+                                            <AlarmClockMinus className="w-5 h-5" />
+                                        ) : (
+                                            <AlarmClockPlus className="w-5 h-5" />
+                                        )
+                                    }
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleToggleWatchLater();
+                                    }}
+                                >
+                                    {isWatchLater ? '从“稍后观看”中移除' : '保存到“稍后观看”'}
+                                </BottomSheetItem>
+
+                                <BottomSheetItem
+                                    disabled={isFavoriteProcessing}
+                                    icon={
+                                        isFavoriteProcessing ? (
+                                            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                                        ) : (
+                                            <Bookmark
+                                                className="w-5 h-5"
+                                                fill={isFavorited ? "currentColor" : "none"}
+                                            />
+                                        )
+                                    }
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleToggleFavorite();
+                                    }}
+                                >
+                                    {isFavorited ? '取消收藏' : '保存到收藏夹'}
+                                </BottomSheetItem>
+                            </div>
+                        )}
+                    </BottomSheetContent>
+                </BottomSheet>
+            </>
+        );
+    }
+
+    // 💻 桌面端：保持紧凑优雅的下拉菜单 (DropdownMenu)
     return (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
                 <button
-                    className="p-1.5 hover:bg-muted rounded-full transition-colors outline-none data-[state=open]:bg-muted"
+                    className="p-1.5 hover:bg-muted rounded-full transition-colors outline-none data-[state=open]:bg-muted cursor-pointer"
                     onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();

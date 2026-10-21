@@ -150,33 +150,33 @@ export function LikeAndDislikeButton({ videoId, slug, initialLiked, initialDisli
                 }
             `}</style>
 
-            <div className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="inline-flex items-center rounded-full bg-secondary text-secondary-foreground shrink-0 shadow-none">
                 {/* 点赞按钮 */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             variant="ghost"
-                            className="h-10 rounded-l-full rounded-r-none px-4 hover:bg-zinc-200 dark:hover:bg-zinc-700 relative overflow-visible"
+                            className="h-9 rounded-l-full rounded-r-none px-3 sm:px-3.5 hover:bg-secondary/80 relative overflow-visible"
                             onClick={handleLike}
                             disabled={processing}
                         >
-                            <div className="relative flex items-center justify-center mr-2 h-5 w-5">
+                            <div className="relative flex items-center justify-center mr-1.5 h-4 w-4">
                                 {isAnimating ? (
                                     <>
-                                        <Music className="h-5 w-5 fill-current bounce-in text-foreground" />
+                                        <Music className="h-4 w-4 fill-current bounce-in text-foreground" />
                                         <Music className="absolute h-3 w-3 text-pink-500 fill-current animate-float-1" />
                                         <Music className="absolute h-2 w-2 text-purple-500 fill-current animate-float-2" />
                                         <Music className="absolute h-3 w-3 text-red-500 fill-current animate-float-3" />
                                     </>
                                 ) : (
                                     <ThumbsUp
-                                        className={`h-5 w-5 transition-transform duration-200 ${liked ? 'scale-110' : 'scale-100'}`}
+                                        className={`h-4 w-4 transition-transform duration-200 ${liked ? 'scale-110' : 'scale-100'}`}
                                         {...(liked ? { fill: "currentColor" } : {})}
                                     />
                                 )}
                             </div>
 
-                            {likeCount > 0 && <span className="text-sm font-semibold">{likeCount}</span>}
+                            {likeCount > 0 && <span className="text-xs sm:text-sm font-medium">{likeCount}</span>}
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
@@ -185,18 +185,18 @@ export function LikeAndDislikeButton({ videoId, slug, initialLiked, initialDisli
                 </Tooltip>
 
                 {/* 分隔线 */}
-                <div className="h-5 w-px bg-zinc-300 dark:bg-zinc-600" />
+                <div className="h-4 w-px bg-border/60" />
 
                 {/* 踩按钮 */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
                             variant="ghost"
-                            className="h-10 rounded-r-full rounded-l-none px-4 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                            className="h-9 rounded-r-full rounded-l-none px-2.5 sm:px-3 hover:bg-secondary/80"
                             onClick={handleDislike}
                             disabled={processing}
                         >
-                            <ThumbsDown className="h-5 w-5" {...(disLiked ? { fill: "currentColor" } : {})} />
+                            <ThumbsDown className="h-4 w-4" {...(disLiked ? { fill: "currentColor" } : {})} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">

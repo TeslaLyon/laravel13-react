@@ -15,6 +15,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    BottomSheet,
+    BottomSheetContent,
+    BottomSheetItem,
+} from "@/components/ui/bottom-sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Channel } from "@/types/channel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHttp, Link } from '@inertiajs/react';
@@ -127,55 +133,106 @@ export default function StudioCard({ studio }: { studio: Channel & any }) {
                     </h3>
 
                     {/* 🌟 5. 下拉菜单 open / onOpenChange 绑定 */}
-                    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
-                        <DropdownMenuTrigger asChild>
+                    {isMobile ? (
+                        <>
                             <Button
+                                type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground hover:bg-foreground/10 data-[state=open]:bg-foreground/10 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-all rounded-full shadow-none"
-                                onClick={(e) => e.stopPropagation()}
+                                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground opacity-100 transition-all rounded-full shadow-none cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenChange(true);
+                                }}
                             >
                                 <MoreVertical className="w-5 h-5" />
                             </Button>
-                        </DropdownMenuTrigger>
 
-                        <DropdownMenuContent
-                            align="end"
-                            className="w-64 rounded-xl shadow-lg p-2"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {isGetting ? (
-                                <div className="px-1 py-0.5">
-                                    <Skeleton className="h-9 w-full rounded-lg bg-muted/60" />
-                                </div>
-                            ) : (
-                                <DropdownMenuItem
-                                    className="gap-3 py-2.5 cursor-pointer rounded-lg text-foreground hover:bg-muted"
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        handleToggleFollow();
-                                    }}
-                                >
-                                    {isPosting ? (
-                                        <>
-                                            <Loader2 className="w-[18px] h-[18px] animate-spin text-muted-foreground" />
-                                            <span className="text-[15px]">处理中...</span>
-                                        </>
-                                    ) : isFollowing ? (
-                                        <>
-                                            <UserMinus className="w-[18px] h-[18px] text-muted-foreground" />
-                                            <span className="text-[15px]">取消关注</span>
-                                        </>
+                            <BottomSheet open={isOpen} onOpenChange={handleOpenChange}>
+                                <BottomSheetContent title={studio.name} onClick={(e) => e.stopPropagation()}>
+                                    {isGetting ? (
+                                        <div className="flex items-center gap-4 px-4 py-3">
+                                            <Skeleton className="h-5 w-5 rounded-full" />
+                                            <Skeleton className="h-5 w-24 rounded-md" />
+                                        </div>
                                     ) : (
-                                        <>
-                                            <UserPlus className="w-[18px] h-[18px]" />
-                                            <span className="text-[15px]">关注</span>
-                                        </>
+                                        <div className="flex flex-col py-1">
+                                            <BottomSheetItem
+                                                disabled={isPosting}
+                                                icon={
+                                                    isPosting ? (
+                                                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                                                    ) : isFollowing ? (
+                                                        <UserMinus className="w-5 h-5 text-muted-foreground" />
+                                                    ) : (
+                                                        <UserPlus className="w-5 h-5 text-primary" />
+                                                    )
+                                                }
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setIsOpen(false);
+                                                    handleToggleFollow();
+                                                }}
+                                            >
+                                                {isPosting ? '处理中...' : isFollowing ? '取消关注' : '关注频道'}
+                                            </BottomSheetItem>
+                                        </div>
                                     )}
-                                </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                </BottomSheetContent>
+                            </BottomSheet>
+                        </>
+                    ) : (
+                        <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground hover:bg-foreground/10 data-[state=open]:bg-foreground/10 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-all rounded-full shadow-none cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <MoreVertical className="w-5 h-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+
+                            <DropdownMenuContent
+                                align="end"
+                                className="w-64 rounded-xl shadow-lg p-2"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                {isGetting ? (
+                                    <div className="px-1 py-0.5">
+                                        <Skeleton className="h-9 w-full rounded-lg bg-muted/60" />
+                                    </div>
+                                ) : (
+                                    <DropdownMenuItem
+                                        className="gap-3 py-2.5 cursor-pointer rounded-lg text-foreground hover:bg-muted"
+                                        onSelect={(e) => {
+                                            e.preventDefault();
+                                            handleToggleFollow();
+                                        }}
+                                    >
+                                        {isPosting ? (
+                                            <>
+                                                <Loader2 className="w-[18px] h-[18px] animate-spin text-muted-foreground" />
+                                                <span className="text-[15px]">处理中...</span>
+                                            </>
+                                        ) : isFollowing ? (
+                                            <>
+                                                <UserMinus className="w-[18px] h-[18px] text-muted-foreground" />
+                                                <span className="text-[15px]">取消关注</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <UserPlus className="w-[18px] h-[18px]" />
+                                                <span className="text-[15px]">关注</span>
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">

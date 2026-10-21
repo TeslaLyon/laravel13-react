@@ -31,19 +31,36 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
   className,
+  children,
   align = "start",
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
+      {/* 📱 移动端全屏半透明遮罩 */}
+      <div
+        data-slot="dropdown-menu-mobile-overlay"
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs sm:hidden pointer-events-none"
+      />
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+        className={cn(
+          "z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // 📱 移动端自动转换为 YouTube 风格的底部抽屉 (Bottom Sheet)
+          "max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!left-0 max-sm:!transform-none max-sm:!w-full max-sm:!max-w-none max-sm:!max-h-[85vh] max-sm:!rounded-t-[20px] max-sm:!rounded-b-none max-sm:!border-t max-sm:!border-border/60 max-sm:!border-x-0 max-sm:!border-b-0 max-sm:!ring-0 max-sm:!shadow-2xl max-sm:!p-2 max-sm:!pb-[max(1.25rem,env(safe-area-inset-bottom))] max-sm:data-open:!slide-in-from-bottom max-sm:data-closed:!slide-out-to-bottom max-sm:data-open:!zoom-in-100 max-sm:data-closed:!zoom-out-100 max-sm:!duration-300",
+          className
+        )}
         {...props}
-      />
+      >
+        {/* 📱 移动端顶部手势拖拽把手条 (YouTube Handle Pill) */}
+        <div className="hidden max-sm:flex justify-center pt-1.5 pb-2 shrink-0">
+          <div className="h-1.25 w-10 rounded-full bg-muted-foreground/35" />
+        </div>
+        {children}
+      </DropdownMenuPrimitive.Content>
     </DropdownMenuPrimitive.Portal>
   )
 }
@@ -72,6 +89,8 @@ function DropdownMenuItem({
       data-variant={variant}
       className={cn(
         "group/dropdown-menu-item relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
+        // 📱 移动端触控条目尺寸优化
+        "max-sm:min-h-[48px] max-sm:gap-3.5 max-sm:px-3.5 max-sm:py-3 max-sm:text-[15px] max-sm:rounded-xl [&_svg]:max-sm:size-5",
         className
       )}
       {...props}

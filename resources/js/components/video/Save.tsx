@@ -76,7 +76,7 @@ export function Save({ videoId, slug, initialIsCollect, initialFavoritesCount = 
                     <Button
                         onClick={handleCollectToggle}
                         variant="secondary"
-                        className="rounded-full px-4 h-9 shadow-none hover:bg-muted-foreground/10 gap-2"
+                        className="rounded-full px-3 sm:px-3.5 h-9 shadow-none bg-secondary text-secondary-foreground hover:bg-secondary/80 gap-1.5 shrink-0 cursor-pointer"
                         disabled={processing}
                     >
                         {processing ? (
@@ -86,9 +86,9 @@ export function Save({ videoId, slug, initialIsCollect, initialFavoritesCount = 
                                 className={`w-4 h-4 ${isCollect ? 'fill-current' : ''}`}
                             />
                         )}
-                        <span className="text-sm font-medium">{label}</span>
+                        <span className="text-xs sm:text-sm font-medium">{label}</span>
                         {favoritesCount > 0 && (
-                            <span className="text-sm font-semibold">{favoritesCount}</span>
+                            <span className="text-xs sm:text-sm font-medium">{favoritesCount}</span>
                         )}
                     </Button>
                 </TooltipTrigger>

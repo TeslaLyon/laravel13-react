@@ -272,10 +272,10 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         <>
             <Button
                 variant="secondary"
-                className={`rounded-full px-4 h-9 shadow-none gap-2 shrink-0 font-medium text-sm transition-colors cursor-pointer ${
+                className={`rounded-full px-3 sm:px-3.5 h-9 shadow-none gap-1.5 shrink-0 font-medium text-xs sm:text-sm transition-colors cursor-pointer ${
                     downloads.length > 0
                         ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-500/20"
-                        : "hover:bg-muted-foreground/10"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 }`}
                 onClick={handleOpenDialog}
             >

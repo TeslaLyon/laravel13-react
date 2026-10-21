@@ -25,17 +25,17 @@ export function VideoCard({ video }: { video: Video }) {
 
     return (
         <div className="group relative flex flex-col gap-1 cursor-pointer z-0">
-            {/* 核心悬停背景框 */}
-            <div className={`absolute -inset-3 rounded-2xl border border-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100 -z-10 ${hoverBgStyle}`}></div>
+            {/* 核心悬停背景框 (移动端禁用，避免出现横向滚动条) */}
+            <div className={`hidden sm:block absolute -inset-3 rounded-2xl border border-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100 -z-10 ${hoverBgStyle}`}></div>
 
-            {/* 视频封面区域 */}
-            <div className="relative w-full aspect-video overflow-hidden rounded-xl bg-background">
+            {/* 视频封面区域：移动端如同 YouTube App 顶格全宽 rounded-none，平板及以上保留 rounded-xl */}
+            <div className="relative w-full aspect-video overflow-hidden rounded-none sm:rounded-xl bg-background">
                 <ResponsiveVideoImage
                     listImg={video.list_img}
                     preview={video.preview}
                     alt={video.name}
                     dataCrawlType={video.channel?.data_crawl_type}
-                    className="w-full h-full object-cover rounded-xl transition-all duration-200"
+                    className="w-full h-full object-cover rounded-none sm:rounded-xl transition-all duration-200"
                 />
 
                 {/* 封面左上角状态徽章 */}
@@ -65,8 +65,8 @@ export function VideoCard({ video }: { video: Video }) {
                 )}
             </div>
 
-            {/* 底部信息区域 */}
-            <div className="flex gap-3 px-1 mt-2">
+            {/* 底部信息区域：移动端左右提供舒适内边距，大屏贴齐 */}
+            <div className="flex gap-3 px-3.5 sm:px-1 mt-2.5 sm:mt-2">
                 <Avatar className="h-9 w-9 shrink-0 mt-0.5">
                     <AvatarImage src={video.channel?.avatar} alt={video.channel?.name} />
                     <AvatarFallback>{video.channel?.name?.substring(0, 2) || '视频'}</AvatarFallback>
