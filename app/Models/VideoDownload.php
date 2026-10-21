@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 use Laravel\Scout\Searchable;
 
@@ -73,6 +74,14 @@ class VideoDownload extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * 关联的纠错反馈记录
+     */
+    public function feedbacks(): HasMany
+    {
+        return $this->hasMany(VideoDownloadFeedback::class, 'video_download_id');
     }
 
     /**

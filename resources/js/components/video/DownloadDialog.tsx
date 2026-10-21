@@ -12,23 +12,30 @@ import {
     FileUp,
     Plus,
     ArrowLeft,
-    HardDrive
+    HardDrive,
+    AlertCircle,
+    MessageSquareWarning,
+    Loader2
 } from "lucide-react";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
+    DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 // 1. 引入 Inertia 与 toast
 import { useHttp } from "@inertiajs/react";
 import { toast } from "sonner";
 import { Video } from "@/types/video";
 import VideoDownloadSubmissionController from '@/actions/App/Http/Controllers/VideoDownloadSubmissionController';
+import VideoDownloadFeedbackController from '@/actions/App/Http/Controllers/VideoDownloadFeedbackController';
 
 // 2. 引入全局登录拦截 Hook
 import { useRequireAuth } from '@/components/require-auth-provider';
@@ -49,6 +56,15 @@ interface DownloadDialogProps {
     video?: Video;
 }
 
+const FEEDBACK_TYPES = [
+    { value: 1, label: '死链/无速度', desc: '链接失效、无做种、长时间 0KB 速度' },
+    { value: 2, label: '内容不符/货不对板', desc: '下载后影片内容与番号/标题不符' },
+    { value: 3, label: '密码/提取码错误', desc: '网盘提取码失效或解压密码错误' },
+    { value: 4, label: '清晰度不符', desc: '标称 4K/1080P，实际为模糊画质' },
+    { value: 5, label: '广告捆绑/恶意文件', desc: '含病毒木马、非视频或大量引流广告' },
+    { value: 6, label: '其他问题', desc: '其他未列出的资源异常' },
+];
+
 export function DownloadDialog({ video }: DownloadDialogProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeView, setActiveView] = useState<'list' | 'submit'>('list');
@@ -59,6 +75,10 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
     const [archivePassword, setArchivePassword] = useState(''); // 解压密码
     const [remark, setRemark] = useState('');                   // 备注说明
     const [torrentFile, setTorrentFile] = useState<File | null>(null);
+
+    // 纠错反馈弹窗状态
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const [selectedFeedbackDownload, setSelectedFeedbackDownload] = useState<DownloadItem | null>(null);
 
     // 3. 获取全局登录拦截方法
     const { requireAuth } = useRequireAuth();
@@ -72,6 +92,12 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         extraction_code: null as string | null,
         archive_password: null as string | null,
         remark: null as string | null,
+    });
+
+    // 5. 纠错反馈表单 Hook
+    const feedbackForm = useHttp({
+        type: 1 as number,
+        content: '' as string,
     });
 
     // 字节大小转换显示 (KB / MB / GB)
@@ -268,6 +294,52 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
         });
     };
 
+    // 打开纠错反馈弹窗
+    const handleOpenFeedback = (item: DownloadItem) => {
+        requireAuth(() => {
+            setSelectedFeedbackDownload(item);
+            feedbackForm.setData({
+                type: 1,
+                content: '',
+            });
+            feedbackForm.clearErrors();
+            setFeedbackOpen(true);
+        });
+    };
+
+    // 提交纠错反馈
+    const handleFeedbackSubmit = () => {
+        if (!video?.id || !selectedFeedbackDownload?.id) {
+            toast.error("资源信息缺失，无法提交反馈");
+            return;
+        }
+
+        feedbackForm.post(
+            VideoDownloadFeedbackController.store.url({
+                video: video.id,
+                slug: video.slug,
+                download: selectedFeedbackDownload.id,
+            }),
+            {
+                preserveScroll: true,
+                onSuccess: (response: any) => {
+                    const serverMessage = response?.data?.message || response?.message || "纠错反馈提交成功！感谢您的指正与贡献，我们会尽快核查处理。";
+                    toast.success(serverMessage, {
+                        duration: 5000,
+                    });
+                    setFeedbackOpen(false);
+                    feedbackForm.reset();
+                },
+                onError: (errors: any) => {
+                    const firstError = Object.values(errors)[0] as string;
+                    toast.error("提交失败", {
+                        description: firstError || "服务器繁忙，请稍后再试。",
+                    });
+                },
+            }
+        );
+    };
+
     return (
         <>
             <Button
@@ -284,7 +356,11 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
             </Button>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="w-[95vw] sm:max-w-3xl lg:max-w-4xl rounded-2xl p-5 sm:p-6 max-h-[90vh] flex flex-col">
+                <DialogContent
+                    className="w-[95vw] sm:max-w-3xl lg:max-w-4xl rounded-2xl p-5 sm:p-6 max-h-[90vh] flex flex-col"
+                    onInteractOutside={(e) => { if (feedbackOpen) e.preventDefault(); }}
+                    onEscapeKeyDown={(e) => { if (feedbackOpen) e.preventDefault(); }}
+                >
                     <DialogHeader className="flex flex-row items-center justify-between border-b pb-4 min-w-0 w-full shrink-0">
                         <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2 truncate">
                             {activeView === 'submit' && downloads.length > 0 && (
@@ -378,14 +454,14 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto mt-1 sm:mt-0">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
                                             {item.type === 'magnet' ? (
                                                 <>
                                                     <Button
                                                         asChild
                                                         variant="default"
                                                         size="sm"
-                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3.5 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
+                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                     >
                                                         <a href={item.link}>
                                                             <Zap className="w-3.5 h-3.5 mr-1" />
@@ -396,7 +472,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3.5 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
+                                                        className="flex-1 sm:flex-none h-8 sm:h-9 px-3 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                         onClick={() => handleCopy(item.link)}
                                                     >
                                                         <Copy className="w-3.5 h-3.5 mr-1" />
@@ -408,7 +484,7 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                     asChild
                                                     variant="default"
                                                     size="sm"
-                                                    className="w-full sm:w-auto h-8 sm:h-9 px-4 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
+                                                    className="flex-1 sm:flex-none h-8 sm:h-9 px-4 font-medium text-xs sm:text-sm shadow-none cursor-pointer"
                                                 >
                                                     <a href={item.link} target="_blank" rel="noopener noreferrer">
                                                         <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
@@ -416,6 +492,17 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                                                     </a>
                                                 </Button>
                                             )}
+
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 sm:h-9 px-2 sm:px-2.5 font-normal text-xs text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 dark:hover:text-amber-400 dark:hover:bg-amber-500/20 shrink-0 cursor-pointer"
+                                                onClick={() => handleOpenFeedback(item)}
+                                                title="资源纠错反馈"
+                                            >
+                                                <AlertCircle className="w-3.5 h-3.5 sm:mr-1" />
+                                                <span>报错</span>
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -573,6 +660,135 @@ export function DownloadDialog({ video }: DownloadDialogProps) {
                             </div>
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* 纠错反馈弹窗 */}
+            <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+                <DialogContent
+                    className="sm:max-w-md w-[95vw] rounded-2xl p-5 sm:p-6"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <DialogHeader className="space-y-1.5 pb-3 border-b">
+                        <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                            <span>下载资源纠错反馈</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-muted-foreground">
+                            如发现链接失效、画质不符或资源错误，欢迎向我们反馈，我们会尽快核验修复。
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedFeedbackDownload && (
+                        <div className="mt-3 p-3 rounded-xl bg-muted/50 border border-border/60 text-xs space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {getResolutionBadge(selectedFeedbackDownload.resolution)}
+                                <span className="font-mono text-muted-foreground">
+                                    {selectedFeedbackDownload.type === 'magnet' ? 'BT 磁力' : selectedFeedbackDownload.type === 'store' ? '官方商城' : '下载链接'}
+                                </span>
+                                {formatFileSize(selectedFeedbackDownload.fileSize) && (
+                                    <span className="font-mono text-muted-foreground">
+                                        • {formatFileSize(selectedFeedbackDownload.fileSize)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="font-mono font-medium text-foreground text-xs line-clamp-2 break-all">
+                                {selectedFeedbackDownload.title}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-3 mt-3">
+                        <div>
+                            <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                                问题类型 <span className="text-destructive">*</span>
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {FEEDBACK_TYPES.map((typeOption) => {
+                                    const isSelected = feedbackForm.data.type === typeOption.value;
+                                    return (
+                                        <button
+                                            key={typeOption.value}
+                                            type="button"
+                                            onClick={() => {
+                                                feedbackForm.setData('type', typeOption.value);
+                                                feedbackForm.clearErrors('type');
+                                            }}
+                                            className={`text-left p-2.5 rounded-xl border transition-all text-xs cursor-pointer flex flex-col gap-0.5 ${
+                                                isSelected
+                                                    ? 'border-amber-500 bg-amber-500/10 text-amber-900 dark:text-amber-200 ring-1 ring-amber-500/50'
+                                                    : 'border-border/70 hover:bg-muted/50 text-foreground/80'
+                                            }`}
+                                        >
+                                            <span className="font-medium text-xs flex items-center justify-between">
+                                                <span>{typeOption.label}</span>
+                                                {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground line-clamp-1">
+                                                {typeOption.desc}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {feedbackForm.errors.type && (
+                                <p className="text-xs text-destructive mt-1">{feedbackForm.errors.type}</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs font-semibold text-foreground">
+                                    补充描述 <span className="text-muted-foreground font-normal">(选填)</span>
+                                </label>
+                                <span className="text-[11px] text-muted-foreground">
+                                    {feedbackForm.data.content.length} / 1000
+                                </span>
+                            </div>
+                            <Textarea
+                                placeholder="如：哪一分钟花屏、迅雷提示什么错误、有效解压密码线索等..."
+                                value={feedbackForm.data.content}
+                                maxLength={1000}
+                                onChange={(e) => {
+                                    feedbackForm.setData('content', e.target.value);
+                                    feedbackForm.clearErrors('content');
+                                }}
+                                className="min-h-[80px] max-h-[160px] text-xs resize-none rounded-xl"
+                            />
+                            {feedbackForm.errors.content && (
+                                <p className="text-xs text-destructive mt-1">{feedbackForm.errors.content}</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex sm:justify-end gap-2 mt-4 pt-3 border-t">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setFeedbackOpen(false)}
+                            disabled={feedbackForm.processing}
+                            className="cursor-pointer"
+                        >
+                            取消
+                        </Button>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={handleFeedbackSubmit}
+                            disabled={feedbackForm.processing}
+                            className="bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+                        >
+                            {feedbackForm.processing ? (
+                                <>
+                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                    提交中...
+                                </>
+                            ) : (
+                                '提交纠错反馈'
+                            )}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </>

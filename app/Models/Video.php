@@ -266,6 +266,14 @@ class Video extends Model implements ReactableInterface
     }
 
     /**
+     * 获取该视频下所有磁力/下载资源的纠错反馈记录
+     */
+    public function downloadFeedbacks(): HasMany
+    {
+        return $this->hasMany(VideoDownloadFeedback::class);
+    }
+
+    /**
      * 🌟 本地作用域：按视频真实发布时间倒序排序（若无发布时间则回退到创建时间）
      */
     public function scopeLatestPublished(Builder $query): Builder

@@ -17,6 +17,7 @@ use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\ActorCorrectionController;
 use App\Http\Controllers\VideoSubtitleFeedbackController;
 use App\Http\Controllers\VideoDownloadSubmissionController;
+use App\Http\Controllers\VideoDownloadFeedbackController;
 use App\Http\Controllers\Forum\ForumController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\UserSpaceController;
@@ -169,6 +170,9 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::post('/videos/{video}/{slug}/download-submission', [VideoDownloadSubmissionController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('video.download-submission.store');
+    Route::post('/videos/{video}/{slug}/downloads/{download}/feedback', [VideoDownloadFeedbackController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('videos.downloads.feedback.store');
 
 
     Route::post('/channels/{channel}/{slug}/subscribe', [ChannelController::class, 'toggleSubscribe'])
