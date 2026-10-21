@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 // 引入 Shadcn UI 原生 Progress 组件
 import { Progress } from "@/components/ui/progress";
 import { cdnUrl } from '@/lib/utils';
+import { previewPreloader } from '@/lib/previewPreloader';
 
 export interface ImageItem {
     src?: string | null;
@@ -225,15 +226,50 @@ export function ResponsiveVideoImage({
         return () => clearInterval(timer);
     }, [isHovered, previewData, isPreviewLoading]);
 
+    // 🎯 视口感知智能预加载：进入视口且设备适合时，登记到低优先级空闲预加载队列中
+    useEffect(() => {
+        if (!containerRef.current || !previewData?.url) return;
+        if (!previewPreloader.checkEligibility()) return;
+
+        const el = containerRef.current;
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    previewPreloader.enqueue(previewData.url, previewData.type);
+                } else {
+                    previewPreloader.dequeue(previewData.url);
+                }
+            });
+        }, {
+            rootMargin: '150px 0px', // 预留 150px 视口缓冲区
+            threshold: 0.05
+        });
+
+        observer.observe(el);
+
+        return () => {
+            observer.disconnect();
+            previewPreloader.dequeue(previewData.url);
+        };
+    }, [previewData]);
+
     // 3. 鼠标移入
     const handleMouseEnter = () => {
         setIsHovered(true);
 
         if (previewData) {
             if (previewData.type === 1) {
-                setVideoLoadProgress(2); // 起步 2%，给用户即时响应感
-                setIsPreviewLoading(true);
-                setIsPreviewReady(false);
+                // 🚀 核心秒开优化：若后台已预热完成，直接跳过漫长等待，立即呈现就绪状态！
+                const isReady = previewPreloader.isPreloaded(previewData.url);
+                if (isReady) {
+                    setVideoLoadProgress(100);
+                    setIsPreviewLoading(false);
+                    setIsPreviewReady(true);
+                } else {
+                    setVideoLoadProgress(2); // 起步 2%，给用户即时响应感
+                    setIsPreviewLoading(true);
+                    setIsPreviewReady(false);
+                }
             } else if (previewData.type === 3) {
                 setIsPreviewReady(true);
                 if (previewData.imageUrls.length > 0) {
@@ -302,15 +338,20 @@ export function ResponsiveVideoImage({
         }
     }, [loadedImageUrls, activeImageIndex, previewData, isHovered]);
 
-    // 🎯 6. 视频缓冲足够播放：冲满 100% 并顺滑隐藏
+    // 🎯 6. 视频缓冲足够播放：冲满 100% 并顺滑呈现
     const handleVideoCanPlay = () => {
         setVideoLoadProgress(100);
 
-        // 留出 250ms 让用户直观感知到进度条全满，然后隐去
-        setTimeout(() => {
+        if (previewData?.url && previewPreloader.isPreloaded(previewData.url)) {
             setIsPreviewLoading(false);
             setIsPreviewReady(true);
-        }, 250);
+        } else {
+            // 留出 250ms 让用户直观感知到进度条全满，然后隐去
+            setTimeout(() => {
+                setIsPreviewLoading(false);
+                setIsPreviewReady(true);
+            }, 250);
+        }
 
         if (videoRef.current && isHovered) {
             videoRef.current.play().catch(() => { });
