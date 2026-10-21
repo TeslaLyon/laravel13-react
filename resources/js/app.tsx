@@ -7,6 +7,22 @@ import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 // import { AuthPromptProvider } from './Contexts/AuthPromptContext';
 
+// 🌟 版本自愈保护：当生产环境发布新版本后，若客户端仍持有旧 Chunk 导致 404，自动静默刷新获取最新资源
+if (typeof window !== 'undefined') {
+    window.addEventListener('vite:preloadError', (event) => {
+        event.preventDefault();
+        const reloadKey = 'vite_chunk_reload_lock';
+        if (!sessionStorage.getItem(reloadKey)) {
+            sessionStorage.setItem(reloadKey, '1');
+            window.location.reload();
+        }
+    });
+
+    window.addEventListener('load', () => {
+        sessionStorage.removeItem('vite_chunk_reload_lock');
+    });
+}
+
 const appName = (typeof window !== 'undefined' && window.APP_NAME) || import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
