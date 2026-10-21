@@ -22,11 +22,12 @@ php artisan storage:link --force || true
 php artisan optimize
 php artisan view:cache
 
-# 5. 🔑 核心权限校准：
-# 将刚刚由 root 权限编译生成的缓存文件与持久化挂载目录，强行重置所有权与读写权限给 www-data
-chown -R www-data:www-data /app/storage /app/bootstrap/cache /app/public/storage 2>/dev/null || true
-chmod -R 775 /app/storage /app/bootstrap/cache
-chmod -R 777 /app/storage/logs /app/storage/app/public
+# 5. 🔑 核心权限校准 (高精度轻量版)：
+# 仅针对框架运行时缓存与日志目录提权，严禁对挂载了数万图片文件的 /app/storage/app/public 进行全量递归扫描！
+chown -R www-data:www-data /app/storage/framework /app/storage/logs /app/bootstrap/cache 2>/dev/null || true
+chmod -R 775 /app/storage/framework /app/bootstrap/cache
+chmod -R 777 /app/storage/logs
+chmod 777 /app/storage/app/public /app/storage/app/public/avatars 2>/dev/null || true
 
 echo "✅ [Initialization] Bootstrapping completed successfully."
 echo "⚡ [Runtime] Launching FrankenPHP via Octane..."

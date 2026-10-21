@@ -114,36 +114,81 @@ jobs:
             echo "🔐 登录 Docker 镜像库..."
             echo "$TEMP_GH_TOKEN" | docker login ghcr.io -u teslalyon --password-stdin
 
+            # 🔍 检测当前活跃的蓝绿槽位
+            if docker ps --format '{{.Names}}' | grep -q "^smzdk_app_blue$"; then
+              ACTIVE_SLOT="blue"
+              TARGET_SLOT="green"
+            elif docker ps --format '{{.Names}}' | grep -q "^smzdk_app_green$"; then
+              ACTIVE_SLOT="green"
+              TARGET_SLOT="blue"
+            else
+              # 首次切换蓝绿部署（或旧版单容器模式）
+              ACTIVE_SLOT="none"
+              TARGET_SLOT="blue"
+            fi
+
+            echo "🔵 当前活跃槽位: ${ACTIVE_SLOT}"
+            echo "🟢 本次部署槽位: ${TARGET_SLOT} (smzdk_app_${TARGET_SLOT})"
+
             echo "📥 正在预拉取最新的应用与队列镜像 (前台服务持续正常响应)..."
-            docker compose -f compose.prod.yaml pull app horizon scheduler
+            docker compose -f compose.prod.yaml pull app_${TARGET_SLOT} horizon scheduler
 
             # 🌟 核心优化 1：数据库迁移前置！在旧版本容器还在运行对外服务时，静默升级数据库表结构（前台访问零中断）
-            echo "🗄️ 在当前运行环境中平滑执行数据库迁移 (Migration)..."
-            docker compose -f compose.prod.yaml exec -T app php artisan migrate --force || docker compose -f compose.prod.yaml run --rm --no-deps app php artisan migrate --force || true
+            echo "🗄️ 平滑执行数据库迁移 (Migration)..."
+            if [ "$ACTIVE_SLOT" != "none" ]; then
+              docker compose -f compose.prod.yaml exec -T app_${ACTIVE_SLOT} php artisan migrate --force || docker compose -f compose.prod.yaml run --rm --no-deps app_${TARGET_SLOT} php artisan migrate --force || true
+            else
+              docker compose -f compose.prod.yaml run --rm --no-deps app_${TARGET_SLOT} php artisan migrate --force || true
+            fi
 
             # 🌟 核心优化 2：优雅通知旧 Horizon 队列收拢正在处理的任务
             echo "🔄 优雅通知旧队列进程平滑准备..."
             docker compose -f compose.prod.yaml exec -T horizon php artisan horizon:terminate || true
 
-            # 🌟 核心优化 3：极速切换容器（镜像已预拉取完毕，新容器启动时由 entrypoint 内部自动完成高质缓存编译）
-            echo "📦 正在无损拉起全新应用容器..."
-            docker compose -f compose.prod.yaml up -d --no-deps app horizon scheduler
+            # 🌟 核心优化 3：启动全新目标槽位容器（旧容器完全不受影响，仍在持续对外处理流量）
+            echo "📦 正在拉起新槽位容器: smzdk_app_${TARGET_SLOT}..."
+            docker compose -f compose.prod.yaml up -d --no-deps app_${TARGET_SLOT} horizon scheduler
 
             # 🌟 核心优化 4：健康检查探针实时轮询，精确确认新 Octane 服务已开始接受流量
-            echo "🩺 等待新服务健康就绪探针响应..."
-            for i in $(seq 1 20); do
-              if docker compose -f compose.prod.yaml exec -T app curl -fs http://127.0.0.1:8000/up > /dev/null 2>&1; then
-                echo "🎉 新应用容器已健康就绪 (响应 HTTP 200)，耗时约 ${i} 秒！"
+            echo "🩺 等待新槽位服务就绪探针响应 (/up)..."
+            READY=false
+            for i in $(seq 1 30); do
+              if docker compose -f compose.prod.yaml exec -T app_${TARGET_SLOT} curl -fs http://127.0.0.1:8000/up > /dev/null 2>&1; then
+                echo "🎉 新槽位 smzdk_app_${TARGET_SLOT} 已健康就绪 (响应 HTTP 200)，耗时约 ${i} 秒！"
+                READY=true
                 break
               fi
               sleep 1
             done
 
-            # 🌟 核心优化 5：将耗时的 Meilisearch 搜索引擎索引同步移至后台异步执行，绝不阻塞主部署流程
+            if [ "$READY" != "true" ]; then
+              echo "❌ 新槽位健康检查超时，部署终止，保持旧容器服务保证业务不中断！"
+              docker compose -f compose.prod.yaml stop app_${TARGET_SLOT} || true
+              exit 1
+            fi
+
+            # 稍作等待 2 秒确保 Caddy 的健康探针同步标记新容器为 HEALTHY
+            sleep 2
+
+            # 🌟 核心优化 5：安全下线并停止旧槽位容器（此时 Caddy 已平滑切流至 TARGET_SLOT）
+            if [ "$ACTIVE_SLOT" != "none" ]; then
+              echo "🛑 安全下线旧槽位容器: smzdk_app_${ACTIVE_SLOT}..."
+              docker compose -f compose.prod.yaml stop app_${ACTIVE_SLOT} || true
+              docker compose -f compose.prod.yaml rm -f app_${ACTIVE_SLOT} || true
+            fi
+
+            # 清理可能残余的旧单容器 laravel_app
+            if docker ps -a --format '{{.Names}}' | grep -q "^laravel_app$"; then
+              echo "🧹 清理旧版历史单容器 laravel_app..."
+              docker stop laravel_app 2>/dev/null || true
+              docker rm laravel_app 2>/dev/null || true
+            fi
+
+            # 🌟 核心优化 6：将耗时的 Meilisearch 搜索引擎索引同步移至后台异步执行，绝不阻塞主部署流程
             echo "🔍 后台异步同步搜索引擎规则..."
-            docker compose -f compose.prod.yaml exec -d app php artisan scout:sync-index-settings || true
+            docker compose -f compose.prod.yaml exec -d app_${TARGET_SLOT} php artisan scout:sync-index-settings || true
 
             docker logout ghcr.io
             docker image prune -f
 
-            echo "✅ 真正的平滑零停机自动化部署完成！"
+            echo "✅ 真正的 Caddy 蓝绿零停机无缝切换部署完成！"

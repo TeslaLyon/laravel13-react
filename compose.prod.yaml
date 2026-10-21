@@ -8,44 +8,53 @@ x-logging: &default-logging
     max-size: "20m"   # 每个日志文件最大 20MB
     max-file: "3"     # 最多保留 3 个滚动文件
 
+# 蓝绿部署应用基础配置模板
+x-app-base: &app-base
+  image: ghcr.io/teslalyon/laravel13-react:latest
+  restart: always
+  logging: *default-logging
+  stop_grace_period: 10s
+  environment:
+    - APP_ENV=production
+    - DB_CONNECTION=pgsql
+    - DB_HOST=laravel_pgsql
+    - REDIS_HOST=laravel_valkey
+    - MEILISEARCH_HOST=http://meilisearch:7700
+    - MEILISEARCH_KEY=${MEILISEARCH_KEY:-your_production_master_key}
+    - SCOUT_DRIVER=meilisearch
+    - SCOUT_QUEUE=true
+    - BROADCAST_CONNECTION=pusher
+    - PUSHER_HOST=soketi
+    - CACHE_STORE=redis
+    - SESSION_DRIVER=redis
+    - QUEUE_CONNECTION=redis
+    - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+  volumes:
+    - ./.env:/app/.env
+    - ./storage/logs:/app/storage/logs
+    - ./storage/app/public:/app/storage/app/public
+  dns:
+    - 8.8.8.8
+    - 114.114.114.114
+  networks:
+    - gateway_net
+    - backend_net
+  depends_on:
+    pgsql:
+      condition: service_healthy
+    valkey:
+      condition: service_started
+
 services:
-  app:
-    image: ghcr.io/teslalyon/laravel13-react:latest
-    container_name: laravel_app
-    restart: always
-    logging: *default-logging # 引入全局日志限制
-    # 💡 优化：FrankenPHP 处理停止信号极快，10秒足够平滑收拢在途请求，大幅缩短容器交接时间
-    stop_grace_period: 10s
-    environment:
-      - APP_ENV=production
-      - DB_CONNECTION=pgsql
-      - DB_HOST=laravel_pgsql
-      - REDIS_HOST=laravel_valkey
-      - MEILISEARCH_HOST=http://meilisearch:7700
-      - MEILISEARCH_KEY=${MEILISEARCH_KEY:-your_production_master_key}
-      - SCOUT_DRIVER=meilisearch
-      - SCOUT_QUEUE=true
-      - BROADCAST_CONNECTION=pusher
-      - PUSHER_HOST=soketi
-      - CACHE_STORE=redis
-      - SESSION_DRIVER=redis
-      - QUEUE_CONNECTION=redis
-      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
-    volumes:
-      - ./.env:/app/.env
-      - ./storage/logs:/app/storage/logs
-      - ./storage/app/public:/app/storage/app/public
-    dns:
-      - 8.8.8.8
-      - 114.114.114.114
-    networks:
-      - gateway_net
-      - backend_net
-    depends_on:
-      pgsql:
-        condition: service_healthy
-      valkey:
-        condition: service_started
+  # 🔵 蓝槽应用服务
+  app_blue:
+    <<: *app-base
+    container_name: smzdk_app_blue
+
+  # 🟢 绿槽应用服务
+  app_green:
+    <<: *app-base
+    container_name: smzdk_app_green
 
   horizon:
     image: ghcr.io/teslalyon/laravel13-react:latest
