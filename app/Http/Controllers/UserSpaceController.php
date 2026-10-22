@@ -116,8 +116,14 @@ class UserSpaceController extends Controller
             $groupDisplayName = '注册会员';
         }
 
+        $permissions = $this->tabService->resolvePermissions($currentUser, $user);
+        $canViewProfile = (bool) ($permissions['canViewProfile'] ?? true);
+        $profileVisibility = $user->getPrivacySetting('profile_visibility', 'public');
+
         return Inertia::render('UserSpace/Show', [
             'activeTab' => $currentTab,
+            'isProfilePrivate' => !$canViewProfile,
+            'profileVisibility' => $profileVisibility,
 
             'profile' => [
                 'id' => $user->id,
@@ -125,7 +131,7 @@ class UserSpaceController extends Controller
                 'nickname' => $user->nickname ?? $user->name,
                 'avatar' => $user->avatar ?? '/images/default-avatar.png',
                 'bannerUrl' => $user->banner_url ?? $user->banner,
-                'bio' => $user->bio,
+                'bio' => $canViewProfile ? $user->bio : null,
                 'followersCount' => $followersCount,
                 // 🌟 优先读取字段缓存的 post_count，不存在时再回退到关系统计
                 'worksCount' => $user->post_count ?? (method_exists($user, 'posts') ? $user->posts()->count() : 0),
@@ -133,7 +139,6 @@ class UserSpaceController extends Controller
                 'isSelf' => $currentUser ? $currentUser->id === $user->id : false,
                 'group' => [
                     'id' => $primaryGroup?->id ?? 1,
-                    'name' => $primaryGroup?->title ?? $primaryGroup?->name ?? '注册会员',
                     'name' => $groupDisplayName,
                     'slug' => $primaryGroup?->name ?? 'member',
                 ],
@@ -147,22 +152,22 @@ class UserSpaceController extends Controller
                 'avatarDecoration' => $avatarDecorationData,
             ],
 
-            'permissions' => $this->tabService->resolvePermissions($currentUser, $user),
+            'permissions' => $permissions,
 
             // 🌟 6. 按需延迟并发通道（仅挂载内容消费相关的收藏/点赞/稍后观看）
-            'collectedVideos' => $currentTab === 'video-collections'
+            'collectedVideos' => ($canViewProfile && $currentTab === 'video-collections')
                 ? Inertia::defer(fn() => $this->tabService->resolveVideoCollections($currentUser, $user))
                 : null,
 
-            'collectedImages' => $currentTab === 'image-collections'
+            'collectedImages' => ($canViewProfile && $currentTab === 'image-collections')
                 ? Inertia::defer(fn() => $this->tabService->resolveImageCollections($currentUser, $user))
                 : null,
 
-            'likedVideos' => $currentTab === 'video-likes'
+            'likedVideos' => ($canViewProfile && $currentTab === 'video-likes')
                 ? Inertia::defer(fn() => $this->tabService->resolveLikedVideos($currentUser, $user))
                 : null,
 
-            'watchLaterVideos' => $currentTab === 'video-watch-later'
+            'watchLaterVideos' => ($canViewProfile && $currentTab === 'video-watch-later')
                 ? Inertia::defer(fn() => $this->tabService->resolveWatchLaterVideos($currentUser, $user))
                 : null,
         ]);

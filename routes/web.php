@@ -38,10 +38,8 @@ use Illuminate\Support\Facades\DB;
 // TODO:统一所有按钮的样式和大小：https://www.youtube.com/results?search_query=%E5%BD%AD%E5%9D%A6 （订阅、查看频道）
 // TODO:用户名和昵称不允许包含特殊字符，具体的规则参考主流网站的：X
 // TODO:增加用户上传头像、横幅内容审核功能，按添加时间排序
-// TODO:如果用户未验证邮箱也会进行点赞、收藏等操作限制
 // TODO:支付方式选择 V 免签和 虎皮椒
 // TODO:请问你需要我为你继续编写对应的 Laravel Eloquent Models（带关联关系），还是这个用于自动判定勋章发放的 MedalCriteriaEvaluator 规则匹配服务？
-// TODO:增加个人资料查看权限
 // TODO: 当访问 http://localhost/medals 不存在的路由页面时，应该显示 404 页面
 // TODO:如果配置了两步验证后，登录后未跳转到redirect链接，当登录页面 url 是http://localhost/login?redirect=%2Fvideos%2F2%2Fim-off-the-clock-gimme-your-cock
 // TODO:当用户点赞某个帖子后过了一个月又取消了，那么怎么处理统计呢？还是说不将这种可以撤销的行为算入总积分什么的？

@@ -107,10 +107,13 @@ class UserSpaceTabService
      */
     public function resolvePermissions(?User $viewer, User $author): array
     {
+        $canViewProfile = $this->privacyPolicy->viewProfile($viewer, $author);
+
         return [
-            'canViewVideoCollections' => $this->privacyPolicy->viewVideoFavorites($viewer, $author),
-            'canViewImageCollections' => $this->privacyPolicy->viewVideoFavorites($viewer, $author),
-            'canViewLikedVideos' => $this->privacyPolicy->viewLikedVideos($viewer, $author),
+            'canViewProfile' => $canViewProfile,
+            'canViewVideoCollections' => $canViewProfile && $this->privacyPolicy->viewVideoFavorites($viewer, $author),
+            'canViewImageCollections' => $canViewProfile && $this->privacyPolicy->viewVideoFavorites($viewer, $author),
+            'canViewLikedVideos' => $canViewProfile && $this->privacyPolicy->viewLikedVideos($viewer, $author),
             'canViewWatchLater' => $viewer && $viewer->id === $author->id,
         ];
     }

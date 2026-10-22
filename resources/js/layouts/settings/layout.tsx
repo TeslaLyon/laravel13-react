@@ -34,6 +34,11 @@ const sidebarNavItems: NavItem[] = [
         icon: null,
     },
     {
+        title: '隐私设置',
+        href: '/settings/privacy',
+        icon: null,
+    },
+    {
         title: '外观',
         href: editAppearance(),
         icon: null,

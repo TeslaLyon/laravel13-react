@@ -22,7 +22,10 @@ export interface PaginatedData<T> {
 interface Props {
     activeTab?: string;
     profile: ChannelProfile;
+    isProfilePrivate?: boolean;
+    profileVisibility?: 'public' | 'followers' | 'mutual' | 'private';
     permissions: {
+        canViewProfile?: boolean;
         canViewVideoCollections: boolean;
         canViewImageCollections: boolean;
         canViewLikedVideos: boolean;
@@ -59,6 +62,8 @@ function VideoGridSkeleton() {
 export default function Show({
     activeTab = 'home',
     profile,
+    isProfilePrivate = false,
+    profileVisibility = 'public',
     permissions,
     collectedVideos,
     collectedImages,
@@ -95,9 +100,26 @@ export default function Show({
             <ProfileHeader profile={profile} />
 
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+                {isProfilePrivate ? (
+                    <div className="rounded-2xl border border-border/80 bg-card p-12 text-center shadow-xs flex flex-col items-center justify-center my-8 max-w-md mx-auto space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary ring-8 ring-primary/5">
+                            <Lock className="w-8 h-8" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <h3 className="text-lg font-bold text-foreground">用户已开启隐私保护</h3>
+                            <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                                {profileVisibility === 'mutual'
+                                    ? '该主页内容仅对互相关注的好友公开。'
+                                    : profileVisibility === 'followers'
+                                    ? '该主页内容仅对作者的粉丝公开。'
+                                    : '该主页内容仅作者本人可见。'}
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
 
-                    {/* 🌟 1. 常规标准 Shadcn UI 选项卡导航栏 */}
+                        {/* 🌟 1. 常规标准 Shadcn UI 选项卡导航栏 */}
                     <div className="w-full border-b border-border/50 pb-3">
                         <div className="flex w-full overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden">
                             <TabsList className="inline-flex h-11 items-center justify-start rounded-xl bg-muted/70 p-1 text-muted-foreground gap-1 min-w-max">
@@ -307,6 +329,7 @@ export default function Show({
                         </TabsContent>
                     </div>
                 </Tabs>
+                )}
             </div>
         </div>
     );

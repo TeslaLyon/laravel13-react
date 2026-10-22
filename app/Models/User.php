@@ -415,6 +415,42 @@ class User extends Authenticatable implements FilamentUser, PasskeyUser, MustVer
 
 
     /**
+     * 判断指定用户是否已关注当前用户（即 $user 是当前用户的粉丝）
+     */
+    public function isFollowedBy(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasSubscribedToEntity($this);
+    }
+
+    /**
+     * 判断当前用户是否已关注目标用户
+     */
+    public function isFollowing(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $this->hasSubscribedToEntity($user);
+    }
+
+    /**
+     * 判断当前用户与目标用户是否为互相关注好友
+     */
+    public function isMutualWith(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $this->isFollowedBy($user) && $this->isFollowing($user);
+    }
+
+    /**
      * 允许访问 Filament 后台的权限控制
      */
     public function canAccessPanel(Panel $panel): bool
