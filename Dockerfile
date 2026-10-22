@@ -2,7 +2,7 @@
 # 阶段 1: 依赖与前端构建阶段 (Builder)
 # ==========================================
 # 保持 $BUILDPLATFORM，让构建工作在 Runner 宿主原生架构（x86_64）高速执行
-FROM --platform=$BUILDPLATFORM dunglas/frankenphp:1.12.4-php8.4 AS builder
+FROM --platform=$BUILDPLATFORM dunglas/frankenphp:1.13.2-php8.4 AS builder
 
 WORKDIR /app
 
@@ -38,7 +38,7 @@ RUN npm run build
 # ==========================================
 # 阶段 2: 生产运行环境 (Runner - 指定 target 架构 ARM64)
 # ==========================================
-FROM dunglas/frankenphp:1.12.4-php8.4 AS runner
+FROM dunglas/frankenphp:1.13.2-php8.4 AS runner
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
