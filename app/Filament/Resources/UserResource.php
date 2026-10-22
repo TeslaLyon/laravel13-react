@@ -243,9 +243,9 @@ class UserResource extends Resource
                             ->required(),
 
                         Forms\Components\Toggle::make('delete_old_file')
-                            ->label('物理删除服务器旧文件')
+                            ->label('彻底物理删除 R2 / 服务器上的违规头像文件')
                             ->default(true)
-                            ->helperText('若旧头像是上传在服务器本地的文件，勾选后将物理删除，防止外链盗链访问'),
+                            ->helperText('勾选后将自动调用 R2 API 从 Cloudflare 存储桶中永久彻底销毁违规头像文件，节省存储空间并防止外链盗用'),
                     ])
                     ->action(function (User $record, array $data, UserAvatarService $avatarService) {
                         $result = $avatarService->takeDownAvatar(
@@ -259,6 +259,9 @@ class UserResource extends Resource
                         );
 
                         $msg = "用户 [{$record->name}] 的违规头像已成功下架！";
+                        if (!empty($data['delete_old_file'])) {
+                            $msg .= " 已同步彻底清理 R2/存储源文件。";
+                        }
                         if (!empty($result['violation_recorded'])) {
                             $msg .= " 已增加违规记录，当前违规次数：{$result['violation_count']}，扣减后最新总积分：{$result['total_credits']}";
                         }
@@ -310,8 +313,9 @@ class UserResource extends Resource
                                 ->required(),
 
                             Forms\Components\Toggle::make('delete_old_file')
-                                ->label('物理删除服务器旧文件')
-                                ->default(true),
+                                ->label('彻底物理删除 R2 / 服务器上的违规头像文件')
+                                ->default(true)
+                                ->helperText('勾选后自动调用 R2 API 彻底物理销毁所有选中用户的违规头像文件以节省空间'),
                         ])
                         ->action(function (Collection $records, array $data, UserAvatarService $avatarService) {
                             $count = 0;
@@ -328,9 +332,16 @@ class UserResource extends Resource
                                 $count++;
                             }
 
+                            $msg = "已成功批量下架 {$count} 位用户的头像并完成审核处理";
+                            if (!empty($data['delete_old_file'])) {
+                                $msg .= "，并已从 R2 存储桶中物理销毁旧文件。";
+                            } else {
+                                $msg .= "。";
+                            }
+
                             Notification::make()
                                 ->title('批量处理完成')
-                                ->body("已成功批量下架 {$count} 位用户的头像并完成审核处理。")
+                                ->body($msg)
                                 ->success()
                                 ->send();
                         }),
