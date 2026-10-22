@@ -38,19 +38,14 @@ function DropdownMenuContent({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
-      {/* 📱 移动端全屏半透明遮罩 */}
-      <div
-        data-slot="dropdown-menu-mobile-overlay"
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs sm:hidden pointer-events-none"
-      />
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
         className={cn(
           "z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          // 📱 移动端自动转换为 YouTube 风格的底部抽屉 (Bottom Sheet)
-          "max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!left-0 max-sm:!transform-none max-sm:!w-full max-sm:!max-w-none max-sm:!max-h-[85vh] max-sm:!rounded-t-[20px] max-sm:!rounded-b-none max-sm:!border-t max-sm:!border-border/60 max-sm:!border-x-0 max-sm:!border-b-0 max-sm:!ring-0 max-sm:!shadow-2xl max-sm:!p-2 max-sm:!pb-[max(1.25rem,env(safe-area-inset-bottom))] max-sm:data-open:!slide-in-from-bottom max-sm:data-closed:!slide-out-to-bottom max-sm:data-open:!zoom-in-100 max-sm:data-closed:!zoom-out-100 max-sm:!duration-300",
+          // 📱 移动端自动转换为 YouTube 风格的底部抽屉 (Bottom Sheet)；通过 box-shadow 产生全屏半透明遮罩背景，避免 Radix Portal 多子节点 Slot 报错
+          "max-sm:!fixed max-sm:!inset-x-0 max-sm:!bottom-0 max-sm:!top-auto max-sm:!left-0 max-sm:!transform-none max-sm:!w-full max-sm:!max-w-none max-sm:!max-h-[85vh] max-sm:!rounded-t-[20px] max-sm:!rounded-b-none max-sm:!border-t max-sm:!border-border/60 max-sm:!border-x-0 max-sm:!border-b-0 max-sm:!ring-0 max-sm:!shadow-[0_0_0_100vmax_rgba(0,0,0,0.6)] max-sm:!p-2 max-sm:!pb-[max(1.25rem,env(safe-area-inset-bottom))] max-sm:data-open:!slide-in-from-bottom max-sm:data-closed:!slide-out-to-bottom max-sm:data-open:!zoom-in-100 max-sm:data-closed:!zoom-out-100 max-sm:!duration-300",
           className
         )}
         {...props}
