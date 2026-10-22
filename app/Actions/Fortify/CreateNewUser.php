@@ -25,13 +25,14 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
             'cf-turnstile-response' => [new Turnstile],
         ], [
+            ...$this->profileValidationMessages(),
             'cf-turnstile-response' => '人机安全验证失败，请重新验证。',
         ])->validate();
 
         return User::create([
-            'name' => $input['name'],
-            'nickname' => $input['nickname'],
-            'email' => $input['email'],
+            'name' => trim($input['name']),
+            'nickname' => trim($input['nickname']),
+            'email' => strtolower(trim($input['email'])),
             'password' => $input['password'],
         ]);
     }

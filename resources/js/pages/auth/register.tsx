@@ -27,38 +27,50 @@ export default function Register({ passwordRules }: Props) {
                 {({ processing, errors }) => (
                     <>
                         <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">用户名 <span className="text-destructive">*</span></Label>
+                            <div className="grid gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="name">用户名 <span className="text-destructive">*</span></Label>
+                                    <span className="text-[11px] text-muted-foreground">用于登录与账号标识</span>
+                                </div>
                                 <Input
                                     id="name"
                                     type="text"
                                     required
                                     autoFocus
                                     tabIndex={1}
-                                    autoComplete="name"
+                                    autoComplete="username"
                                     name="name"
-                                    placeholder="Full name"
+                                    placeholder="例如：alex_99"
                                 />
+                                <p className="text-[11px] text-muted-foreground leading-normal">
+                                    3-20 位字符，仅支持字母、数字、下划线 (_) 与连字符 (-)，须以字母或数字开头，不支持特殊符号与表情。
+                                </p>
                                 <InputError
                                     message={errors.name}
-                                    className="mt-2"
+                                    className="mt-1"
                                 />
                             </div>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="nickname">昵称 <span className="text-destructive">*</span></Label>
+                            <div className="grid gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="nickname">昵称 <span className="text-destructive">*</span></Label>
+                                    <span className="text-[11px] text-muted-foreground">用于社区展示</span>
+                                </div>
                                 <Input
                                     id="nickname"
                                     type="text"
                                     required
-                                    tabIndex={1}
+                                    tabIndex={2}
                                     autoComplete="nickname"
                                     name="nickname"
-                                    placeholder="昵称"
+                                    placeholder="例如：Alex 🚀"
                                 />
+                                <p className="text-[11px] text-muted-foreground leading-normal">
+                                    2-30 位字符，支持中文、字母、数字、常规符号及 Emoji 表情。
+                                </p>
                                 <InputError
                                     message={errors.nickname}
-                                    className="mt-2"
+                                    className="mt-1"
                                 />
                             </div>
 
@@ -68,7 +80,7 @@ export default function Register({ passwordRules }: Props) {
                                     id="email"
                                     type="email"
                                     required
-                                    tabIndex={2}
+                                    tabIndex={3}
                                     autoComplete="email"
                                     name="email"
                                     placeholder="email@example.com"
@@ -81,7 +93,7 @@ export default function Register({ passwordRules }: Props) {
                                 <PasswordInput
                                     id="password"
                                     required
-                                    tabIndex={3}
+                                    tabIndex={4}
                                     autoComplete="new-password"
                                     name="password"
                                     placeholder="Password"
@@ -97,7 +109,7 @@ export default function Register({ passwordRules }: Props) {
                                 <PasswordInput
                                     id="password_confirmation"
                                     required
-                                    tabIndex={4}
+                                    tabIndex={5}
                                     autoComplete="new-password"
                                     name="password_confirmation"
                                     placeholder="Confirm password"
@@ -120,7 +132,7 @@ export default function Register({ passwordRules }: Props) {
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
-                                tabIndex={5}
+                                tabIndex={6}
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}
@@ -130,7 +142,7 @@ export default function Register({ passwordRules }: Props) {
 
                         <div className="text-center text-sm text-muted-foreground">
                             已有账户？{' '}
-                            <TextLink href={login()} tabIndex={6}>
+                            <TextLink href={login()} tabIndex={7}>
                                 登录
                             </TextLink>
                         </div>

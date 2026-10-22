@@ -49,16 +49,16 @@ export default function Profile({
                         <>
                             <div className="grid gap-2">
                                 <Label htmlFor="name">
-                                    用户名 <span className="text-destructive">(暂不支持修改用户名)</span>
+                                    用户名 <span className="text-muted-foreground text-xs">(系统唯一标识，暂不支持修改)</span>
                                 </Label>
 
                                 <Input
                                     id="name"
-                                    className="mt-1 block w-full"
+                                    className="mt-1 block w-full bg-muted/50 cursor-not-allowed select-none"
                                     defaultValue={auth.user.name}
                                     name="name"
                                     required
-                                    autoComplete="name"
+                                    autoComplete="username"
                                     placeholder="用户名"
                                     readOnly
                                 />
@@ -74,11 +74,15 @@ export default function Profile({
                                     name="nickname"
                                     required
                                     autoComplete="nickname"
-                                    placeholder="昵称"
+                                    placeholder="例如：Alex 🚀"
                                 />
 
+                                <p className="text-xs text-muted-foreground">
+                                    2-30 位字符，支持中文、字母、数字、常规符号及 Emoji 表情。
+                                </p>
+
                                 <InputError
-                                    className="mt-2"
+                                    className="mt-1"
                                     message={errors.nickname}
                                 />
                             </div>
