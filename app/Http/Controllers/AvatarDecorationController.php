@@ -92,7 +92,7 @@ class AvatarDecorationController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'avatar' => $user->avatar ?? '/images/default-avatar.png',
+                'avatar' => $user->avatar ?: config('avatars.fallback', '/images/default-avatars/avatar-1.svg'),
             ],
         ]);
     }

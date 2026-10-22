@@ -129,7 +129,7 @@ class UserSpaceController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'nickname' => $user->nickname ?? $user->name,
-                'avatar' => $user->avatar ?? '/images/default-avatar.png',
+                'avatar' => $user->avatar ?: config('avatars.fallback', '/images/default-avatars/avatar-1.svg'),
                 'bannerUrl' => $user->banner_url ?? $user->banner,
                 'bio' => $canViewProfile ? $user->bio : null,
                 'followersCount' => $followersCount,
