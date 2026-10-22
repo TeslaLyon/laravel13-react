@@ -33,7 +33,7 @@ class UserResource extends Resource
 
     /**
      * 规范化头像媒体图片 URL
-     * 用户头像与系统默认头像均存放在本站 (smzdk) 域名下，严格使用 asset() 生成本站完整直链，不拼接外部视频 CDN 域名
+     * 智能识别 R2 相对路径、本站相对路径与完整 URL，动态拼接对应域名
      */
     public static function resolveMediaUrl(?string $path): ?string
     {
@@ -47,6 +47,13 @@ class UserResource extends Resource
 
         $cleanPath = ltrim($path, '/');
 
+        // 存放在 Cloudflare R2 的相对路径 (例如 avatars/u3_xxx.webp)
+        if (str_starts_with($cleanPath, 'avatars/')) {
+            $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+            return $r2BaseUrl ? "{$r2BaseUrl}/{$cleanPath}" : \Illuminate\Support\Facades\Storage::disk('r2')->url($cleanPath);
+        }
+
+        // 本地静态资源或系统默认头像使用本站 asset 直链
         return asset($cleanPath);
     }
 

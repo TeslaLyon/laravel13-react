@@ -140,31 +140,39 @@ class ProfileController extends Controller
      */
     protected function deleteOldAvatarFiles(User $user, ?string $newAvatarUrl = null): void
     {
+        $rawOldAvatar = $user->getRawOriginal('avatar');
         $oldAvatar = $user->avatar;
 
-        if (empty($oldAvatar) || $oldAvatar === $newAvatarUrl) {
+        if (empty($rawOldAvatar) && empty($oldAvatar)) {
             return;
         }
 
-        // 1. 如果旧头像是存放在 R2 上的文件，从 R2 彻底删除以节省空间
-        $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
-        if (!empty($r2BaseUrl) && Str::startsWith($oldAvatar, $r2BaseUrl)) {
-            $r2Key = ltrim(Str::after($oldAvatar, $r2BaseUrl), '/');
-            if (!empty($r2Key)) {
-                try {
-                    if (Storage::disk('r2')->exists($r2Key)) {
-                        Storage::disk('r2')->delete($r2Key);
-                        Log::info("已删除 R2 旧头像文件: {$r2Key} [User ID: {$user->id}]");
-                    }
-                } catch (\Throwable $e) {
-                    Log::warning("清理 R2 旧头像文件异常 [{$r2Key}]: " . $e->getMessage());
+        // 1. 如果旧头像是存放在 R2 上的文件 (支持相对路径如 avatars/u3_xxx.webp 或完整 R2 URL)
+        $r2Key = null;
+        if (!empty($rawOldAvatar) && Str::startsWith($rawOldAvatar, 'avatars/')) {
+            $r2Key = $rawOldAvatar;
+        } else {
+            $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+            if (!empty($r2BaseUrl) && !empty($oldAvatar) && Str::startsWith($oldAvatar, $r2BaseUrl)) {
+                $r2Key = ltrim(Str::after($oldAvatar, $r2BaseUrl), '/');
+            }
+        }
+
+        if (!empty($r2Key)) {
+            try {
+                if (Storage::disk('r2')->exists($r2Key)) {
+                    Storage::disk('r2')->delete($r2Key);
+                    Log::info("已删除 R2 旧头像文件: {$r2Key} [User ID: {$user->id}]");
                 }
+            } catch (\Throwable $e) {
+                Log::warning("清理 R2 旧头像文件异常 [{$r2Key}]: " . $e->getMessage());
             }
         }
 
         // 2. 如果旧头像是历史存放在本地 /storage/avatars/ 的文件，也同步清理
-        if (Str::startsWith($oldAvatar, '/storage/')) {
-            $localPath = Str::replaceFirst('/storage/', '', $oldAvatar);
+        $localTarget = $rawOldAvatar ?: $oldAvatar;
+        if (!empty($localTarget) && Str::startsWith($localTarget, '/storage/')) {
+            $localPath = Str::replaceFirst('/storage/', '', $localTarget);
             try {
                 if (Storage::disk('public')->exists($localPath)) {
                     Storage::disk('public')->delete($localPath);

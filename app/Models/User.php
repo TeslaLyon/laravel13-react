@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @property int $id
@@ -131,6 +132,55 @@ class User extends Authenticatable implements FilamentUser, PasskeyUser, MustVer
             'total_credits' => 'float',
             'last_activity_at' => 'datetime',
         ];
+    }
+
+    /**
+     * 头像属性访问器与修改器 (数据库仅保存相对路径，读取时动态拼装完整访问 URL)
+     */
+    protected function avatar(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value): ?string {
+                if (empty($value)) {
+                    return null;
+                }
+
+                // 1. 如果已包含完整协议头 (http:// 或 https://)，直接返回 (兼容可能遗留的历史全量链接或第三方图床)
+                if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+                    return $value;
+                }
+
+                // 2. 如果是存放在 R2 存储桶的相对路径 (如 avatars/u3_xxx.webp)
+                if (str_starts_with($value, 'avatars/')) {
+                    $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+                    return $r2BaseUrl ? "{$r2BaseUrl}/{$value}" : Storage::disk('r2')->url($value);
+                }
+
+                // 3. 如果是本地 public 存储路径或系统预置默认头像 (/images/default-avatars/... 或 /storage/...)
+                return asset(ltrim($value, '/'));
+            },
+            set: function (?string $value): ?string {
+                if (empty($value)) {
+                    return null;
+                }
+
+                $cleanValue = trim($value);
+
+                // 1. 如果保存时带有当前配置的 R2 域名，自动剥离为相对路径 (如 avatars/u3_xxx.webp)
+                $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+                if (!empty($r2BaseUrl) && str_starts_with($cleanValue, $r2BaseUrl)) {
+                    return ltrim(substr($cleanValue, strlen($r2BaseUrl)), '/');
+                }
+
+                // 2. 移除常见的本站完整 URL 前缀，保留相对路径
+                $appUrl = rtrim((string) config('app.url'), '/');
+                if (!empty($appUrl) && str_starts_with($cleanValue, $appUrl)) {
+                    return substr($cleanValue, strlen($appUrl));
+                }
+
+                return $cleanValue;
+            }
+        );
     }
 
     /**
