@@ -36,9 +36,7 @@ use Illuminate\Support\Facades\DB;
 // TODO：上线前查看SQL 语句并添加复合索引
 // TODO:路由上添加限速器
 // TODO:统一所有按钮的样式和大小：https://www.youtube.com/results?search_query=%E5%BD%AD%E5%9D%A6 （订阅、查看频道）
-// TODO：当初在 http://localhost/videos/1/shes-not-that-into-anal-or-is-she 时点击退出登录，应该跳转首页还是当前页面？
 // TODO:用户名和昵称不允许包含特殊字符，具体的规则参考主流网站的：X
-// TODO: 登录页面接入 cloudflare 的验证，否则不允许点击登录按钮
 // TODO:增加用户上传头像、横幅内容审核功能，按添加时间排序
 // TODO:如果用户未验证邮箱也会进行点赞、收藏等操作限制
 // TODO:支付方式选择 V 免签和 虎皮椒
@@ -131,9 +129,9 @@ Route::prefix('forum')->name('forum.')->middleware('throttle:120,1')->controller
     Route::get('/threads/{thread}/{slug?}', [ThreadController::class, 'show'])
         ->name('threads.show');
 
-    // 提交回帖 (需要登录中间件 auth)
+    // 提交回帖 (需要登录中间件 auth 与邮箱验证 verified)
     Route::post('/threads/{thread}/posts', [ThreadController::class, 'storePost'])
-        ->middleware(['auth', 'throttle:10,1'])
+        ->middleware(['auth', 'verified', 'throttle:10,1'])
         ->name('threads.posts.store');
 
 });

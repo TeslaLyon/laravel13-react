@@ -3,6 +3,7 @@ import { useForm } from '@inertiajs/react';
 import { Send, Lock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useRequireAuth } from '@/components/require-auth-provider';
 
 interface QuickReplyEditorProps {
     threadId: number | string;
@@ -13,6 +14,7 @@ export default function QuickReplyEditor({ threadId, canReply }: QuickReplyEdito
     const { data, setData, post, processing, reset, errors } = useForm({
         message: '',
     });
+    const { requireAuth } = useRequireAuth();
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,10 +22,16 @@ export default function QuickReplyEditor({ threadId, canReply }: QuickReplyEdito
             return;
         }
 
-        post(`/forum/threads/${threadId}/posts`, {
-            preserveScroll: true,
-            onSuccess: () => reset('message'),
+        requireAuth(() => {
+            post(`/forum/threads/${threadId}/posts`, {
+                preserveScroll: true,
+                onSuccess: () => reset('message'),
+            });
         });
+    };
+
+    const handleFocus = () => {
+        requireAuth(() => {});
     };
 
     if (!canReply) {
@@ -48,6 +56,7 @@ export default function QuickReplyEditor({ threadId, canReply }: QuickReplyEdito
                 placeholder="撰写你的回复内容，与大家共同讨论..."
                 value={data.message}
                 onChange={(e) => setData('message', e.target.value)}
+                onFocus={handleFocus}
                 rows={4}
                 className="resize-none focus-visible:ring-primary"
             />
