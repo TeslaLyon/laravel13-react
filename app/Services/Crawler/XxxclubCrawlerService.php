@@ -446,11 +446,7 @@ class XxxclubCrawlerService
             $cleanCode = preg_replace('/[^a-zA-Z0-9.]+/', '', $cleanCode);
             $cleanCode = trim(preg_replace('/\.+/', '.', $cleanCode), '.');
 
-            if (!empty($cleanCode)) {
-                $keywords[] = $this->limitKeywordWords($cleanCode, 10);
-            }
-
-            // 识别标准结构：[厂牌].[YY].[MM].[DD].[后续内容]
+            // 识别标准结构：[厂牌].[YY].[MM].[DD].[后续内容] (欧美成人片主流命名规则)
             if (preg_match('/^([a-zA-Z0-9]+)[._-](\d{2})[._-](\d{2})[._-](\d{2})[._-](.+)$/i', $rawCode, $m)) {
                 $channel = trim($m[1]);
                 $yy = (int) $m[2];
@@ -461,73 +457,127 @@ class XxxclubCrawlerService
                 $fullYear = $yy > 70 ? 1900 + $yy : 2000 + $yy;
                 if (checkdate($mm, $dd, $fullYear)) {
                     $dt = Carbon::create($fullYear, $mm, $dd);
-                    $prevDate = $dt->copy()->subDay()->format('y.m.d');
+                    $prevDt = $dt->copy()->subDay();
+                    $prevDateDot = $prevDt->format('y.m.d');
+                    $prevDateSpace = $prevDt->format('y m d');
+                    $origDateDot = sprintf('%02d.%02d.%02d', $yy, $mm, $dd);
+                    $origDateSpace = sprintf('%02d %02d %02d', $yy, $mm, $dd);
 
-                    // 策略 2: 片商名字 + 其中一名女演员的名字 + 原片片名（使用空格拼接）
+                    // 智能提取主要女演员名（剥离男演员及 .And. / .With. / .Feat. 干扰）
                     $primaryActorName = null;
                     if ($video->relationLoaded('actors') && $video->actors->isNotEmpty()) {
                         $primaryActorName = $video->actors->first()->name;
+                    } elseif ($video->exists && method_exists($video, 'actors')) {
+                        try {
+                            $firstActor = $video->actors()->first();
+                            if ($firstActor) {
+                                $primaryActorName = $firstActor->name;
+                            }
+                        } catch (\Throwable) {}
                     }
-                    if (empty($primaryActorName)) {
-                        $tokens = explode('.', $afterDate);
-                        if (!empty($tokens[0])) {
-                            $primaryActorName = !empty($tokens[1]) && !in_array(strtolower($tokens[1]), ['and', 'the', 'in', 'part'])
-                                ? "{$tokens[0]} {$tokens[1]}"
-                                : $tokens[0];
+
+                    // 剥离连接词
+                    $parts = preg_split('/\.And\.|\.With\.|\.Feat\.|\.Vs\./i', $afterDate, 2);
+                    $beforeAnd = $parts[0] ?? '';
+                    $afterAnd = $parts[1] ?? '';
+
+                    if (empty($primaryActorName) && !empty($beforeAnd)) {
+                        $actorTokens = array_values(array_filter(explode('.', $beforeAnd), fn($t) => strlen($t) >= 2));
+                        if (count($actorTokens) >= 2) {
+                            $primaryActorName = "{$actorTokens[0]} {$actorTokens[1]}";
+                        } elseif (count($actorTokens) === 1) {
+                            $primaryActorName = $actorTokens[0];
                         }
                     }
-                    $movieTitleName = trim((string) ($video->name ?: $video->slug));
-                    if (!empty($primaryActorName) && !empty($movieTitleName)) {
-                        $cleanChannel = $channel ?: ($video->channel?->name ?: $video->channel?->slug);
-                        $cleanActor = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $primaryActorName));
-                        $cleanMovieTitle = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $movieTitleName));
-                        $keywords[] = $this->limitKeywordWords("{$cleanChannel} {$cleanActor} {$cleanMovieTitle}", 10);
-                    }
 
-                    // 策略 3: 容差前一天完整词 (欧美发片时区偏差)
-                    if (!empty($afterDate)) {
-                        $keywords[] = $this->limitKeywordWords("{$channel}.{$prevDate}.{$afterDate}", 10);
-                    }
-
-                    // 厂牌 + 日期 (如 Deeper.26.10.09 / Deeper.26.10.08)
-                    $origDate = sprintf('%02d.%02d.%02d', $yy, $mm, $dd);
-                    $keywords[] = "{$channel}.{$origDate}";
-                    $keywords[] = "{$channel}.{$prevDate}";
-
-                    // 提取女演员名与片名部分（空格分隔）
-                    $afterTokens = array_values(array_filter(explode('.', $afterDate), fn($t) => strlen($t) >= 2));
                     $actorSpace = '';
-                    $titleSpace = '';
-                    if (count($afterTokens) >= 2) {
-                        $actorSpace = "{$afterTokens[0]} {$afterTokens[1]}";
-                        if (count($afterTokens) > 2) {
-                            $titleSpace = implode(' ', array_slice($afterTokens, 2));
-                        }
-                    } elseif (count($afterTokens) === 1) {
-                        $actorSpace = "{$afterTokens[0]}";
+                    $actorDot = '';
+                    if (!empty($primaryActorName)) {
+                        $cleanActor = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $primaryActorName));
+                        $actorSpace = $cleanActor;
+                        $actorDot = str_replace(' ', '.', $cleanActor);
                     }
 
-                    // 如果从 video_code 未能截取出标题部分，但原片有 name/slug，则补充使用
-                    if (empty($titleSpace)) {
-                        $rawVideoName = (string) ($video->name ?: $video->slug);
-                        if (!empty($rawVideoName)) {
-                            $titleSpace = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $rawVideoName));
-                        }
+                    // 提取片名（Title）
+                    $cleanMovieTitle = '';
+                    $rawVideoName = trim((string) ($video->name ?: $video->slug));
+                    if (!empty($rawVideoName)) {
+                        $cleanMovieTitle = trim(preg_replace('/[^a-zA-Z0-9]+/', ' ', $rawVideoName));
+                    } elseif (!empty($afterAnd)) {
+                        $andTokens = array_values(array_filter(explode('.', $afterAnd), fn($t) => strlen($t) >= 2));
+                        $cleanMovieTitle = count($andTokens) > 2
+                            ? implode(' ', array_slice($andTokens, 2))
+                            : implode(' ', $andTokens);
                     }
 
+                    // 🌟 优先级 1: 厂牌 + 前一天日期 + 女演员名 (点号/空格双格式) —— 最高命中率组合 (解决欧美时差偏差)
+                    // 例如: Vixen 26.10.19 Sami.Hayes / Vixen 26.10.19 Sami Hayes / Vixen 26 10 19 Sami Hayes
+                    if (!empty($actorDot)) {
+                        $keywords[] = "{$channel} {$prevDateDot} {$actorDot}";
+                    }
                     if (!empty($actorSpace)) {
-                        // 1) 厂牌 + 前一天日期 + 女演员名 + 原片片名（空格分隔，如 Blacked 26.10.05 Jessi Rae Some Title）
-                        if (!empty($titleSpace)) {
-                            $keywords[] = $this->limitKeywordWords("{$channel} {$prevDate} {$actorSpace} {$titleSpace}", 10);
-                        }
+                        $keywords[] = "{$channel} {$prevDateDot} {$actorSpace}";
+                        $keywords[] = "{$channel} {$prevDateSpace} {$actorSpace}";
+                    }
 
-                        // 2) 厂牌 + 前一天日期 + 主要女演员（空格分隔，如 Blacked 26.10.05 Jessi Rae）
-                        $keywords[] = "{$channel} {$prevDate} {$actorSpace}";
-
-                        // 3) 厂牌 + 主要女演员（空格分隔，如 Blacked Jessi Rae）
+                    // 🌟 优先级 2: 厂牌 + 女演员名 (点号/空格双格式) —— 极高召回率
+                    // 例如: Vixen Sami.Hayes / Vixen Sami Hayes
+                    if (!empty($actorDot)) {
+                        $keywords[] = "{$channel} {$actorDot}";
+                    }
+                    if (!empty($actorSpace)) {
                         $keywords[] = "{$channel} {$actorSpace}";
                     }
+
+                    // 🌟 优先级 3: 厂牌 + 前一天日期 + 女演员 + 片名 (xxxclub 种子标题完整原生结构)
+                    if (!empty($actorSpace) && !empty($cleanMovieTitle)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$prevDateSpace} {$actorSpace} {$cleanMovieTitle}", 10);
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$prevDateDot} {$actorSpace} {$cleanMovieTitle}", 10);
+                    }
+
+                    // 🌟 优先级 4: 厂牌 + 女演员 + 片名
+                    if (!empty($actorSpace) && !empty($cleanMovieTitle)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$actorSpace} {$cleanMovieTitle}", 10);
+                        if (!empty($actorDot)) {
+                            $keywords[] = $this->limitKeywordWords("{$channel} {$actorDot} {$cleanMovieTitle}", 10);
+                        }
+                    }
+
+                    // 🌟 优先级 5: 厂牌 + 片名
+                    if (!empty($cleanMovieTitle)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$cleanMovieTitle}", 10);
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$prevDateSpace} {$cleanMovieTitle}", 10);
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$prevDateDot} {$cleanMovieTitle}", 10);
+                    }
+
+                    // 🌟 优先级 6: 女演员 + 片名
+                    if (!empty($actorSpace) && !empty($cleanMovieTitle)) {
+                        $keywords[] = $this->limitKeywordWords("{$actorSpace} {$cleanMovieTitle}", 10);
+                    }
+
+                    // 🌟 优先级 7: 当天日期备选 (针对按原日期发布的片源)
+                    if (!empty($actorDot)) {
+                        $keywords[] = "{$channel} {$origDateDot} {$actorDot}";
+                    }
+                    if (!empty($actorSpace)) {
+                        $keywords[] = "{$channel} {$origDateDot} {$actorSpace}";
+                        $keywords[] = "{$channel} {$origDateSpace} {$actorSpace}";
+                    }
+                    if (!empty($actorSpace) && !empty($cleanMovieTitle)) {
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$origDateSpace} {$actorSpace} {$cleanMovieTitle}", 10);
+                        $keywords[] = $this->limitKeywordWords("{$channel} {$origDateDot} {$actorSpace} {$cleanMovieTitle}", 10);
+                    }
+
+                    // 🌟 优先级 8: 纯日期兜底 (全空格与点号)
+                    $keywords[] = "{$channel}.{$prevDateDot}";
+                    $keywords[] = "{$channel} {$prevDateSpace}";
+                    $keywords[] = "{$channel}.{$origDateDot}";
                 }
+            }
+
+            // 原始 cleanCode 兜底 (截断前 10 词)
+            if (!empty($cleanCode)) {
+                $keywords[] = $this->limitKeywordWords($cleanCode, 10);
             }
         }
 

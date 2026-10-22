@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -43,24 +43,17 @@ const VISIBILITY_OPTIONS = [
     },
 ] as const;
 
-export default function PrivacySettings({ settings, status }: PrivacySettingsProps) {
+export default function PrivacySettings({ settings }: PrivacySettingsProps) {
     const { data, setData, patch, processing } = useForm({
         profile_visibility: settings.profile_visibility || 'public',
         video_favorites: settings.video_favorites || 'public',
         liked_videos: settings.liked_videos || 'followers',
     });
 
-    const [saved, setSaved] = useState(false);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         patch('/settings/privacy', {
             preserveScroll: true,
-            onSuccess: () => {
-                toast.success('隐私设置已成功保存');
-                setSaved(true);
-                setTimeout(() => setSaved(false), 2000);
-            },
             onError: () => {
                 toast.error('保存设置失败，请检查输入或重试');
             },
@@ -193,12 +186,6 @@ export default function PrivacySettings({ settings, status }: PrivacySettingsPro
                         <Button type="submit" disabled={processing} className="px-6">
                             {processing ? '保存中...' : '保存更改'}
                         </Button>
-
-                        {saved && (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in-0 duration-200">
-                                已保存！
-                            </span>
-                        )}
                     </div>
                 </form>
             </div>
