@@ -69,7 +69,7 @@ class ProfileController extends Controller
         $key = sprintf('avatars/u%d_%s.%s', $user->id, Str::random(16), $ext);
 
         $presigned = Storage::disk('r2')->temporaryUploadUrl($key, now()->addMinutes(10), [
-            'ResponseContentType' => $contentType,
+            'ContentType' => $contentType,
         ]);
 
         $publicUrl = Storage::disk('r2')->url($key);
