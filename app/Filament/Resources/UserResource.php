@@ -32,7 +32,8 @@ class UserResource extends Resource
     protected static ?int $navigationSort = 1;
 
     /**
-     * 规范化媒体图片 URL (兼容完整 URL、CDN 与本地相对路径)
+     * 规范化头像媒体图片 URL
+     * 用户头像与系统默认头像均存放在本站 (smzdk) 域名下，严格使用 asset() 生成本站完整直链，不拼接外部视频 CDN 域名
      */
     public static function resolveMediaUrl(?string $path): ?string
     {
@@ -44,10 +45,9 @@ class UserResource extends Resource
             return $path;
         }
 
-        $cdnUrl = rtrim((string) config('app.cdn_url'), '/');
         $cleanPath = ltrim($path, '/');
 
-        return $cdnUrl ? "{$cdnUrl}/{$cleanPath}" : asset($cleanPath);
+        return asset($cleanPath);
     }
 
     public static function form(Form $form): Form

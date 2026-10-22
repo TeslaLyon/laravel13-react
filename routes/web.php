@@ -196,6 +196,9 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
 
 
     Route::get('/settings/avatar', [ProfileController::class, 'editAvatar'])->name('profile.avatar.edit');
+    Route::post('/settings/avatar/presigned-url', [ProfileController::class, 'presignedAvatarUrl'])
+        ->middleware('throttle:30,1')
+        ->name('profile.avatar.presigned');
     Route::post('/settings/avatar', [ProfileController::class, 'updateAvatar'])
         ->middleware('throttle:10,1')
         ->name('profile.avatar.update');

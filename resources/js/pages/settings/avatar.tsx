@@ -109,7 +109,7 @@ export default function AvatarSettings() {
         setErrorMessage(null);
     };
 
-    // 3. 提交裁剪后的 400x400 头像
+    // 3. 提交裁剪后的 400x400 头像 (通过前端 WebP 压缩 + Cloudflare R2 预签名秒级直传)
     const handleUpload = async () => {
         if (!imageSrc || !croppedAreaPixels) return;
 
@@ -117,27 +117,92 @@ export default function AvatarSettings() {
             setIsUploading(true);
             setErrorMessage(null);
 
-            const croppedFile = await getCroppedImg(imageSrc, croppedAreaPixels, 'avatar.jpg', 400);
+            // 1. 前端 Canvas 高速压缩为 400x400 WebP (质量 0.85，耗时仅 ~10ms，体积仅 15-25KB)
+            const croppedWebpFile = await getCroppedImg(
+                imageSrc,
+                croppedAreaPixels,
+                'avatar.webp',
+                400,
+                400,
+                0.85,
+                'image/webp'
+            );
 
-            const formData = new FormData();
-            formData.append('avatar', croppedFile);
+            let publicUrl: string | null = null;
 
-            router.post(updateAvatarUrl(), formData, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    handleCancel();
-                },
-                onError: (errors) => {
-                    if (errors.avatar) {
-                        setErrorMessage(errors.avatar);
-                    } else {
-                        setErrorMessage('上传失败，请稍后重试。');
+            // 2. 尝试向后端申请 R2 预签名直传凭证
+            try {
+                const xsrfToken = decodeURIComponent(
+                    document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] || ''
+                );
+
+                const presignRes = await fetch('/settings/avatar/presigned-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
+                    },
+                    body: JSON.stringify({
+                        content_type: 'image/webp',
+                    }),
+                });
+
+                if (presignRes.ok) {
+                    const presignData = await presignRes.json();
+                    if (presignData.upload_url && presignData.public_url) {
+                        // 3. 直接通过 PUT 上传至 Cloudflare R2
+                        const r2Res = await fetch(presignData.upload_url, {
+                            method: 'PUT',
+                            body: croppedWebpFile,
+                            headers: {
+                                'Content-Type': 'image/webp',
+                            },
+                        });
+
+                        if (r2Res.ok) {
+                            publicUrl = presignData.public_url;
+                        }
                     }
-                },
-                onFinish: () => {
-                    setIsUploading(false);
-                },
-            });
+                }
+            } catch (r2Error) {
+                console.warn('R2 直传异常，自动切换为后端转存 R2 兜底模式:', r2Error);
+            }
+
+            // 4. 提交保存至数据库 (后端会自动清理旧头像文件以节省 R2 空间)
+            if (publicUrl) {
+                // 直传成功模式：仅提交 public_url，服务器极轻量秒存
+                router.post(updateAvatarUrl(), { avatar_url: publicUrl }, {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        handleCancel();
+                    },
+                    onError: (errors) => {
+                        setErrorMessage(errors.avatar_url || errors.avatar || '保存头像失败，请稍后重试。');
+                    },
+                    onFinish: () => {
+                        setIsUploading(false);
+                    },
+                });
+            } else {
+                // 兜底模式：直接将已压缩好的 20KB WebP 文件发给后端，后端存入 R2 并清理旧头像
+                const formData = new FormData();
+                formData.append('avatar', croppedWebpFile);
+
+                router.post(updateAvatarUrl(), formData, {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        handleCancel();
+                    },
+                    onError: (errors) => {
+                        setErrorMessage(errors.avatar || '上传头像失败，请稍后重试。');
+                    },
+                    onFinish: () => {
+                        setIsUploading(false);
+                    },
+                });
+            }
         } catch (error) {
             console.error('头像处理异常:', error);
             setErrorMessage('图片处理异常，请重试。');

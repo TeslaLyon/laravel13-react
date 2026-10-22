@@ -15,7 +15,8 @@ export interface PixelCrop {
  * @param outputWidth 期望输出的宽度（默认 2560）
  * @param outputHeight 可选：显式指定期望输出的高度；若不传则根据 pixelCrop 比例自动换算
  * @param quality 导出图片质量 (0 ~ 1，默认 0.92)
- * @returns Promise<File> 返回可直接通过 FormData 上传的 File 对象
+ * @param mimeType 导出图片格式 (默认 'image/jpeg'，支持 'image/webp')
+ * @returns Promise<File> 返回可直接通过 FormData 或直传 R2 的 File 对象
  */
 export default async function getCroppedImg(
     imageSrc: string,
@@ -23,7 +24,8 @@ export default async function getCroppedImg(
     fileName = 'cropped.jpg',
     outputWidth = 2560,
     outputHeight?: number,
-    quality = 0.92
+    quality = 0.92,
+    mimeType = 'image/jpeg'
 ): Promise<File> {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
@@ -43,7 +45,7 @@ export default async function getCroppedImg(
     canvas.width = outputWidth;
     canvas.height = targetHeight;
 
-    // 🎯 3. 填充纯白背景 (防止透明 PNG 导出 JPEG 时出现黑底或边缘黑边)
+    // 🎯 3. 填充纯白背景 (防止透明 PNG 导出 JPEG/WebP 时出现黑底或边缘黑边)
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, outputWidth, targetHeight);
 
@@ -64,7 +66,7 @@ export default async function getCroppedImg(
         targetHeight
     );
 
-    // 🎯 6. 导出为标准 JPEG File 对象
+    // 🎯 6. 导出为指定 MIME (如 image/webp 或 image/jpeg) 的 File 对象
     return new Promise((resolve, reject) => {
         canvas.toBlob(
             (blob) => {
@@ -72,10 +74,10 @@ export default async function getCroppedImg(
                     reject(new Error('Canvas 导出 Blob 失败'));
                     return;
                 }
-                const file = new File([blob], fileName, { type: 'image/jpeg' });
+                const file = new File([blob], fileName, { type: mimeType });
                 resolve(file);
             },
-            'image/jpeg',
+            mimeType,
             quality
         );
     });

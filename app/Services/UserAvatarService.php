@@ -58,15 +58,34 @@ class UserAvatarService
     ): array {
         $oldAvatar = $user->avatar;
 
-        // 1. 如果旧头像是上传在本地 public 存储中的文件且需要清理
-        if ($deleteOldFile && !empty($oldAvatar) && Str::startsWith($oldAvatar, '/storage/')) {
-            try {
-                $filePath = Str::replaceFirst('/storage/', '', $oldAvatar);
-                if (Storage::disk('public')->exists($filePath)) {
-                    Storage::disk('public')->delete($filePath);
+        // 1. 如果需要清理旧文件
+        if ($deleteOldFile && !empty($oldAvatar)) {
+            // 1.1 如果旧头像是 R2 存储文件，从 R2 删除以节约空间
+            $r2BaseUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+            if (!empty($r2BaseUrl) && Str::startsWith($oldAvatar, $r2BaseUrl)) {
+                $r2Key = ltrim(Str::after($oldAvatar, $r2BaseUrl), '/');
+                if (!empty($r2Key)) {
+                    try {
+                        if (Storage::disk('r2')->exists($r2Key)) {
+                            Storage::disk('r2')->delete($r2Key);
+                            Log::info("下架头像：已清理 R2 旧文件 [{$r2Key}], user_id: {$user->id}");
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning("下架头像时清理 R2 文件异常 [{$r2Key}]: " . $e->getMessage());
+                    }
                 }
-            } catch (\Throwable $e) {
-                Log::warning("下架头像时清理旧文件失败 [user_id: {$user->id}]: " . $e->getMessage());
+            }
+
+            // 1.2 如果旧头像是本地 public 存储文件，从本地删除
+            if (Str::startsWith($oldAvatar, '/storage/')) {
+                try {
+                    $filePath = Str::replaceFirst('/storage/', '', $oldAvatar);
+                    if (Storage::disk('public')->exists($filePath)) {
+                        Storage::disk('public')->delete($filePath);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("下架头像时清理本地旧文件失败 [user_id: {$user->id}]: " . $e->getMessage());
+                }
             }
         }
 
