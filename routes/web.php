@@ -36,12 +36,9 @@ use Illuminate\Support\Facades\DB;
 // TODO：上线前查看SQL 语句并添加复合索引
 // TODO:路由上添加限速器
 // TODO:统一所有按钮的样式和大小：https://www.youtube.com/results?search_query=%E5%BD%AD%E5%9D%A6 （订阅、查看频道）
-// TODO:用户名和昵称不允许包含特殊字符，具体的规则参考主流网站的：X
 // TODO:增加用户上传头像、横幅内容审核功能，按添加时间排序
 // TODO:支付方式选择 V 免签和 虎皮椒
 // TODO:请问你需要我为你继续编写对应的 Laravel Eloquent Models（带关联关系），还是这个用于自动判定勋章发放的 MedalCriteriaEvaluator 规则匹配服务？
-// TODO: 当访问 http://localhost/medals 不存在的路由页面时，应该显示 404 页面
-// TODO:如果配置了两步验证后，登录后未跳转到redirect链接，当登录页面 url 是http://localhost/login?redirect=%2Fvideos%2F2%2Fim-off-the-clock-gimme-your-cock
 // TODO:当用户点赞某个帖子后过了一个月又取消了，那么怎么处理统计呢？还是说不将这种可以撤销的行为算入总积分什么的？
 // TODO:在用户执行特殊操作时需要记录 ip 地址 v4 v6
 // TODO：在 http://localhost/avatar-decorations 佩戴头饰时，如何更改 sidebar 中的头像头饰
@@ -49,13 +46,10 @@ use Illuminate\Support\Facades\DB;
 // TODO:前端支付页面的倒计时功能在切换到别的标签页后会暂停，导致支付超时后用户还在继续支付，应该在切换标签页时继续倒计时
 // TODO：修复支付端 tmp_price 表有脏数据的问题
 // TODO:跳转支付页面默认不要是空白的，能不能来个正在加载中的动画？
-// TODO：每次发布代码后日志文件就会重新生成，历史日志文件消失，不应该消失。
 // TODO：将实际支付金额改为递增，因为考虑到一旦用户发现是递减的会重复下单，但是在递增的情况下，实际到账金额应该是实际支付金额
 // TODO:充值指定金额赠送相应的纸巾
-// TODO: table 表格中的业务说明文字太多无法完全展示，考虑 hover 后显示全部
 // TODO: 考虑直接跳转到支付有风险，则采用卡密方式充值，兑换卡密时增加支付时间校验，防止撞库
 // TODO：检查返回到前端的字段是否安全
-// TODO:修改 brazzers 抓取数据时先检测有关于 img 的字段是否为空，为空时才会上传到 r2
 
 // Route::inertia('/', 'welcome')->name('home');
 

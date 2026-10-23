@@ -75,11 +75,14 @@ export const VideoPreviews = ({
 
     // 获取 Lightbox 弹窗大图 URL
     const getFullUrl = (item: PreviewImageItem): string | null => {
-        if (!item || typeof item === 'string') return null;
+        if (!item) return null;
+        if (typeof item === 'string') {
+            return isSource || item.startsWith('http://') || item.startsWith('https://') ? item : cdnUrl(item);
+        }
 
         const raw = isSource
-            ? (item.full_source_url || item.screen_img_full_source_url || item.full_url || item.xx || '')
-            : (item.full_url || item.xx || item.screen_img_full_url || '');
+            ? (item.full_source_url || item.screen_img_full_source_url || item.full_url || item.xx || item.source_url || item.url || '')
+            : (item.full_url || item.xx || item.screen_img_full_url || item.url || item.source_url || '');
 
         if (!raw || typeof raw !== 'string' || !raw.trim()) {
             return null;
@@ -111,8 +114,8 @@ export const VideoPreviews = ({
         }
     };
 
-    // 智能获取图片比例 (优先使用元数据 width/height 计算，避免硬编码比例导致拉伸或裁切)
-    const getImageAspectRatio = (item: PreviewImageItem): string | undefined => {
+    // 智能获取图片比例 (优先使用元数据计算，默认统一回退至 16/9 保持整齐横向排布)
+    const getImageAspectRatio = (item: PreviewImageItem): string => {
         if (typeof item === 'object' && item !== null) {
             const w = Number(item.width) || Number(item.full_width) || Number(item.default_width);
             const h = Number(item.height) || Number(item.full_height) || Number(item.default_height);
@@ -120,7 +123,7 @@ export const VideoPreviews = ({
                 return `${w} / ${h}`;
             }
         }
-        return undefined;
+        return '16 / 9';
     };
 
     // 弹窗大图左右切换控制
@@ -188,14 +191,13 @@ export const VideoPreviews = ({
                 )}
             </div>
 
-            {/* 1. 自适应瀑布流网格布局（强化 CSS 渲染隔离与硬件加速）：
-                 - 移动端：2 列
-                 - 平板端：3 列
-                 - 桌面端：4 列
-                 - content-visibility: auto + contain-intrinsic-size 智能跳过视口外无谓渲染
-                 - decoding="async" 异步后台线程解压图片，彻底消除主线程阻塞与滚动卡顿
+            {/* 1. 横向网格布局（严格遵循从左到右、自上而下的横向一条龙顺序排列）：
+                 - 移动端：2 列 (grid-cols-2)
+                 - 平板端：3 列 (sm:grid-cols-3)
+                 - 桌面端：4 列 (lg:grid-cols-4)
+                 - 保证缩略图视觉顺序与 Lightbox 大图编号 (1/N, 2/N, 3/N...) 完全统一
             */}
-            <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 px-1 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-1">
                 {displayedImages.map((item, index) => {
                     const thumbUrl = getThumbUrl(item);
                     const fallbackUrl = getFallbackUrl(item);
@@ -212,11 +214,11 @@ export const VideoPreviews = ({
                                 }
                             }}
                             style={{
-                                aspectRatio: aspectRatio || undefined,
+                                aspectRatio: aspectRatio,
                                 contentVisibility: 'auto',
                                 containIntrinsicSize: 'auto none auto 240px',
                             }}
-                            className={`break-inside-avoid relative w-full overflow-hidden rounded-xl bg-muted/50 border border-transparent transform-gpu ${
+                            className={`relative w-full overflow-hidden rounded-xl bg-muted/50 border border-transparent transform-gpu ${
                                 hasFullImage
                                     ? 'cursor-pointer hover:border-border/60 hover:shadow-md group'
                                     : 'cursor-default'
@@ -233,7 +235,7 @@ export const VideoPreviews = ({
                                         e.currentTarget.src = fallbackUrl;
                                     }
                                 }}
-                                className={`w-full h-auto block transition-transform duration-200 transform-gpu ${
+                                className={`w-full h-full object-cover block transition-transform duration-200 transform-gpu ${
                                     hasFullImage ? 'group-hover:scale-[1.02]' : ''
                                 }`}
                             />

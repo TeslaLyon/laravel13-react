@@ -7,6 +7,7 @@ import {
     VolumeX,
     Maximize,
     Minimize,
+    X,
 } from 'lucide-react';
 
 // 图片元数据接口定义
@@ -191,6 +192,25 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
         }
     };
 
+    // 7. 关闭播放器并回到默认封面图状态
+    const handleClose = (e?: React.MouseEvent) => {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+        if (videoRef.current) {
+            videoRef.current.pause();
+            videoRef.current.currentTime = 0;
+        }
+        setIsPlaying(false);
+        setHasStarted(false);
+        setCurrentTime(0);
+        setIsFullscreen(false);
+        setShowControls(true);
+    };
+
     // 监听键盘 ESC 等原生的全屏状态退出
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -207,6 +227,7 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
             ref={containerRef}
             className="relative w-full aspect-video bg-black sm:rounded-2xl overflow-hidden shadow-sm group select-none flex items-center justify-center"
             onMouseEnter={() => setShowControls(true)}
+            onMouseMove={() => setShowControls(true)}
             onMouseLeave={() => isPlaying && setShowControls(false)}
         >
             {/* ===== 核心修复点：大图/封面图展示区域 ===== */}
@@ -300,6 +321,22 @@ export const VideoHeader: React.FC<VideoHeaderProps> = ({
                     aria-label="Play video"
                 >
                     <Play className="w-8 h-8 fill-current translate-x-0.5" />
+                </button>
+            )}
+
+            {/* ===== 右上角关闭视频预览返回默认头图按钮 ===== */}
+            {videoUrl && hasStarted && (
+                <button
+                    type="button"
+                    onClick={handleClose}
+                    className={`absolute top-3 right-3 sm:top-4 sm:right-4 z-30 flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full bg-black/60 hover:bg-black/85 text-white/90 hover:text-white backdrop-blur-md border border-white/15 shadow-lg transition-all duration-200 cursor-pointer ${
+                        showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+                    }`}
+                    title="关闭视频预览，返回头图"
+                    aria-label="关闭视频预览，返回头图"
+                >
+                    <X className="w-4 h-4" />
+                    <span className="text-xs font-medium hidden sm:inline">关闭预览</span>
                 </button>
             )}
 

@@ -569,11 +569,11 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                         <Deferred data="video" fallback={
                             <div className="mt-6">
                                 <Skeleton className="h-6 w-24 mb-3" />
-                                <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 px-1 space-y-3">
-                                    <Skeleton className="w-full aspect-[2/3] rounded-xl break-inside-avoid" />
-                                    <Skeleton className="w-full aspect-video rounded-xl break-inside-avoid" />
-                                    <Skeleton className="w-full aspect-square rounded-xl break-inside-avoid" />
-                                    <Skeleton className="w-full aspect-[2/3] rounded-xl break-inside-avoid" />
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-1">
+                                    <Skeleton className="w-full aspect-video rounded-xl" />
+                                    <Skeleton className="w-full aspect-video rounded-xl" />
+                                    <Skeleton className="w-full aspect-video rounded-xl" />
+                                    <Skeleton className="w-full aspect-video rounded-xl" />
                                 </div>
                             </div>
                         }>

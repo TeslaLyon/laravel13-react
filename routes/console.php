@@ -3,6 +3,7 @@
 use App\Jobs\CrawlDorcelVideosJob;
 use App\Jobs\CrawlJulesJordanVideosJob;
 use App\Jobs\CrawlProject1VideosJob;
+use App\Jobs\CrawlTrueAnalVideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
 use App\Jobs\SyncVideoViewsToDatabaseJob;
@@ -73,6 +74,18 @@ Schedule::job(new CrawlDorcelVideosJob(page: 1, skipExisting: true))
  */
 Schedule::job(new CrawlJulesJordanVideosJob(page: 1, skipExisting: true))
     ->cron('0 14,19 * * *')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * TrueAnal 厂牌视频增量定时爬取任务
+ * 每天在北京时间 19:10 自动投递任务至 Horizon 队列：
+ * 1. 抓取第 1 页最新视频列表；
+ * 2. 开启 skipExisting 极速增量模式：已入库视频跳过详情抓取，仅抓取新上架视频；
+ * 3. 开启 withoutOverlapping 避免并发重叠。
+ */
+Schedule::job(new CrawlTrueAnalVideosJob(page: 1, skipExisting: true))
+    ->dailyAt('19:10')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
 
