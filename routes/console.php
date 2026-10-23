@@ -125,15 +125,16 @@ Schedule::command('channel:sync-subscribers')
 
 /**
  * xxxclub 视频磁力下载资源定时抓取与自动补充任务
- * 每间隔 10 分钟自动投递任务至 Horizon 队列，每次处理 50 部有效目标视频：
+ * 每间隔 10 分钟自动投递任务至 Horizon 队列，每次处理 15 部有效目标视频：
  * 1. 默认仅筛选已上映片源 (onlyReleased: true)，彻底跳过未到排期的未来预售片；
- * 2. 启用 7 天失败冷却期 (cooldownDays: 7)，未搜到资源的视频跳过并自动向后顺延补齐 50 部；
- * 3. 开启 withoutOverlapping(30)，确保上一批未跑完时不会重叠触发。
+ * 2. 启用 7 天失败冷却期 (cooldownDays: 7)，未搜到资源的视频跳过并自动向后顺延补齐；
+ * 3. 单批 15 部耗时约 2~3 分钟，完美契合 10 分钟调度周期，杜绝单次任务超长触发 30 分钟超时熔断；
+ * 4. 开启 withoutOverlapping(15)，确保上一批未跑完时不会重叠触发。
  */
-Schedule::job(new CrawlXxxclubMagnetsJob(limit: 50, onlyReleased: true, cooldownDays: 7))
+Schedule::job(new CrawlXxxclubMagnetsJob(limit: 15, onlyReleased: true, cooldownDays: 7))
     ->everyTenMinutes()
     ->timezone('Asia/Shanghai')
-    ->withoutOverlapping(30);
+    ->withoutOverlapping(15);
 
 
 
