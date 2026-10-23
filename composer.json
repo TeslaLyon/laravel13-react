@@ -25,7 +25,8 @@
         "league/flysystem-aws-s3-v3": "^3.0",
         "meilisearch/meilisearch-php": "^1.17",
         "overtrue/laravel-query-logger": "^5.1",
-        "resend/resend-php": "^1.5"
+        "resend/resend-php": "^1.5",
+        "sentry/sentry-laravel": "^4.29"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7",
