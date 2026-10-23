@@ -137,6 +137,16 @@ class CrawlXxxclubMagnetsCommand extends Command
         // =========================================================================
         // 模式 B：在线网络抓取与补充
         // =========================================================================
+        $rateLimitCooldown = $crawlerService->getRateLimitCooldownRemaining();
+        if ($rateLimitCooldown > 0 && !$ignoreCooldown && !$videoId) {
+            $formattedCooldown = $crawlerService->formatTtl($rateLimitCooldown);
+            $this->newLine();
+            $this->warn("⏳ 目标网站 (xxxclub) 当前正处于限流冷却保护期中（还剩 {$formattedCooldown}），暂缓本次自动爬取，避免触发封锁。");
+            $this->comment("💡 如需强制忽略限流保护继续执行，可添加参数: --ignore-cooldown");
+            Log::warning("目标网站 (xxxclub) 触发全局频率限制冷却保护，当前暂缓执行，剩余冷却时间: {$formattedCooldown}");
+            return self::SUCCESS;
+        }
+
         $this->info("🔍 正在筛选目标视频（无下载资源，或为 4K 片源但缺失 4K 下载项" . ($beforeToday ? "，且已排除当天发布的片源" : "") . "）...");
 
         try {
@@ -174,6 +184,8 @@ class CrawlXxxclubMagnetsCommand extends Command
         ];
 
         $unmatchedVideos = [];
+        $consecutiveRateLimits = 0;
+        $rateLimitTriggered = false;
 
         $planCount = $limit > 0 ? min($limit, $totalAvailable) : $totalAvailable;
         $progressBar = $this->output->createProgressBar($planCount);
@@ -243,6 +255,34 @@ class CrawlXxxclubMagnetsCommand extends Command
                     $flaresolverrUrl,
                     !$noFlareSolverr
                 );
+
+                // 优先检查是否遭遇目标站频率限制 (429 / CF 1015 / Too Many Requests)
+                if ($crawlerService->isRateLimited($fetchResult)) {
+                    $stats['cf_blocked']++;
+                    $consecutiveRateLimits++;
+                    $this->newLine();
+                    $this->warn("⚠️  [视频 ID: {$video->id}] 关键词 [{$kw}] 触发目标站访问频率限制 (HTTP 429 / CF Error 1015)！[连续 {$consecutiveRateLimits} 次]");
+
+                    if ($consecutiveRateLimits >= 2) {
+                        $cooldownSeconds = 900; // 冷却 15 分钟
+                        $crawlerService->setRateLimitCooldown($cooldownSeconds);
+                        $this->newLine();
+                        $this->error("🛑 目标网站已连续 {$consecutiveRateLimits} 次触发频率限制，自动触发全局熔断冷却机制（冷却 15 分钟），暂缓本次爬取任务！");
+                        Log::warning("xxxclub 爬取连续 {$consecutiveRateLimits} 次遭遇限流拦截，启动全局冷却 15 分钟并平稳终止当前批次任务。");
+                        $rateLimitTriggered = true;
+                        break 2; // 跳出 keywords 循环以及 video 外部循环
+                    }
+
+                    $backoffSeconds = 30;
+                    $this->comment("⏸️  首次遭遇限流，临时退避缓冲 {$backoffSeconds} 秒后继续尝试...");
+                    sleep($backoffSeconds);
+                    continue;
+                }
+
+                // 正常响应重置连续限流计数
+                if (!empty($fetchResult['success'])) {
+                    $consecutiveRateLimits = 0;
+                }
 
                 if (!empty($fetchResult['via_flaresolverr']) && $fetchResult['success']) {
                     $stats['flaresolverr_solved']++;
@@ -394,29 +434,37 @@ class CrawlXxxclubMagnetsCommand extends Command
         // 输出执行汇总表
         $this->info("📋 执行结果汇总统计：");
         $xxxclubSolved = $stats['success_videos'] - $stats['ciligou_solved'];
-        $this->table(
-            ['指标项', '统计数值'],
-            [
-                ['目标视频总数', $stats['total_videos']],
-                ['⏭️ 跳过未上映未来片', $stats['future_skipped']],
-                ['❄️ 冷却期跳过 (Cool-down)', $stats['cooldown_skipped']],
-                ['实际处理视频', $stats['processed_videos']],
-                ['成功补充视频', $stats['success_videos']],
-                ['  ├─ xxxclub 命中', $xxxclubSolved],
-                ['  └─ 🐶 磁力狗兜底命中', $stats['ciligou_solved']],
-                ['未搜到资源/无匹配', $stats['empty_videos']],
-                ['FlareSolverr 成功穿透', $stats['flaresolverr_solved']],
-                ['Cloudflare 拦截拦截次数', $stats['cf_blocked']],
-                ['请求异常次数', $stats['error_videos']],
-                ['匹配下载项总数', $stats['total_magnets']],
-                ['新增下载项 (Inserted)', $stats['inserted_magnets']],
-                ['覆盖更新下载项 (Updated)', $stats['updated_magnets']],
-                ['跳过重复项 (Skipped)', $stats['skipped_magnets']],
-                ['清理旧下载项 (Cleaned Old)', $stats['deleted_magnets']],
-                ['⏱️ 运行总耗时 (Duration)', $formattedDuration . " ({$elapsedSeconds}s)"],
-                ['⚡ 平均每部耗时 (Avg Speed)', $avgPerVideo],
-            ]
-        );
+        $tableRows = [
+            ['目标视频总数', $stats['total_videos']],
+            ['⏭️ 跳过未上映未来片', $stats['future_skipped']],
+            ['❄️ 冷却期跳过 (Cool-down)', $stats['cooldown_skipped']],
+            ['实际处理视频', $stats['processed_videos']],
+            ['成功补充视频', $stats['success_videos']],
+            ['  ├─ xxxclub 命中', $xxxclubSolved],
+            ['  └─ 🐶 磁力狗兜底命中', $stats['ciligou_solved']],
+            ['未搜到资源/无匹配', $stats['empty_videos']],
+            ['FlareSolverr 成功穿透', $stats['flaresolverr_solved']],
+            ['Cloudflare 拦截拦截次数', $stats['cf_blocked']],
+            ['请求异常次数', $stats['error_videos']],
+            ['匹配下载项总数', $stats['total_magnets']],
+            ['新增下载项 (Inserted)', $stats['inserted_magnets']],
+            ['覆盖更新下载项 (Updated)', $stats['updated_magnets']],
+            ['跳过重复项 (Skipped)', $stats['skipped_magnets']],
+            ['清理旧下载项 (Cleaned Old)', $stats['deleted_magnets']],
+            ['⏱️ 运行总耗时 (Duration)', $formattedDuration . " ({$elapsedSeconds}s)"],
+            ['⚡ 平均每部耗时 (Avg Speed)', $avgPerVideo],
+        ];
+
+        if ($rateLimitTriggered) {
+            $tableRows[] = ['🛑 频率限制熔断状态', '已触发 (全局休眠 15 分钟)'];
+        }
+
+        $this->table(['指标项', '统计数值'], $tableRows);
+
+        if ($rateLimitTriggered) {
+            $this->newLine();
+            $this->error("🛑 提示：由于目标站点触发了连续访问频率限制 (429 / CF 1015)，任务已启动熔断机制提前平稳结束并进入 15 分钟冷却期。");
+        }
 
         // 💡 打印未匹配的视频 Code 列表，方便用户直接复制到官网手动搜索
         if (!empty($unmatchedVideos)) {

@@ -114,8 +114,16 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(): void
+    public function handle(\App\Services\Crawler\XxxclubCrawlerService $crawlerService): void
     {
+        // 1. 目标站全局限流冷却保护期前置检测
+        $cooldownRemaining = $crawlerService->getRateLimitCooldownRemaining();
+        if ($cooldownRemaining > 0) {
+            $formattedCooldown = $crawlerService->formatTtl($cooldownRemaining);
+            Log::warning("⏳ [CrawlXxxclubMagnetsJob] 目标网站 (xxxclub) 当前正处于全局限流冷却保护期（剩余 {$formattedCooldown}），暂缓本次队列抓取，避免加剧封锁。");
+            return;
+        }
+
         $cooldownDesc = $this->cooldownDays !== null ? "{$this->cooldownDays}天" : "智能阶梯动态";
         Log::info("🚀 Horizon 队列开始执行 xxxclub 磁力爬取任务 [CrawlXxxclubMagnetsJob]"
             . ($this->channel ? " [片商: {$this->channel}]" : " [全部片商]")
@@ -147,11 +155,16 @@ class CrawlXxxclubMagnetsJob implements ShouldQueue
             $params['--flaresolverr'] = $this->flaresolverrUrl;
         }
 
-        Artisan::call('video:crawl-xxxclub-magnets', $params);
-
-        $output = trim(Artisan::output());
-        if (!empty($output)) {
-            Log::info("xxxclub 磁力爬取任务输出:\n" . $output);
+        try {
+            $exitCode = Artisan::call('video:crawl-xxxclub-magnets', $params);
+            $output = trim(Artisan::output());
+            if (!empty($output)) {
+                Log::info("xxxclub 磁力爬取任务完成 [退出码: {$exitCode}]:\n" . $output);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("⚠️ [CrawlXxxclubMagnetsJob] 抓取命令执行过程发生异常: " . $e->getMessage(), [
+                'exception' => $e,
+            ]);
         }
     }
 }

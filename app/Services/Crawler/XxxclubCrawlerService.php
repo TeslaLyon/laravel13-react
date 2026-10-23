@@ -424,6 +424,87 @@ class XxxclubCrawlerService
     }
 
     /**
+     * 判断当前是否处于目标站全局限流冷却保护期（秒）
+     */
+    public function getRateLimitCooldownRemaining(): int
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                $ttl = Redis::ttl('crawler:xxxclub:rate_limited');
+                return max(0, (int) $ttl);
+            }
+        } catch (Throwable) {}
+
+        return 0;
+    }
+
+    /**
+     * 设置目标站全局限流冷却保护期（默认 15 分钟 = 900 秒）
+     */
+    public function setRateLimitCooldown(int $ttlSeconds = 900): void
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::setex('crawler:xxxclub:rate_limited', $ttlSeconds, now()->toDateTimeString());
+            }
+        } catch (Throwable) {}
+
+        Cache::put('crawler:xxxclub:rate_limited', now()->toDateTimeString(), $ttlSeconds);
+    }
+
+    /**
+     * 手动清除限流冷却期标记
+     */
+    public function clearRateLimitCooldown(): void
+    {
+        try {
+            if (class_exists(Redis::class)) {
+                Redis::del('crawler:xxxclub:rate_limited');
+            }
+        } catch (Throwable) {}
+
+        Cache::forget('crawler:xxxclub:rate_limited');
+    }
+
+    /**
+     * 智能判定响应是否属于目标站的频率限制拦截 (HTTP 429 / CF 1015 / Too Many Requests)
+     */
+    public function isRateLimited(array $fetchResult): bool
+    {
+        if (!empty($fetchResult['is_rate_limited'])) {
+            return true;
+        }
+
+        $statusCode = (int) ($fetchResult['status_code'] ?? 0);
+        if ($statusCode === 429) {
+            return true;
+        }
+
+        $message = strtolower($fetchResult['message'] ?? '');
+        $html = strtolower($fetchResult['html'] ?? '');
+
+        if (
+            str_contains($message, '429') ||
+            str_contains($message, '1015') ||
+            str_contains($message, 'rate limit') ||
+            str_contains($message, 'too many requests')
+        ) {
+            return true;
+        }
+
+        if (
+            str_contains($html, '1015') ||
+            str_contains($html, 'rate limited') ||
+            str_contains($html, 'too many requests') ||
+            str_contains($html, 'error 1015')
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * 根据视频元数据智能构建用于 xxxclub 的多策略候选搜索关键词列表（按置信度排序）
      * 策略 1: 原始/清洗后的完整 video_code（例如 Deeper.26.10.09.Violet.Voss.And.Alex.Jones.Absolution）
      * 策略 2: 容差时差候选词：厂牌 + 前一天日期 + 标题（解决欧美发行时区偏差1天的情况，例如 Deeper.26.10.08.Violet.Voss.And.Alex.Jones.Absolution）
@@ -750,6 +831,21 @@ class XxxclubCrawlerService
             $statusCode = $response->status();
             $body = $response->body();
 
+            // 检查目标站频率限制拦截 (HTTP 429 或 Cloudflare 1015)
+            $isRateLimited = ($statusCode === 429) || str_contains($body, '1015') || str_contains(strtolower($body), 'rate limit');
+            if ($isRateLimited) {
+                return [
+                    'success'          => false,
+                    'status_code'      => $statusCode ?: 429,
+                    'url'              => $url,
+                    'is_cf'            => true,
+                    'is_rate_limited'  => true,
+                    'via_flaresolverr' => false,
+                    'message'          => "目标网站返回访问频率限制 (HTTP {$statusCode} / Rate Limited / CF 1015)",
+                    'html'             => $body,
+                ];
+            }
+
             // 检查 Cloudflare 质询拦截
             if ($statusCode === 403 || str_contains($body, 'Just a moment...') || str_contains($body, 'cf-browser-verification')) {
                 return [
@@ -757,6 +853,7 @@ class XxxclubCrawlerService
                     'status_code'      => $statusCode,
                     'url'              => $url,
                     'is_cf'            => true,
+                    'is_rate_limited'  => false,
                     'via_flaresolverr' => false,
                     'message'          => '触发了 Cloudflare 防爬验证质询 (403/Challenge)',
                     'html'             => $body,
@@ -769,6 +866,7 @@ class XxxclubCrawlerService
                     'status_code'      => $statusCode,
                     'url'              => $url,
                     'is_cf'            => false,
+                    'is_rate_limited'  => false,
                     'via_flaresolverr' => false,
                     'message'          => "HTTP 请求失败，状态码: {$statusCode}",
                     'html'             => $body,
@@ -857,6 +955,27 @@ class XxxclubCrawlerService
             }
 
             if (($data['status'] ?? '') === 'ok' && !empty($data['solution']['response'])) {
+                $html = $data['solution']['response'];
+                $solutionStatus = (int) ($data['solution']['status'] ?? 200);
+                $isRateLimited = ($solutionStatus === 429) ||
+                    str_contains($html, '1015') ||
+                    str_contains(strtolower($html), 'rate limit') ||
+                    str_contains(strtolower($html), 'too many requests');
+
+                if ($isRateLimited) {
+                    Log::warning("⚠️ FlareSolverr 页面返回目标站限流拦截 (HTTP {$solutionStatus} / Error 1015 / Rate Limited) [{$url}]");
+                    return [
+                        'success'          => false,
+                        'status_code'      => $solutionStatus ?: 429,
+                        'url'              => $url,
+                        'is_cf'            => true,
+                        'is_rate_limited'  => true,
+                        'via_flaresolverr' => true,
+                        'message'          => "目标站频率限制拦截 (HTTP {$solutionStatus} / Rate Limited)",
+                        'html'             => $html,
+                    ];
+                }
+
                 $elapsed = round(microtime(true) - $startTime, 2);
                 Log::info("🎉 FlareSolverr 成功穿透 Cloudflare [{$hostKey} | 耗时 {$elapsed}s]！");
 
@@ -872,36 +991,56 @@ class XxxclubCrawlerService
 
                 return [
                     'success'          => true,
-                    'status_code'      => $data['solution']['status'] ?? 200,
+                    'status_code'      => $solutionStatus,
                     'url'              => $url,
                     'is_cf'            => false,
+                    'is_rate_limited'  => false,
                     'via_flaresolverr' => true,
                     'message'          => 'OK (via FlareSolverr)',
-                    'html'             => $data['solution']['response'],
+                    'html'             => $html,
                 ];
             }
 
             $failureMessage = $data['message'] ?? $response->body();
-            Log::error("FlareSolverr 求解失败 [{$url}]: " . $failureMessage);
+            $solutionStatus = (int) ($data['solution']['status'] ?? 500);
+            $isRateLimited = ($solutionStatus === 429) ||
+                str_contains(strtolower($failureMessage), '429') ||
+                str_contains($failureMessage, '1015') ||
+                str_contains(strtolower($failureMessage), 'rate limit') ||
+                str_contains(strtolower($failureMessage), 'too many requests');
+
+            if ($isRateLimited) {
+                Log::warning("⚠️ FlareSolverr 求解遇到目标站限流拦截: {$failureMessage}");
+            } else {
+                Log::error("FlareSolverr 求解失败 [{$url}]: " . $failureMessage);
+            }
 
             return [
                 'success'          => false,
-                'status_code'      => $data['solution']['status'] ?? 500,
+                'status_code'      => $solutionStatus,
                 'url'              => $url,
                 'is_cf'            => true,
+                'is_rate_limited'  => $isRateLimited,
                 'via_flaresolverr' => true,
                 'message'          => 'FlareSolverr 求解失败: ' . $failureMessage,
                 'html'             => '',
             ];
         } catch (Throwable $e) {
-            Log::error("调用 FlareSolverr 发生异常: " . $e->getMessage());
+            $errMsg = $e->getMessage();
+            $isRateLimited = str_contains(strtolower($errMsg), '429') ||
+                str_contains($errMsg, '1015') ||
+                str_contains(strtolower($errMsg), 'rate limit') ||
+                str_contains(strtolower($errMsg), 'too many requests');
+
+            Log::error("调用 FlareSolverr 发生异常: " . $errMsg);
             return [
                 'success'          => false,
                 'status_code'      => 0,
                 'url'              => $url,
                 'is_cf'            => true,
+                'is_rate_limited'  => $isRateLimited,
                 'via_flaresolverr' => true,
-                'message'          => '调用 FlareSolverr 发生异常: ' . $e->getMessage(),
+                'message'          => '调用 FlareSolverr 发生异常: ' . $errMsg,
                 'html'             => '',
             ];
         }
