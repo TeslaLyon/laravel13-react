@@ -185,6 +185,7 @@ class VideoController extends Controller
         /** @var \App\Models\User|null $user */
         $user = $request->user();
         $isSubscribed = false;
+        $notificationType = 'personalized';
         $isLike = false;
         $isDisLike = false;
         $isCollect = false;
@@ -206,9 +207,11 @@ class VideoController extends Controller
                 $video->registerAsLoveReactant();
             }
 
-            $isSubscribed = $video->channel
-                ? app(ChannelSubscriptionService::class)->getSubscriptionStatus($video->channel, $user)['is_subscribed']
-                : false;
+            $subscriptionStatus = $video->channel
+                ? app(ChannelSubscriptionService::class)->getSubscriptionStatus($video->channel, $user)
+                : ['is_subscribed' => false, 'notification_type' => 'personalized'];
+            $isSubscribed = $subscriptionStatus['is_subscribed'];
+            $notificationType = $subscriptionStatus['notification_type'];
             $isLike = $video->viaLoveReactant()->isReactedBy($user, 'Like');
             $isDisLike = $video->viaLoveReactant()->isReactedBy($user, 'Dislike');
             $isCollect = $video->viaLoveReactant()->isReactedBy($user, "VideoCollect");
@@ -247,6 +250,7 @@ class VideoController extends Controller
             ])->findOrFail($video->id)),
             'recommendVideos' => Inertia::defer(fn() => $recommendVideos),
             'isSubscribed' => $isSubscribed,
+            'notificationType' => $notificationType,
             'liked' => $isLike,
             'disLiked' => $isDisLike,
             'likeCount' => (int) ($video->likes_count ?? 0),

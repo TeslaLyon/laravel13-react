@@ -31,6 +31,16 @@ class ChannelSeeder extends Seeder
                 'love_reactant_id'     => 1,
             ],
             [
+                'name'                 => 'SexyHub',
+                'slug'                 => 'sexyhub',
+                'data_crawl_type'      => 1,
+                'video_num'            => 0,
+                'follow_num'           => 0,
+                'avatar'               => '/images/channels/sexyhub.avif',
+                'logo'                 => '/images/channels/sexyhub.avif',
+                'official_website_url' => 'https://www.sexyhub.com',
+            ],
+            [
                 'name'                 => 'Vixen',
                 'slug'                 => 'vixen',
                 'data_crawl_type'      => 2,

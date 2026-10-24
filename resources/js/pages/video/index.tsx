@@ -4,8 +4,7 @@ import { VideoCard } from "@/components/video/Card";
 import { VideoPagination } from '@/components/VideoPagination';
 import { Button } from "@/components/ui/button";
 import { SlidersHorizontal, ChevronUp } from "lucide-react";
-import { Link, Deferred, router, useHttp } from '@inertiajs/react';
-import { show } from '@/routes/videos';
+import { Deferred, router, useHttp } from '@inertiajs/react';
 import { Video, PaginatedResponse } from "@/types/video";
 import { toast } from 'sonner';
 
@@ -405,15 +404,9 @@ export default function YoutubeVideoGrid({
                         <VideoSkeleton key={index} />
                     ))
                 }>
-                    {videos?.data?.map((video) => {
-                        const videoId = video?.id ?? 0;
-                        const videoSlug = video?.slug || String(videoId || 'video');
-                        return (
-                            <Link href={show({ video: videoId, slug: videoSlug })} key={video.id}>
-                                <VideoCard key={video.id} video={video} />
-                            </Link>
-                        );
-                    })}
+                    {videos?.data?.map((video) => (
+                        <VideoCard key={video.id} video={video} />
+                    ))}
                 </Deferred>
             </div>
 

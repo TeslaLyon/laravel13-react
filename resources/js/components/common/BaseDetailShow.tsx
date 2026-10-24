@@ -14,7 +14,6 @@ import { EditActorDialog } from '@/components/actor/EditActorDialog';
 import { XIcon, InstagramIcon, YoutubeIcon, FacebookIcon, WebsiteIcon } from '@/components/BrandIcons';
 import { formatChineseUnit, cdnUrl } from '@/lib/utils';
 import { VideoCard } from "@/components/video/Card";
-import { show } from '@/routes/videos';
 import { SubscribeButton, NotificationType } from '@/components/subscribe-button';
 
 // 独立视频分页组件
@@ -509,15 +508,9 @@ export default function BaseDetailShow({
                                     <Deferred data="latestVideos" fallback={<VideoSkeletonGrid count={4} />}>
                                         {latestVideos && latestVideos.length > 0 ? (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-5">
-                                                {latestVideos.map((v) => {
-                                                    const vId = v?.id ?? 0;
-                                                    const vSlug = v?.slug || String(vId || 'video');
-                                                    return (
-                                                        <Link href={show({ video: vId, slug: vSlug })} key={v.id}>
-                                                            <VideoCard video={v} />
-                                                        </Link>
-                                                    );
-                                                })}
+                                                {latestVideos.map((v) => (
+                                                    <VideoCard key={v.id} video={v} />
+                                                ))}
                                             </div>
                                         ) : (
                                             <EmptyState
@@ -564,15 +557,9 @@ export default function BaseDetailShow({
                                     {paginatedVideos?.data && paginatedVideos.data.length > 0 ? (
                                         <>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-5">
-                                                {paginatedVideos.data.map((video: any) => {
-                                                    const videoId = video?.id ?? 0;
-                                                    const videoSlug = video?.slug || String(videoId || 'video');
-                                                    return (
-                                                        <Link href={show({ video: videoId, slug: videoSlug })} key={video.id}>
-                                                            <VideoCard video={video} />
-                                                        </Link>
-                                                    );
-                                                })}
+                                                {paginatedVideos.data.map((video: any) => (
+                                                    <VideoCard key={video.id} video={video} />
+                                                ))}
                                             </div>
 
                                             {paginatedVideos?.links && (

@@ -1,94 +1,39 @@
-import {
-    ChevronDown,
-    Bell
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Spinner } from '@/components/ui/spinner';
-import { toast } from 'sonner';
-import { useHttp } from '@inertiajs/react';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useRequireAuth } from '@/components/require-auth-provider';
-import ChannelController from "@/actions/App/Http/Controllers/ChannelController";
-import { cn } from "@/lib/utils";
+import { SubscribeButton as BaseSubscribeButton, type NotificationType } from '@/components/subscribe-button';
 
-interface SubscribeResponse {
-    is_subscribed: boolean;
-    message: string;
-    subscribers_count?: number;
-}
-interface PostOptions {
-    onSuccess?: (response: unknown) => void;
-    onError?: (error: unknown) => void;
-}
-
-export function SubscribeButton({ subscribed, channelId, setSubscribed, channelSlug, onCountChange }: {
-    subscribed: boolean,
-    channelId: number,
-    setSubscribed: (subscribed: boolean) => void,
-    channelSlug: string,
-    onCountChange?: (count: number) => void
+export function SubscribeButton({
+    subscribed,
+    channelId,
+    setSubscribed,
+    channelSlug,
+    onCountChange,
+    channelName,
+    notificationType = 'personalized',
+    className = 'h-9 ml-2 shrink-0',
+}: {
+    subscribed: boolean;
+    channelId: number;
+    setSubscribed: (subscribed: boolean) => void;
+    channelSlug?: string;
+    onCountChange?: (count: number) => void;
+    channelName?: string;
+    notificationType?: NotificationType;
+    className?: string;
 }) {
-
-    const { post, processing } = useHttp()
-
-    const { requireAuth } = useRequireAuth();
-
-    // 2. 使用 requireAuth 包裹订阅处理函数
-    const handleSubscribeToggle = () => {
-        requireAuth(() => {
-            if (processing) return;
-            post(ChannelController.toggleSubscribe.url({ channel: channelId, slug: channelSlug }), {
-                onSuccess: (response: unknown) => {
-                    const subscribeResponse = response as SubscribeResponse;
-                    toast.success(subscribeResponse.message);
-                    setSubscribed(subscribeResponse.is_subscribed);
-                    if (typeof subscribeResponse.subscribers_count === 'number' && onCountChange) {
-                        onCountChange(subscribeResponse.subscribers_count);
-                    }
-                },
-                onError: () => {
-                    toast.error('刷新页面后重试');
-                }
-            });
-        });
-    };
     return (
-        <>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                        variant={subscribed ? "secondary" : "default"}
-                        className={cn("rounded-full shadow-none ml-2 px-5 h-9", subscribed ? "w-[128px]" : "w-[72px]")}
-                        onClick={handleSubscribeToggle}
-                        disabled={processing}
-                    >
-                        {processing && (
-                            <>
-                                <Spinner data-icon="inline-start" />
-                            </>
-                        )
-                        }
-                        {subscribed ? (
-                            <>
-                                {!processing && (<Bell className="w-4 h-4 " />)}
-                                已订阅
-                                <ChevronDown className="w-4 h-4 " />
-                            </>
-                        ) : (
-                            "订阅"
-                        )}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>订阅片商</p>
-                </TooltipContent>
-            </Tooltip>
-
-        </>
-
+        <BaseSubscribeButton
+            type="channel"
+            id={channelId}
+            name={channelName}
+            initialIsSubscribed={subscribed}
+            initialNotificationType={notificationType}
+            onSubscriptionChange={(isSub, delta) => {
+                setSubscribed(isSub);
+                onCountChange?.(delta);
+            }}
+            className={className}
+        />
     );
 }
+
+export { BaseSubscribeButton };
+

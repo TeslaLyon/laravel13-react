@@ -37,6 +37,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { subscribe, unsubscribe, updateNotification } from '@/actions/App/Http/Controllers/SubscriptionController';
+import { cn } from '@/lib/utils';
 
 export type NotificationType = 'all' | 'personalized' | 'none';
 
@@ -189,7 +190,10 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
                 <Button
                     onClick={handleSubscribe}
                     disabled={isProcessing}
-                    className={`rounded-full px-6 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70 ${className}`}
+                    className={cn(
+                        "rounded-full px-6 font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70",
+                        className
+                    )}
                 >
                     {isSubscribeProcessing && (
                         <Loader2 className="w-4 h-4 animate-spin text-primary-foreground" />
@@ -203,7 +207,10 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
                         variant="secondary"
                         disabled={isProcessing}
                         onClick={() => setIsMenuOpen(true)}
-                        className={`rounded-full px-4 sm:px-5 font-semibold bg-secondary/80 text-secondary-foreground hover:bg-secondary flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60 ${className}`}
+                        className={cn(
+                            "rounded-full px-4 sm:px-5 font-semibold bg-secondary/80 text-secondary-foreground hover:bg-secondary flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60",
+                            className
+                        )}
                     >
                         {isProcessing ? (
                             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -284,7 +291,10 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
                     <DropdownMenuTrigger asChild disabled={isProcessing}>
                         <Button
                             variant="secondary"
-                            className={`rounded-full px-4 sm:px-5 font-semibold bg-secondary/80 text-secondary-foreground hover:bg-secondary flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60 ${className}`}
+                            className={cn(
+                                "rounded-full px-4 sm:px-5 font-semibold bg-secondary/80 text-secondary-foreground hover:bg-secondary flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60",
+                                className
+                            )}
                         >
                             {isProcessing ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />

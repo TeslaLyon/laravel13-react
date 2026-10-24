@@ -34,6 +34,10 @@ class FindMissingProject1VideosCommand extends Command
         $slug = (string) $this->argument('channel');
         $channel = Channel::where('slug', $slug)->first();
 
+        if (!$channel && Project1VideoCrawlerService::isSupported($slug)) {
+            $channel = $crawlerService->ensureChannel($slug);
+        }
+
         if (!$channel) {
             $this->error("❌ 未在数据库找到片商 slug=[{$slug}] 的记录。");
             return self::FAILURE;

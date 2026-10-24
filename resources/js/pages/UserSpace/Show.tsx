@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Head, Deferred, router } from '@inertiajs/react';
+import { Head, Deferred, router, Link } from '@inertiajs/react';
 import { ProfileHeader } from '@/components/UserSpace/ProfileHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChannelProfile } from '@/types/profile';

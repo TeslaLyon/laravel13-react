@@ -178,6 +178,10 @@ class CrawlProject1VideosCommand extends Command
 
         foreach ($targetChannels as $chSlug) {
             $channelModel = Channel::where('slug', $chSlug)->where('data_crawl_type', 1)->first();
+            if (!$channelModel && Project1VideoCrawlerService::isSupported($chSlug)) {
+                $channelModel = $crawlerService->ensureChannel($chSlug);
+            }
+
             if (!$channelModel) {
                 $this->error("❌ 片商 [{$chSlug}] 未找到或 data_crawl_type 不为 1");
                 continue;

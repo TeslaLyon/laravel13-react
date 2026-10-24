@@ -69,6 +69,11 @@ class Project1VideoCrawlerService
             'official_url' => 'https://www.propertysex.com',
             'has_site_prefix' => true,
         ],
+        'sexyhub' => [
+            'name'         => 'SexyHub',
+            'official_url' => 'https://www.sexyhub.com',
+            'has_site_prefix' => true,
+        ],
     ];
 
     /**
@@ -102,6 +107,63 @@ class Project1VideoCrawlerService
     }
 
     /**
+     * 自动确保指定片商在数据库中存在（若不存在则依据字典配置自动创建并注册 LoveReactant）
+     */
+    public function ensureChannel(string $slug): ?Channel
+    {
+        $slug = strtolower($slug);
+        $config = self::getChannelConfig($slug);
+        if (!$config) {
+            return null;
+        }
+
+        $channel = Channel::where('slug', $slug)->first();
+        if ($channel) {
+            $updates = [];
+            if ((int) $channel->data_crawl_type !== 1) {
+                $updates['data_crawl_type'] = 1;
+            }
+            if (empty($channel->official_website_url)) {
+                $updates['official_website_url'] = $config['official_url'];
+            }
+            if (!empty($updates)) {
+                $channel->update($updates);
+            }
+            if ($channel->isNotRegisteredAsLoveReactant()) {
+                $channel->registerAsLoveReactant();
+            }
+            return $channel;
+        }
+
+        $avatarPath = file_exists(public_path("images/channels/{$slug}.avif"))
+            ? "/images/channels/{$slug}.avif"
+            : (file_exists(public_path("images/channels/{$slug}-avatar.avif")) ? "/images/channels/{$slug}-avatar.avif" : '');
+
+        $logoPath = file_exists(public_path("images/channels/{$slug}.avif"))
+            ? "/images/channels/{$slug}.avif"
+            : (file_exists(public_path("images/channels/{$slug}-logo.avif")) ? "/images/channels/{$slug}-logo.avif" : '');
+
+        $channel = Channel::create([
+            'name'                 => $config['name'],
+            'slug'                 => $slug,
+            'data_crawl_type'      => 1,
+            'avatar'               => $avatarPath,
+            'logo'                 => $logoPath,
+            'official_website_url' => $config['official_url'],
+            'video_num'            => 0,
+            'follow_num'           => 0,
+        ]);
+
+        if ($channel->isNotRegisteredAsLoveReactant()) {
+            $channel->registerAsLoveReactant();
+        }
+
+        Log::info("已为 Project1 片商 [{$slug}] 自动在数据库创建 Channel 记录 (ID: {$channel->id})");
+
+        return $channel;
+    }
+
+    /**
      * 执行指定片商或所有片商的视频列表爬取任务
      *
      * @param string|null $channelSlug 片商 slug（若为空则爬取所有支持的 Project1 片商）
@@ -117,6 +179,11 @@ class Project1VideoCrawlerService
             $channel = Channel::where('slug', $channelSlug)
                 ->where('data_crawl_type', 1)
                 ->first();
+
+            // 若在受支持列表中但数据库尚无记录，自动尝试创建
+            if (!$channel && self::isSupported($channelSlug)) {
+                $channel = $this->ensureChannel($channelSlug);
+            }
 
             if (!$channel) {
                 $msg = "片商 [{$channelSlug}] 未找到或 data_crawl_type 不为 1";
@@ -645,7 +712,7 @@ class Project1VideoCrawlerService
     public function resolveChannelToken(Channel|string $channel, bool $forceRefresh = false): ?string
     {
         $channelModel = is_string($channel)
-            ? Channel::where('slug', $channel)->where('data_crawl_type', 1)->first()
+            ? (Channel::where('slug', $channel)->where('data_crawl_type', 1)->first() ?: (self::isSupported($channel) ? $this->ensureChannel($channel) : null))
             : $channel;
 
         if (!$channelModel) {
@@ -1077,6 +1144,9 @@ class Project1VideoCrawlerService
     {
         $slug = $channel instanceof Channel ? $channel->slug : (string) $channel;
         $channelModel = $channel instanceof Channel ? $channel : Channel::where('slug', $slug)->first();
+        if (!$channelModel && self::isSupported($slug)) {
+            $channelModel = $this->ensureChannel($slug);
+        }
 
         $results = [
             'success' => false,

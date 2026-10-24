@@ -26,14 +26,13 @@ import { DownloadDialog } from '@/components/video/DownloadDialog';
 import { LikeAndDislikeButton } from '@/components/video/LikeAndDislikeButton';
 import { MoreOption } from '@/components/video/MoreOption';
 import { Save } from '@/components/video/Save';
-import { SubscribeButton } from '@/components/video/SubscribeButton';
+import { SubscribeButton, NotificationType } from '@/components/subscribe-button';
 import { SubtitleDialog } from '@/components/video/SubtitleDialog';
 import { VideoHeader } from '@/components/video/VideoHeader';
 import type { ImageMeta } from '@/components/video/VideoHeader';
 import { VideoPreviews } from '@/components/video/VideoPreviews';
 import { VideoSkeleton } from "@/components/video/VideoSkeleton";
 import { formatChineseUnit, cn } from '@/lib/utils';
-import { show } from '@/routes/videos';
 import type { Actor } from '@/types/actor';
 import type { Video, Category, Tag } from "@/types/video";
 
@@ -42,6 +41,7 @@ import type { Video, Category, Tag } from "@/types/video";
 interface VideoDetailPageProps {
     video: Video;
     isSubscribed: boolean;
+    notificationType?: NotificationType;
     liked: boolean;
     disLiked: boolean;
     likeCount: number;
@@ -55,7 +55,7 @@ interface VideoDetailPageProps {
     tags?: Tag[];
 }
 
-export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, likeCount, favoritesCount, viewsCount, channelSubscribersCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
+export default function VideoDetailPage({ video, isSubscribed, notificationType = 'personalized', liked, disLiked, likeCount, favoritesCount, viewsCount, channelSubscribersCount, initialIsCollect, recommendVideos }: VideoDetailPageProps) {
     // 侧边栏推荐视频安全解析（防御性处理：兼容数组、对象序列化及 Deferred 加载期间状态，彻底杜绝 map is not a function 异常）
     const safeRecommendVideos: Video[] = useMemo(() => {
         if (!recommendVideos) return [];
@@ -431,11 +431,16 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                 }>
                                     {video?.channel && (
                                         <SubscribeButton
-                                            subscribed={subscribed}
-                                            channelId={video.channel.id}
-                                            setSubscribed={setSubscribed}
-                                            channelSlug={video.channel.slug}
-                                            onCountChange={setSubscribersCount}
+                                            type="channel"
+                                            id={video.channel.id}
+                                            name={video.channel.name_zh || video.channel.name}
+                                            initialIsSubscribed={subscribed}
+                                            initialNotificationType={notificationType || (video.channel as any)?.notificationType || 'personalized'}
+                                            onSubscriptionChange={(isSub, delta) => {
+                                                setSubscribed(isSub);
+                                                setSubscribersCount((prev: number) => Math.max(0, prev + delta));
+                                            }}
+                                            className="h-9 ml-2 shrink-0"
                                         />
                                     )}
                                 </Deferred>
@@ -747,15 +752,9 @@ export default function VideoDetailPage({ video, isSubscribed, liked, disLiked, 
                                 <VideoSkeleton key={index} />
                             ))
                         }>
-                            {safeRecommendVideos.map((item: any) => {
-                                const itemId = item?.id ?? 0;
-                                const itemSlug = item?.slug || String(itemId || 'video');
-                                return (
-                                    <Link href={show({ video: itemId, slug: itemSlug })} key={item.id ?? itemSlug}>
-                                        <VideoCard key={item.id ?? itemSlug} video={item} />
-                                    </Link>
-                                );
-                            })}
+                            {safeRecommendVideos.map((item: any) => (
+                                <VideoCard key={item.id ?? item.slug} video={item} />
+                            ))}
                         </Deferred>
                     </div>
                 </div>

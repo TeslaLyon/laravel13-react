@@ -42,6 +42,10 @@ class CrawlProject1HistoryCommand extends Command
         $channelSlug = trim($this->argument('channel') ?: 'brazzers');
         $channel = Channel::where('slug', $channelSlug)->where('data_crawl_type', 1)->first();
 
+        if (!$channel && Project1VideoCrawlerService::isSupported($channelSlug)) {
+            $channel = $crawlerService->ensureChannel($channelSlug);
+        }
+
         if (!$channel) {
             $this->error("❌ 片商 [{$channelSlug}] 未找到或 data_crawl_type 不为 1！");
             return self::FAILURE;

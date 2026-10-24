@@ -225,13 +225,7 @@ export const ChannelTabs: React.FC<ChannelTabsProps> = ({
                                 {latestVideos && latestVideos.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                         {latestVideos.map((v) => (
-                                            <Link
-                                                href={showRouteGenerator({ video: v.id, slug: v.slug })}
-                                                key={v.id}
-                                                className="group block transition-transform duration-200 hover:-translate-y-0.5"
-                                            >
-                                                <VideoCardComponent video={v} />
-                                            </Link>
+                                            <VideoCardComponent key={v.id} video={v} />
                                         ))}
                                     </div>
                                 ) : (
@@ -293,13 +287,7 @@ export const ChannelTabs: React.FC<ChannelTabsProps> = ({
                                 <div className="space-y-8">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                         {paginatedVideos.data.map((video: any) => (
-                                            <Link
-                                                href={showRouteGenerator({ video: video.id, slug: video.slug })}
-                                                key={video.id}
-                                                className="group block transition-transform duration-200 hover:-translate-y-0.5"
-                                            >
-                                                <VideoCardComponent video={video} />
-                                            </Link>
+                                            <VideoCardComponent key={video.id} video={video} />
                                         ))}
                                     </div>
 

@@ -27,6 +27,15 @@ Schedule::job(new CrawlProject1VideosJob())
     ->withoutOverlapping();
 
 /**
+ * SexyHub 片商视频增量定时爬取任务
+ * 每天晚上 20:40 自动投递任务至 Horizon 队列，与其他爬虫错峰执行
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'sexyhub', limit: 24, page: 1))
+    ->dailyAt('20:40')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
  * 每日视频抓取数据汇总并自动推送至 Telegram
  * 每天晚上 21:00（爬虫执行完毕后）生成当日数据大盘与各片商增量报告
  */
