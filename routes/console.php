@@ -36,6 +36,42 @@ Schedule::job(new CrawlProject1VideosJob(channel: 'sexyhub', limit: 24, page: 1)
     ->withoutOverlapping();
 
 /**
+ * Sweetheart Video (女同题材标杆片商) 视频增量定时爬取任务
+ * 每天晚上 20:44 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'sweetheartvideo', limit: 24, page: 1))
+    ->dailyAt('20:44')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * Sweet Sinner (浪漫剧情片商) 视频增量定时爬取任务
+ * 每天晚上 20:48 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'sweetsinner', limit: 24, page: 1))
+    ->dailyAt('20:48')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * Reality Junkies (纪实真人秀片商) 视频增量定时爬取任务
+ * 每天晚上 20:52 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'realityjunkies', limit: 24, page: 1))
+    ->dailyAt('20:52')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * Doghouse Digital (经典硬核片商) 视频增量定时爬取任务
+ * 每天晚上 20:56 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'doghousedigital', limit: 24, page: 1))
+    ->dailyAt('20:56')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
  * 每日视频抓取数据汇总并自动推送至 Telegram
  * 每天晚上 21:00（爬虫执行完毕后）生成当日数据大盘与各片商增量报告
  */
@@ -144,6 +180,25 @@ Schedule::job(new CrawlXxxclubMagnetsJob(limit: 15, onlyReleased: true, cooldown
     ->everyTenMinutes()
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping(15);
+
+/**
+ * Family Sinners (已完结归档系列) 凌晨低频巡检爬取任务
+ * 每天凌晨 04:10 自动投递任务至 Horizon 队列，轻量检测是否有新剧照或重新发行版本
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'familysinners', limit: 24, page: 1))
+    ->dailyAt('04:10')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * Sex On Sight (已完结归档系列) 凌晨低频巡检爬取任务
+ * 每天凌晨 04:20 自动投递任务至 Horizon 队列，轻量检测是否有新剧照或重新发行版本
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'sexonsight', limit: 24, page: 1))
+    ->dailyAt('04:20')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
 
 
 

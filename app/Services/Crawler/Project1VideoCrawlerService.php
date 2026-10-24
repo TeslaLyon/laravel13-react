@@ -74,6 +74,36 @@ class Project1VideoCrawlerService
             'official_url' => 'https://www.sexyhub.com',
             'has_site_prefix' => true,
         ],
+        'sweetheartvideo' => [
+            'name'         => 'Sweetheart Video',
+            'official_url' => 'https://www.sweetheartvideo.com',
+            'has_site_prefix' => true,
+        ],
+        'sweetsinner' => [
+            'name'         => 'Sweet Sinner',
+            'official_url' => 'https://www.sweetsinner.com',
+            'has_site_prefix' => true,
+        ],
+        'realityjunkies' => [
+            'name'         => 'Reality Junkies',
+            'official_url' => 'https://www.realityjunkies.com',
+            'has_site_prefix' => true,
+        ],
+        'doghousedigital' => [
+            'name'         => 'Doghouse Digital',
+            'official_url' => 'https://www.doghousedigital.com',
+            'has_site_prefix' => true,
+        ],
+        'familysinners' => [
+            'name'         => 'Family Sinners',
+            'official_url' => 'https://www.familysinners.com',
+            'has_site_prefix' => true,
+        ],
+        'sexonsight' => [
+            'name'         => 'Sex On Sight',
+            'official_url' => 'https://www.sexonsight.com',
+            'has_site_prefix' => true,
+        ],
     ];
 
     /**
@@ -135,13 +165,31 @@ class Project1VideoCrawlerService
             return $channel;
         }
 
-        $avatarPath = file_exists(public_path("images/channels/{$slug}.avif"))
-            ? "/images/channels/{$slug}.avif"
-            : (file_exists(public_path("images/channels/{$slug}-avatar.avif")) ? "/images/channels/{$slug}-avatar.avif" : '');
+        $avatarCandidates = [
+            "/images/channels/{$slug}.avif",
+            "/images/channels/{$slug}-avatar.avif",
+            "/images/channels/" . Str::studly($slug) . ".avif",
+        ];
+        $avatarPath = '';
+        foreach ($avatarCandidates as $candidate) {
+            if (file_exists(public_path(ltrim($candidate, '/')))) {
+                $avatarPath = $candidate;
+                break;
+            }
+        }
 
-        $logoPath = file_exists(public_path("images/channels/{$slug}.avif"))
-            ? "/images/channels/{$slug}.avif"
-            : (file_exists(public_path("images/channels/{$slug}-logo.avif")) ? "/images/channels/{$slug}-logo.avif" : '');
+        $logoCandidates = [
+            "/images/channels/{$slug}.avif",
+            "/images/channels/{$slug}-logo.avif",
+            "/images/channels/" . Str::studly($slug) . ".avif",
+        ];
+        $logoPath = '';
+        foreach ($logoCandidates as $candidate) {
+            if (file_exists(public_path(ltrim($candidate, '/')))) {
+                $logoPath = $candidate;
+                break;
+            }
+        }
 
         $channel = Channel::create([
             'name'                 => $config['name'],
