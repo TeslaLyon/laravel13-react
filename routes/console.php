@@ -27,6 +27,24 @@ Schedule::job(new CrawlProject1VideosJob())
     ->withoutOverlapping();
 
 /**
+ * Squirted (潮吹高潮专题片商) 视频增量定时爬取任务
+ * 每天晚上 20:34 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'squirted', limit: 24, page: 1))
+    ->dailyAt('20:34')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * True Amateurs (真实素人自拍片商) 视频增量定时爬取任务
+ * 每天晚上 20:37 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'trueamateurs', limit: 24, page: 1))
+    ->dailyAt('20:37')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
  * SexyHub 片商视频增量定时爬取任务
  * 每天晚上 20:40 自动投递任务至 Horizon 队列，与其他爬虫错峰执行
  */
@@ -78,6 +96,24 @@ Schedule::job(new CrawlProject1VideosJob(channel: 'doghousedigital', limit: 24, 
 Schedule::command('crawler:send-daily-summary')
     ->dailyAt('21:00')
     ->timezone('Asia/Shanghai');
+
+/**
+ * Next Door Hobby (邻家爱好主题片商) 视频增量定时爬取任务
+ * 每天晚上 21:05 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'nextdoorhobby', limit: 24, page: 1))
+    ->dailyAt('21:05')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * Milfed (熟女人妻专题片商) 视频增量定时爬取任务
+ * 每天晚上 21:10 自动投递任务至 Horizon 队列
+ */
+Schedule::job(new CrawlProject1VideosJob(channel: 'milfed', limit: 24, page: 1))
+    ->dailyAt('21:10')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
 
 /**
  * 视频中文标题 AI 自动翻译定时任务

@@ -104,6 +104,26 @@ class Project1VideoCrawlerService
             'official_url' => 'https://www.sexonsight.com',
             'has_site_prefix' => true,
         ],
+        'squirted' => [
+            'name'         => 'Squirted',
+            'official_url' => 'https://www.squirted.com',
+            'has_site_prefix' => true,
+        ],
+        'trueamateurs' => [
+            'name'         => 'True Amateurs',
+            'official_url' => 'https://www.trueamateurs.com',
+            'has_site_prefix' => true,
+        ],
+        'nextdoorhobby' => [
+            'name'         => 'Next Door Hobby',
+            'official_url' => 'https://www.nextdoorhobby.com',
+            'has_site_prefix' => true,
+        ],
+        'milfed' => [
+            'name'         => 'Milfed',
+            'official_url' => 'https://www.milfed.com',
+            'has_site_prefix' => true,
+        ],
     ];
 
     /**
@@ -165,29 +185,34 @@ class Project1VideoCrawlerService
             return $channel;
         }
 
-        $avatarCandidates = [
-            "/images/channels/{$slug}.avif",
-            "/images/channels/{$slug}-avatar.avif",
-            "/images/channels/" . Str::studly($slug) . ".avif",
-        ];
+        $extensions = ['avif', 'webp', 'png', 'jpg'];
         $avatarPath = '';
-        foreach ($avatarCandidates as $candidate) {
-            if (file_exists(public_path(ltrim($candidate, '/')))) {
-                $avatarPath = $candidate;
-                break;
+        foreach ($extensions as $ext) {
+            $candidates = [
+                "/images/channels/{$slug}.{$ext}",
+                "/images/channels/{$slug}-avatar.{$ext}",
+                "/images/channels/" . Str::studly($slug) . ".{$ext}",
+            ];
+            foreach ($candidates as $candidate) {
+                if (file_exists(public_path(ltrim($candidate, '/')))) {
+                    $avatarPath = $candidate;
+                    break 2;
+                }
             }
         }
 
-        $logoCandidates = [
-            "/images/channels/{$slug}.avif",
-            "/images/channels/{$slug}-logo.avif",
-            "/images/channels/" . Str::studly($slug) . ".avif",
-        ];
         $logoPath = '';
-        foreach ($logoCandidates as $candidate) {
-            if (file_exists(public_path(ltrim($candidate, '/')))) {
-                $logoPath = $candidate;
-                break;
+        foreach ($extensions as $ext) {
+            $candidates = [
+                "/images/channels/{$slug}.{$ext}",
+                "/images/channels/{$slug}-logo.{$ext}",
+                "/images/channels/" . Str::studly($slug) . ".{$ext}",
+            ];
+            foreach ($candidates as $candidate) {
+                if (file_exists(public_path(ltrim($candidate, '/')))) {
+                    $logoPath = $candidate;
+                    break 2;
+                }
             }
         }
 
