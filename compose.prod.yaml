@@ -211,6 +211,9 @@ services:
     container_name: laravel_flaresolverr
     restart: always
     shm_size: 1g
+    # 挂载 tmpfs 内存文件系统，彻底阻断临时缓存写入硬盘
+    tmpfs:
+      - /tmp:size=512M
     logging: *default-logging
     dns:
       - 8.8.8.8
