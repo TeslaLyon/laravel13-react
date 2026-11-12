@@ -212,8 +212,13 @@ services:
     restart: always
     shm_size: 1g
     # 挂载 tmpfs 内存文件系统，彻底阻断临时缓存写入硬盘
+    ulimits:
+      core: 0
     tmpfs:
-      - /tmp:size=512M
+      - /tmp:rw,noexec,nosuid,size=1g,uid=1000,gid=1000
+      - /app/.cache:rw,noexec,nosuid,size=512m,uid=1000,gid=1000
+      - /app/.config:rw,noexec,nosuid,size=512m,uid=1000,gid=1000
+      - /app/.local:rw,noexec,nosuid,size=256m,uid=1000,gid=1000
     logging: *default-logging
     dns:
       - 8.8.8.8
