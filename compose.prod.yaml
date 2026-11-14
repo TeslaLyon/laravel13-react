@@ -210,26 +210,32 @@ services:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: laravel_flaresolverr
     restart: always
+    # 1. 接管 PID 1，自动清理崩溃或超时的僵尸 Chromium 子进程
+    init: true
+    # 2. 充足的共享内存，大幅降低 Chromium 渲染崩溃概率
     shm_size: 1g
-    # 挂载 tmpfs 内存文件系统，彻底阻断临时缓存写入硬盘
+    # 3. 彻底禁止内核生成 /app/core.<PID> 转储文件
     ulimits:
-      core: 0
+      core:
+        soft: 0
+        hard: 0
+    # 4. 内存文件系统隔离（总上限控制在 1.5G 以内，为 Chromium 留足运行内存）
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=1g,uid=1000,gid=1000
-      - /app/.cache:rw,noexec,nosuid,size=512m,uid=1000,gid=1000
-      - /app/.config:rw,noexec,nosuid,size=512m,uid=1000,gid=1000
-      - /app/.local:rw,noexec,nosuid,size=256m,uid=1000,gid=1000
+      - /tmp:rw,noexec,nosuid,size=1g,mode=1777
+      - /app/.cache:rw,noexec,nosuid,size=256m,uid=1000,gid=1000
+      - /app/.config:rw,noexec,nosuid,size=128m,uid=1000,gid=1000
+      - /app/.local:rw,noexec,nosuid,size=128m,uid=1000,gid=1000
     logging: *default-logging
     dns:
+      - 1.1.1.1
       - 8.8.8.8
-      - 114.114.114.114
     environment:
       - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
       - LOG_HTML=false
       - CAPTCHA_SOLVER=none
       - TZ=Asia/Shanghai
-      # 🛡️ 内存防泄露：会话超时自动关闭 Chromium 标签页与浏览器进程
       - BROWSER_TIMEOUT=40000
+      # 若未走透明代理，建议改为国内可达地址（如 https://www.baidu.com）避免启动自检超时
       - TEST_URL=https://www.google.com
     networks:
       - backend_net
@@ -237,7 +243,8 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          memory: 2048M
+          # 提升至 3G，防止 tmpfs(1.5G) + Chromium 运行内存(1G+) 叠加触发 OOM Kill
+          memory: 3072M
         reservations:
           cpus: '0.1'
           memory: 256M
