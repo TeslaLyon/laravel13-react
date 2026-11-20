@@ -207,12 +207,13 @@ class WalletOrderResource extends Resource
                     ]),
             ])
             ->actions([
-                // 1. 确认收款并向用户增加余额
+                // 1. 确认收款并向用户增加余额（仅限支付宝口令红包）
                 Tables\Actions\Action::make('approve')
                     ->label('确认收款并加款')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (WalletOrder $record): bool => (int) $record->status === WalletOrder::STATUS_PENDING)
+                    ->visible(fn (WalletOrder $record): bool => (int) $record->status === WalletOrder::STATUS_PENDING
+                        && $record->payment_method === WalletOrder::METHOD_ALIPAY_RED_PACKET)
                     ->modalHeading('核实收款并为用户发放纸巾')
                     ->modalDescription('请确认您已在支付宝领取该口令红包，核对无误后输入实际收到的金额，提交后将自动入账并通知用户。')
                     ->form(fn (WalletOrder $record): array => [
@@ -240,6 +241,15 @@ class WalletOrderResource extends Resource
                             ->maxLength(255),
                     ])
                     ->action(function (WalletOrder $record, array $data): void {
+                        if ($record->payment_method !== WalletOrder::METHOD_ALIPAY_RED_PACKET) {
+                            Notification::make()
+                                ->title('操作被拒绝')
+                                ->body('仅“支付宝口令红包”订单支持后台人工确认收款并加款')
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
                         $reallyAmountCents = (int) round(((float) $data['actual_amount_yuan']) * 100);
                         if ($reallyAmountCents <= 0) {
                             Notification::make()
@@ -257,6 +267,10 @@ class WalletOrderResource extends Resource
                                 $lockedOrder = WalletOrder::where('id', $record->id)
                                     ->lockForUpdate()
                                     ->firstOrFail();
+
+                                if ($lockedOrder->payment_method !== WalletOrder::METHOD_ALIPAY_RED_PACKET) {
+                                    throw new \RuntimeException('仅“支付宝口令红包”订单允许人工确认收款并加款');
+                                }
 
                                 if ((int) $lockedOrder->status !== WalletOrder::STATUS_PENDING) {
                                     throw new \RuntimeException('该订单状态已变更，请勿重复审核放款');

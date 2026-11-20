@@ -324,7 +324,8 @@ class WalletController extends Controller
     protected function notifyAdminRedPacketSubmitted(WalletOrder $order, User $user): void
     {
         $amountYuan = number_format($order->amount / 100, 2, '.', '');
-        $adminUrl = url('/admin/wallet-orders');
+        $filamentPath = trim((string) config('app.filament_path', 'manage'), '/');
+        $adminUrl = url("/{$filamentPath}/wallet-orders");
         $userDisplay = e($user->nickname ?: $user->name);
         $userEmail = e($user->email ?? '无');
         $orderNo = e($order->order_no);
