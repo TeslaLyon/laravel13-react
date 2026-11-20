@@ -3,10 +3,10 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | 是否开启充值功能（生产环境默认关闭，可通过环境变量开启）
+    | 是否开启充值功能（可通过环境变量 WALLET_RECHARGE_ENABLED 控制）
     |--------------------------------------------------------------------------
     */
-    'recharge_enabled' => (bool) env('WALLET_RECHARGE_ENABLED', false),
+    'recharge_enabled' => (bool) env('WALLET_RECHARGE_ENABLED', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -42,8 +42,8 @@ return [
             'code' => 'alipay',
             'description' => '支持支付宝扫码、快捷支付',
             'logo' => rtrim((string) env('CDN_URL', ''), '/') . '/images/wallet/alipay.svg',
-            'is_active' => true,
-            'recommended' => true,
+            'is_active' => false,
+            'recommended' => false,
         ],
         [
             'id' => 'alipay_red_packet',
@@ -52,7 +52,7 @@ return [
             'description' => '输入支付宝口令红包提交，管理员人工核实后发放纸巾',
             'logo' => rtrim((string) env('CDN_URL', ''), '/') . '/images/wallet/alipay.svg',
             'is_active' => true,
-            'recommended' => false,
+            'recommended' => true,
         ],
         [
             'id' => 'wechat',
@@ -60,7 +60,7 @@ return [
             'code' => 'wechat_pay',
             'description' => '支持微信 App 快捷扫码或移动端拉起支付',
             'logo' => rtrim((string) env('CDN_URL', ''), '/') . '/images/wallet/wechat.svg',
-            'is_active' => true,
+            'is_active' => false,
             'recommended' => false,
         ],
     ],

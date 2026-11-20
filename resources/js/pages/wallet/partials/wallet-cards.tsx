@@ -106,7 +106,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
     const [depositOptions, setDepositOptions] = useState<DepositAmountOption[]>([]);
 
     const [selectedAmount, setSelectedAmount] = useState<number>(5000);
-    const [selectedMethod, setSelectedMethod] = useState<string>('wechat');
+    const [selectedMethod, setSelectedMethod] = useState<string>('alipay_red_packet');
     const [redPacketCode, setRedPacketCode] = useState<string>('');
 
     // 轮询定时器引用，防止重复触发或未及时清理

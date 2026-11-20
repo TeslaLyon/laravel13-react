@@ -189,14 +189,14 @@ class WalletController extends Controller
         }
 
         $allowedAmounts = collect(config('wallet.deposit_amounts', []))->pluck('amount')->toArray();
+        $activeMethodIds = collect(config('wallet.payment_methods', []))
+            ->where('is_active', true)
+            ->pluck('id')
+            ->all();
 
         $validated = $request->validate([
             'amount'          => ['required', 'integer', Rule::in($allowedAmounts)],
-            'payment_method'  => ['required', 'string', Rule::in([
-                WalletOrder::METHOD_WECHAT,
-                WalletOrder::METHOD_ALIPAY,
-                WalletOrder::METHOD_ALIPAY_RED_PACKET,
-            ])],
+            'payment_method'  => ['required', 'string', Rule::in($activeMethodIds)],
             'red_packet_code' => [
                 'nullable',
                 'string',
