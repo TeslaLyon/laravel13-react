@@ -3,6 +3,7 @@
 use App\Jobs\CrawlDorcelVideosJob;
 use App\Jobs\CrawlJulesJordanVideosJob;
 use App\Jobs\CrawlProject1VideosJob;
+use App\Jobs\CrawlStasyQVideosJob;
 use App\Jobs\CrawlTrueAnalVideosJob;
 use App\Jobs\CrawlVixenDailyJob;
 use App\Jobs\TranslateVideoTitlesJob;
@@ -167,6 +168,18 @@ Schedule::job(new CrawlJulesJordanVideosJob(page: 1, skipExisting: true))
  */
 Schedule::job(new CrawlTrueAnalVideosJob(page: 1, skipExisting: true))
     ->dailyAt('19:10')
+    ->timezone('Asia/Shanghai')
+    ->withoutOverlapping();
+
+/**
+ * StasyQ 厂牌视频日常增量定时爬取任务
+ * 每天北京时间 19:20 自动投递任务至 Horizon 队列：
+ * 1. 仅抓取第 1 页最新发布的 Releases；
+ * 2. 开启 skipExisting 极速增量模式：已有完整详情与 Photos 的视频自动跳过，仅抓取新片详情；
+ * 3. 开启 withoutOverlapping 避免并发重叠。
+ */
+Schedule::job(new CrawlStasyQVideosJob(page: 1, all: false, skipExisting: true))
+    ->dailyAt('19:20')
     ->timezone('Asia/Shanghai')
     ->withoutOverlapping();
 
