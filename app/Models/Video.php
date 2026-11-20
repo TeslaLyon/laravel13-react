@@ -112,6 +112,7 @@ class Video extends Model implements ReactableInterface
     protected function casts(): array
     {
         return [
+            'release_at' => 'datetime',
             'list_img' => 'array',
             'is_4k' => 'boolean',
             'is_vr' => 'boolean',

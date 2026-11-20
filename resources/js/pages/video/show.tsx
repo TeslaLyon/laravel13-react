@@ -32,7 +32,7 @@ import { VideoHeader } from '@/components/video/VideoHeader';
 import type { ImageMeta } from '@/components/video/VideoHeader';
 import { VideoPreviews } from '@/components/video/VideoPreviews';
 import { VideoSkeleton } from "@/components/video/VideoSkeleton";
-import { formatChineseUnit, cn } from '@/lib/utils';
+import { formatChineseUnit, formatVideoDate, cn } from '@/lib/utils';
 import type { Actor } from '@/types/actor';
 import type { Video, Category, Tag } from "@/types/video";
 
@@ -471,7 +471,7 @@ export default function VideoDetailPage({ video, isSubscribed, notificationType 
                         <div className="mt-4 bg-muted hover:bg-muted/80 transition-colors p-3 sm:p-4 rounded-xl text-sm text-foreground">
                             <div className="flex flex-col gap-2 mb-3">
                                 <div className="text-sm font-medium text-muted-foreground">
-                                    {formatChineseUnit(viewsCount ?? video?.views_count)}次观看 • {video?.release_at || "2026年6月29日"}
+                                    {formatChineseUnit(viewsCount ?? video?.views_count)}次观看 • {formatVideoDate(video?.release_at || video?.created_at, "2026年6月29日")}
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
                                     <span className="shrink-0">视频编号：</span>

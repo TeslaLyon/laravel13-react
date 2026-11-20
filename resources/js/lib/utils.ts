@@ -183,3 +183,12 @@ export function formatVideoPublishTime(dateStr?: string | null): string {
 
     return target.fromNow().replace(/\s+/g, '');
 }
+
+/**
+ * 格式化视频发布日期为中文日期（如 2026年11月20日）
+ */
+export function formatVideoDate(dateStr?: string | null, fallback = ''): string {
+    if (!dateStr) return fallback;
+    const target = dayjs(dateStr);
+    return target.isValid() ? target.format('YYYY年M月D日') : fallback;
+}
