@@ -11,8 +11,26 @@ export type User = {
     [key: string]: unknown;
 };
 
+export type UnreadNotification = {
+    id: string;
+    data: {
+        category?: string;
+        result?: 'approved' | 'rejected' | string;
+        title?: string;
+        message?: string;
+        order_no?: string;
+        amount_cents?: number;
+        tissues?: string;
+        payment_method?: string;
+        remark?: string | null;
+        action_url?: string;
+    };
+    created_at?: string;
+};
+
 export type Auth = {
     user: User;
+    unreadNotifications?: UnreadNotification[];
 };
 
 /* @chisel-passkeys */

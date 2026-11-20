@@ -25,6 +25,7 @@ use App\Http\Controllers\Forum\ThreadController;
 use App\Http\Controllers\Settings\ProfileBannerController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MedalController;
 use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\GrowthController;
@@ -221,6 +222,12 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
         ->name('wallet.deposit');
     Route::get('/wallet/orders/{orderNo}/status', [WalletController::class, 'checkOrderStatus'])
         ->name('wallet.order.status');
+
+    // 站内异步通知已读接口
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])
+        ->name('notifications.read');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])
+        ->name('notifications.read-all');
 
     // 2. 登录用户切换勋章佩戴状态接口
     Route::post('/user/medals/{medal}/toggle-wear', [MedalController::class, 'toggleWear'])

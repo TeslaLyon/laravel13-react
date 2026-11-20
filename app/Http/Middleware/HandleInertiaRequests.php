@@ -56,6 +56,27 @@ class HandleInertiaRequests extends Middleware
 
                     return $user;
                 },
+                'unreadNotifications' => function () use ($request) {
+                    if (!$user = $request->user()) {
+                        return [];
+                    }
+
+                    try {
+                        return $user->unreadNotifications()
+                            ->latest()
+                            ->limit(5)
+                            ->get(['id', 'type', 'data', 'created_at'])
+                            ->map(fn ($n) => [
+                                'id'         => $n->id,
+                                'data'       => $n->data,
+                                'created_at' => $n->created_at?->toDateTimeString(),
+                            ])
+                            ->values()
+                            ->all();
+                    } catch (\Throwable) {
+                        return [];
+                    }
+                },
             ],
             'sidebarOpen' => $request->cookie('sidebar_state') === 'true',
             'turnstileSiteKey' => config('services.turnstile.site_key'),

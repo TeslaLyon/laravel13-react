@@ -46,6 +46,15 @@ return [
             'recommended' => true,
         ],
         [
+            'id' => 'alipay_red_packet',
+            'name' => '支付宝口令红包',
+            'code' => 'alipay_red_packet',
+            'description' => '输入支付宝口令红包提交，管理员人工核实后发放纸巾',
+            'logo' => rtrim((string) env('CDN_URL', ''), '/') . '/images/wallet/alipay.svg',
+            'is_active' => true,
+            'recommended' => false,
+        ],
+        [
             'id' => 'wechat',
             'name' => '微信支付',
             'code' => 'wechat_pay',

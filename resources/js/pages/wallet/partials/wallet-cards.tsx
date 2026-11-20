@@ -13,6 +13,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
@@ -29,6 +30,9 @@ import {
     QrCode,
     ExternalLink,
     RotateCcw,
+    Gift,
+    Send,
+    AlertCircle,
 } from 'lucide-react';
 import { paymentMethods as paymentMethodsRoute, deposit } from '@/actions/App/Http/Controllers/WalletController';
 
@@ -86,13 +90,16 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
     const [depositOpen, setDepositOpen] = useState(false);
     const [isReady, setIsReady] = useState(false);
 
-    // 🌟 1. 弹窗交互状态机：'select' (选择中) | 'pending' (等待支付) | 'success' (支付成功)
-    const [dialogStep, setDialogStep] = useState<'select' | 'pending' | 'success'>('select');
+    // 🌟 1. 弹窗交互状态机：'select' (选择中) | 'pending' (等待支付/核实) | 'success' (支付成功) | 'rejected' (审核未通过)
+    const [dialogStep, setDialogStep] = useState<'select' | 'pending' | 'success' | 'rejected'>('select');
     const [currentOrder, setCurrentOrder] = useState<{
         orderNo: string;
         payUrl: string;
         tissues: number;
         reallyAmount?: number;
+        isManualReview?: boolean;
+        redPacketCode?: string;
+        rejectReason?: string;
     } | null>(null);
 
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -100,6 +107,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
 
     const [selectedAmount, setSelectedAmount] = useState<number>(5000);
     const [selectedMethod, setSelectedMethod] = useState<string>('wechat');
+    const [redPacketCode, setRedPacketCode] = useState<string>('');
 
     // 轮询定时器引用，防止重复触发或未及时清理
     // ✅ 优雅自适应写法（自动匹配当前环境的定时器返回值类型）
@@ -112,6 +120,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
     const { post: postDeposit, processing: depositProcessing, setData } = useHttp({
         amount: selectedAmount,
         payment_method: selectedMethod,
+        red_packet_code: redPacketCode,
         description: '购买纸巾',
     });
 
@@ -130,6 +139,13 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
         }
     };
 
+    const handleRedPacketCodeChange = (value: string) => {
+        setRedPacketCode(value);
+        if (typeof setData === 'function') {
+            setData('red_packet_code', value);
+        }
+    };
+
     // 响应式状态保底同步
     useEffect(() => {
         if (typeof setData === 'function') {
@@ -142,6 +158,12 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
             setData('payment_method', selectedMethod);
         }
     }, [selectedMethod]);
+
+    useEffect(() => {
+        if (typeof setData === 'function') {
+            setData('red_packet_code', redPacketCode);
+        }
+    }, [redPacketCode]);
 
     // 停止并清理轮询定时器
     const stopPolling = () => {
@@ -156,6 +178,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
         stopPolling();
         setDialogStep('select');
         setCurrentOrder(null);
+        setRedPacketCode('');
     };
 
     // 监听弹窗打开/关闭
@@ -179,12 +202,69 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
         }
     }, [depositOpen]);
 
+    // 🌟 统一处理订单状态轮询与手动查询结果
+    const applyOrderStatusResult = (result: any, isManualClick = false) => {
+        if (!result?.success || !result?.data) {
+            return;
+        }
+
+        if (result.data.is_paid) {
+            stopPolling();
+
+            const paidReallyAmount = result.data.really_amount !== undefined
+                ? Number(result.data.really_amount)
+                : undefined;
+
+            if (paidReallyAmount !== undefined) {
+                const paidTissues = result.data.tissues !== undefined
+                    ? Number(result.data.tissues)
+                    : Number((paidReallyAmount / 100).toFixed(2));
+
+                setCurrentOrder(prev => prev ? {
+                    ...prev,
+                    reallyAmount: paidReallyAmount,
+                    tissues: paidTissues,
+                } : null);
+            }
+
+            setDialogStep('success');
+            router.reload({ only: ['wallet', 'transactions'] });
+
+            setTimeout(() => {
+                setDepositOpen(false);
+                resetDialogState();
+            }, 2200);
+            return;
+        }
+
+        if (result.data.is_closed) {
+            stopPolling();
+            const reason = result.data.admin_remark || '订单已被驳回或关闭';
+            setCurrentOrder(prev => prev ? {
+                ...prev,
+                rejectReason: reason,
+            } : null);
+            setDialogStep('rejected');
+            toast.error(`充值申请未通过：${reason}`);
+            return;
+        }
+
+        if (isManualClick) {
+            toast.warning(
+                currentOrder?.isManualReview
+                    ? '管理员正在加紧核实中，核实到账后系统会第一时间通知您'
+                    : '支付网关暂未确认到账，请在完成付款后稍候片刻'
+            );
+        }
+    };
+
     // 🌟 3. 核心轮询监听器：当状态进入 pending 且有单号时自动触发
     useEffect(() => {
         if (dialogStep === 'pending' && currentOrder?.orderNo) {
             stopPolling();
 
-            // 每 2.5 秒静默轮询一次
+            // 第三方支付每 2.5 秒轮询；口令红包人工核实每 4 秒轻量检测一次（关闭弹窗自动停止）
+            const intervalMs = currentOrder.isManualReview ? 4000 : 2500;
             pollTimerRef.current = setInterval(async () => {
                 try {
                     const response = await fetch(`/wallet/orders/${currentOrder.orderNo}/status`, {
@@ -194,42 +274,11 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                         },
                     });
                     const result = await response.json();
-
-                    if (result?.success && result?.data?.is_paid) {
-                        stopPolling();
-
-                        // 🌟 若接口返回了实际支付金额 (really_amount)，动态更新订单纸巾数与金额
-                        const paidReallyAmount = result.data.really_amount !== undefined
-                            ? Number(result.data.really_amount)
-                            : undefined;
-
-                        if (paidReallyAmount !== undefined) {
-                            const paidTissues = result.data.tissues !== undefined
-                                ? Number(result.data.tissues)
-                                : Number((paidReallyAmount / 100).toFixed(2));
-
-                            setCurrentOrder(prev => prev ? {
-                                ...prev,
-                                reallyAmount: paidReallyAmount,
-                                tissues: paidTissues,
-                            } : null);
-                        }
-
-                        setDialogStep('success');
-
-                        // 局部刷新 Inertia 钱包数据，平滑无白屏
-                        router.reload({ only: ['wallet', 'transactions'] });
-
-                        // 停留 2 秒展示成功勾选状态，随后优雅关闭
-                        setTimeout(() => {
-                            setDepositOpen(false);
-                            resetDialogState();
-                        }, 2200);
-                    }
+                    applyOrderStatusResult(result, false);
                 } catch {
                     // 静默捕获偶发网络波动，不中断轮询循环
                 }
-            }, 2500);
+            }, intervalMs);
         }
 
         return () => stopPolling();
@@ -271,21 +320,50 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
         }
     }, [depositOpen]);
 
-    // 🌟 4. 提交充值表单并在新标签页打开收银台
+    // 🌟 4. 提交充值表单（自动区分“口令红包提交”与“第三方收银台跳转”）
     const submitDeposit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const isRedPacket = selectedMethod === 'alipay_red_packet';
+        const trimmedCode = redPacketCode.trim();
+
+        if (isRedPacket && trimmedCode.length < 4) {
+            toast.warning('请输入完整的支付宝红包口令（至少 4 个字符）');
+            return;
+        }
 
         if (typeof setData === 'function') {
             setData('amount', selectedAmount);
             setData('payment_method', selectedMethod);
+            setData('red_packet_code', isRedPacket ? trimmedCode : '');
         }
 
-        // 同步事件中提前打开空白标签页，确保 100% 免疫浏览器拦截
-        const paymentWindow = window.open('about:blank', '_blank');
+        // 仅第三方收银台模式才提前打开新标签页
+        const paymentWindow = isRedPacket ? null : window.open('about:blank', '_blank');
 
         postDeposit(deposit.url(), {
             onSuccess: (response: any) => {
                 const resData = response?.data?.data || response?.data || response;
+
+                if (resData?.is_manual_review || isRedPacket) {
+                    const initialAmount = resData?.amount !== undefined ? Number(resData.amount) : selectedAmount;
+                    const initialTissues = resData?.tissues !== undefined
+                        ? Number(resData.tissues)
+                        : Number((initialAmount / 100).toFixed(2));
+
+                    setCurrentOrder({
+                        orderNo: resData?.order_no,
+                        payUrl: '',
+                        tissues: initialTissues,
+                        reallyAmount: initialAmount,
+                        isManualReview: true,
+                        redPacketCode: resData?.red_packet_code || trimmedCode,
+                    });
+                    setDialogStep('pending');
+                    toast.success('口令红包提交成功！已通知管理员核实');
+                    return;
+                }
+
                 const cashierDomain = 'https://pay.536969.xyz';
                 let targetUrl = resData?.pay_url;
 
@@ -314,12 +392,16 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                     payUrl: targetUrl,
                     tissues: initialTissues,
                     reallyAmount: initialReallyAmount,
+                    isManualReview: false,
                 });
                 setDialogStep('pending');
             },
-            onError: () => {
+            onError: (errors: any) => {
                 if (paymentWindow) paymentWindow.close();
-                toast.error('充值发起失败，请稍后重试。');
+                const errorMsg = errors?.red_packet_code
+                    || errors?.message
+                    || '充值发起失败，请检查输入信息后重试';
+                toast.error(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
             },
             onNetworkError: () => {
                 if (paymentWindow) paymentWindow.close();
@@ -328,7 +410,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
         });
     };
 
-    // 🌟 5. 用户手动点击“我已完成支付”的主动核查动作
+    // 🌟 5. 用户手动点击“我已完成支付”/“刷新核实状态”的主动核查动作
     const handleManualVerify = async () => {
         if (!currentOrder?.orderNo) return;
 
@@ -340,37 +422,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                 },
             });
             const result = await response.json();
-
-            if (result?.success && result?.data?.is_paid) {
-                stopPolling();
-
-                // 🌟 若接口返回了实际支付金额 (really_amount)，动态更新订单纸巾数与金额
-                const paidReallyAmount = result.data.really_amount !== undefined
-                    ? Number(result.data.really_amount)
-                    : undefined;
-
-                if (paidReallyAmount !== undefined) {
-                    const paidTissues = result.data.tissues !== undefined
-                        ? Number(result.data.tissues)
-                        : Number((paidReallyAmount / 100).toFixed(2));
-
-                    setCurrentOrder(prev => prev ? {
-                        ...prev,
-                        reallyAmount: paidReallyAmount,
-                        tissues: paidTissues,
-                    } : null);
-                }
-
-                setDialogStep('success');
-                router.reload({ only: ['wallet', 'transactions'] });
-
-                setTimeout(() => {
-                    setDepositOpen(false);
-                    resetDialogState();
-                }, 1800);
-            } else {
-                toast.warning('支付网关暂未确认到账，请在完成付款后稍候片刻');
-            }
+            applyOrderStatusResult(result, true);
         } catch {
             toast.error('网络核验异常，请刷新页面查看余额');
         }
@@ -513,7 +565,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                                     <div className="space-y-2">
                                                         <div className="flex items-center justify-between">
                                                             <Label className="text-xs font-semibold text-foreground/80">
-                                                                选择充值数量
+                                                                {selectedMethod === 'alipay_red_packet' ? '选择红包金额（需与支付宝口令红包一致）' : '选择充值数量'}
                                                             </Label>
                                                             <span className="text-[11px] text-muted-foreground">
                                                                 固定面额档位
@@ -548,6 +600,28 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                                             })}
                                                         </div>
                                                     </div>
+
+                                                    {/* 支付宝口令红包输入框 */}
+                                                    {selectedMethod === 'alipay_red_packet' && (
+                                                        <div className="space-y-2.5 rounded-xl border border-sky-500/30 bg-sky-500/[0.04] p-3.5 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                                                            <div className="flex items-center gap-2 text-xs font-semibold text-sky-700 dark:text-sky-400">
+                                                                <Gift className="w-4 h-4 shrink-0" />
+                                                                <span>输入支付宝口令红包</span>
+                                                            </div>
+                                                            <Input
+                                                                type="text"
+                                                                value={redPacketCode}
+                                                                onChange={(e) => handleRedPacketCodeChange(e.target.value)}
+                                                                placeholder="请粘贴您在支付宝生成的红包口令"
+                                                                maxLength={128}
+                                                                className="h-10 rounded-lg bg-background/90 border-sky-500/30 focus-visible:ring-sky-500/40 text-sm"
+                                                                autoFocus
+                                                            />
+                                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                                请在支付宝 App 中生成对应金额的“口令红包”并粘贴完整口令到上方。提交后将通知管理员人工核实，最终按实际拆开金额为您发放纸巾。
+                                                            </p>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* 底部操作栏 */}
@@ -563,12 +637,17 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                                     <Button
                                                         type="submit"
                                                         className={dialogButtonStyles.primary}
-                                                        disabled={depositProcessing}
+                                                        disabled={depositProcessing || (selectedMethod === 'alipay_red_packet' && redPacketCode.trim().length < 4)}
                                                     >
                                                         {depositProcessing ? (
                                                             <>
                                                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                                                <span>正在发起支付...</span>
+                                                                <span>{selectedMethod === 'alipay_red_packet' ? '正在提交口令...' : '正在发起支付...'}</span>
+                                                            </>
+                                                        ) : selectedMethod === 'alipay_red_packet' ? (
+                                                            <>
+                                                                <Send className="w-4 h-4" />
+                                                                <span>提交口令并通知审核</span>
                                                             </>
                                                         ) : (
                                                             <>
@@ -583,7 +662,7 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                     </form>
                                 )}
 
-                                {/* ================= STEP 2: 等待支付状态面板 ================= */}
+                                {/* ================= STEP 2: 等待支付 / 等待人工核实状态面板 ================= */}
                                 {dialogStep === 'pending' && (
                                     <div className="py-6 flex flex-col items-center text-center space-y-5">
                                         {/* 呼吸脉冲光环 */}
@@ -595,10 +674,12 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
 
                                         <div className="space-y-2">
                                             <h3 className="text-lg font-bold text-foreground">
-                                                支付页面已在新标签页打开
+                                                {currentOrder?.isManualReview ? '口令已提交，等待管理员核实' : '支付页面已在新标签页打开'}
                                             </h3>
-                                            <p className="text-sm sm:text-base text-muted-foreground max-w-[360px] leading-relaxed">
-                                                请在打开的收银台完成付款。系统检测到到账通知后将自动增加可用纸巾。
+                                            <p className="text-sm sm:text-base text-muted-foreground max-w-[380px] leading-relaxed">
+                                                {currentOrder?.isManualReview
+                                                    ? '系统已推送通知提醒管理员前往支付宝核实您的口令红包。您可关闭此窗口继续浏览站内其他内容，核实到账后系统将自动通知您！'
+                                                    : '请在打开的收银台完成付款。系统检测到到账通知后将自动增加可用纸巾。'}
                                             </p>
                                         </div>
 
@@ -613,6 +694,14 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                                     </span>
                                                 </span>
                                             </div>
+                                            {currentOrder?.isManualReview && currentOrder?.redPacketCode && (
+                                                <div className="flex items-center justify-between text-sm gap-4">
+                                                    <span className="text-muted-foreground shrink-0">红包口令</span>
+                                                    <span className="font-mono text-xs font-semibold text-sky-600 dark:text-sky-400 truncate">
+                                                        {currentOrder.redPacketCode}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="flex items-center justify-between text-sm">
                                                 <span className="text-muted-foreground">商户订单号</span>
                                                 <span className="font-mono text-xs text-foreground/80">
@@ -628,22 +717,32 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                                 onClick={handleManualVerify}
                                                 className="w-full h-11 rounded-xl text-sm sm:text-base font-medium bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all"
                                             >
-                                                我已完成支付
+                                                {currentOrder?.isManualReview ? '刷新核实状态' : '我已完成支付'}
                                             </Button>
 
                                             <div className="flex items-center justify-between gap-3 pt-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (currentOrder?.payUrl) {
-                                                            window.open(currentOrder.payUrl, '_blank');
-                                                        }
-                                                    }}
-                                                    className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
-                                                >
-                                                    <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                                    <span>重新打开支付页</span>
-                                                </button>
+                                                {!currentOrder?.isManualReview ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (currentOrder?.payUrl) {
+                                                                window.open(currentOrder.payUrl, '_blank');
+                                                            }
+                                                        }}
+                                                        className="text-xs sm:text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                        <span>重新打开支付页</span>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDepositOpen(false)}
+                                                        className="text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        先去逛逛（稍后通知我）
+                                                    </button>
+                                                )}
 
                                                 <button
                                                     type="button"
@@ -671,6 +770,40 @@ export function WalletCards({ wallet, recharge_enabled = false }: Props) {
                                             <p className="text-sm sm:text-base text-muted-foreground">
                                                 已成功增加 <span className="font-semibold text-emerald-600 dark:text-emerald-400">{currentOrder?.tissues}</span> 纸巾，正在同步钱包数据...
                                             </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ================= STEP 4: 审核未通过 / 驳回提示 ================= */}
+                                {dialogStep === 'rejected' && (
+                                    <div className="py-6 flex flex-col items-center text-center space-y-5">
+                                        <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-600">
+                                            <AlertCircle className="w-9 h-9" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h3 className="text-lg font-bold text-foreground">
+                                                充值核实未通过
+                                            </h3>
+                                            <p className="text-sm text-muted-foreground max-w-[360px] leading-relaxed">
+                                                未通过原因：{currentOrder?.rejectReason || '口令无效或未查收到款项'}
+                                            </p>
+                                        </div>
+                                        <div className="w-full flex items-center gap-3 pt-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="flex-1 h-10 rounded-xl"
+                                                onClick={() => setDepositOpen(false)}
+                                            >
+                                                关闭
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white"
+                                                onClick={resetDialogState}
+                                            >
+                                                重新提交
+                                            </Button>
                                         </div>
                                     </div>
                                 )}

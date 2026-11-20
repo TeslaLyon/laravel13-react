@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\WalletOrder;
 use App\Models\Wallet;
 use App\Enums\WalletStatus;
+use App\Jobs\SendTelegramMessageJob;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Sleep;
 
@@ -103,9 +104,10 @@ class WalletController extends Controller
                         }
 
                         $paymentMethodLabel = match ($paymentMethod) {
-                            'wechat', 'wxpay' => '微信',
-                            'alipay' => '支付宝',
-                            default => null,
+                            'wechat', 'wxpay'   => '微信',
+                            'alipay'            => '支付宝',
+                            'alipay_red_packet' => '支付宝口令红包',
+                            default             => null,
                         };
 
                         // 若为充值业务类型，将充值方式融合进业务类型名称（如“微信充值”、“支付宝充值”）
@@ -175,7 +177,7 @@ class WalletController extends Controller
     }
 
     /**
-     * 充值下单：本地预先落库，再调用第三方网关接口
+     * 充值下单：支持第三方网关支付及支付宝口令红包人工核实通道
      */
     public function deposit(Request $request, ThirdPartyApiClient $apiClient)
     {
@@ -189,8 +191,23 @@ class WalletController extends Controller
         $allowedAmounts = collect(config('wallet.deposit_amounts', []))->pluck('amount')->toArray();
 
         $validated = $request->validate([
-            'amount' => ['required', 'integer', Rule::in($allowedAmounts)],
-            'payment_method' => ['required', 'string', Rule::in(['wechat', 'alipay'])],
+            'amount'          => ['required', 'integer', Rule::in($allowedAmounts)],
+            'payment_method'  => ['required', 'string', Rule::in([
+                WalletOrder::METHOD_WECHAT,
+                WalletOrder::METHOD_ALIPAY,
+                WalletOrder::METHOD_ALIPAY_RED_PACKET,
+            ])],
+            'red_packet_code' => [
+                'nullable',
+                'string',
+                'min:4',
+                'max:128',
+                Rule::requiredIf($request->input('payment_method') === WalletOrder::METHOD_ALIPAY_RED_PACKET),
+            ],
+        ], [
+            'red_packet_code.required' => '请输入支付宝红包口令',
+            'red_packet_code.min'      => '红包口令长度不能少于 4 个字符',
+            'red_packet_code.max'      => '红包口令长度不能超过 128 个字符',
         ]);
 
         $user = $request->user();
@@ -199,13 +216,55 @@ class WalletController extends Controller
         $subject = "获取 {$tissues} 纸巾";
         $orderNo = 'REC_' . date('YmdHis') . '_' . bin2hex(random_bytes(4));
 
+        // 🧧 分支一：支付宝口令红包（人工核实通道）
+        if ($validated['payment_method'] === WalletOrder::METHOD_ALIPAY_RED_PACKET) {
+            $redPacketCode = trim((string) ($validated['red_packet_code'] ?? ''));
+
+            // 防重复提交校验：同一口令处于待审核或已到账状态时禁止重复下单
+            $duplicate = WalletOrder::where('red_packet_code', $redPacketCode)
+                ->whereIn('status', [WalletOrder::STATUS_PENDING, WalletOrder::STATUS_PAID])
+                ->exists();
+
+            if ($duplicate) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '该红包口令已提交过或已核实入账，请勿重复提交',
+                ], 422);
+            }
+
+            $walletOrder = WalletOrder::create([
+                'user_id'         => $user->id,
+                'order_no'        => $orderNo,
+                'payment_method'  => WalletOrder::METHOD_ALIPAY_RED_PACKET,
+                'red_packet_code' => $redPacketCode,
+                'amount'          => $amountInCents,
+                'status'          => WalletOrder::STATUS_PENDING,
+                'subject'         => $subject,
+            ]);
+
+            $this->notifyAdminRedPacketSubmitted($walletOrder, $user);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'is_manual_review' => true,
+                    'order_no'         => $walletOrder->order_no,
+                    'red_packet_code'  => $redPacketCode,
+                    'tissues'          => (float) round($amountInCents / 100, 2),
+                    'really_amount'    => $amountInCents,
+                    'amount'           => $amountInCents,
+                ],
+            ]);
+        }
+
+        // 🌐 分支二：第三方收银台在线自动通道
         $walletOrder = WalletOrder::create([
-            'user_id' => $user->id,
-            'order_no' => $orderNo,
+            'user_id'        => $user->id,
+            'order_no'       => $orderNo,
             'payment_method' => $validated['payment_method'],
-            'amount' => $amountInCents,
-            'status' => WalletOrder::STATUS_PENDING,
-            'subject' => $subject,
+            'amount'         => $amountInCents,
+            'status'         => WalletOrder::STATUS_PENDING,
+            'subject'        => $subject,
         ]);
 
         try {
@@ -230,20 +289,21 @@ class WalletController extends Controller
 
             $walletOrder->update([
                 'gateway_order_id' => $gatewayOrderId,
-                'gateway_pay_id' => $gatewayData['pay_id'] ?? null,
-                'pay_url' => $cashierPayUrl,
-                'really_amount' => $reallyAmountInCents,
+                'gateway_pay_id'   => $gatewayData['pay_id'] ?? null,
+                'pay_url'          => $cashierPayUrl,
+                'really_amount'    => $reallyAmountInCents,
             ]);
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'order_no' => $walletOrder->order_no,
-                    'order_id' => $gatewayOrderId,
-                    'pay_url' => $cashierPayUrl,
-                    'tissues' => $reallyTissues,
-                    'really_amount' => $reallyAmountInCents,
-                    'amount' => $amountInCents,
+                    'is_manual_review' => false,
+                    'order_no'         => $walletOrder->order_no,
+                    'order_id'         => $gatewayOrderId,
+                    'pay_url'          => $cashierPayUrl,
+                    'tissues'          => $reallyTissues,
+                    'really_amount'    => $reallyAmountInCents,
+                    'amount'           => $amountInCents,
                 ],
             ]);
         } catch (Exception $e) {
@@ -256,6 +316,30 @@ class WalletController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * 推送 Telegram 消息通知管理员核实支付宝口令红包
+     */
+    protected function notifyAdminRedPacketSubmitted(WalletOrder $order, User $user): void
+    {
+        $amountYuan = number_format($order->amount / 100, 2, '.', '');
+        $adminUrl = url('/admin/wallet-orders');
+        $userDisplay = e($user->nickname ?: $user->name);
+        $userEmail = e($user->email ?? '无');
+        $orderNo = e($order->order_no);
+        $code = e((string) $order->red_packet_code);
+        $time = $order->created_at?->format('Y-m-d H:i:s') ?? now()->format('Y-m-d H:i:s');
+
+        $html = "🧧 <b>收到新的支付宝口令红包充值申请</b>\n\n"
+            . "👤 <b>申请用户：</b>{$userDisplay} (ID: {$user->id} / {$userEmail})\n"
+            . "💰 <b>申报金额：</b>¥{$amountYuan}（预期 {$amountYuan} 纸巾）\n"
+            . "🔑 <b>红包口令：</b><code>{$code}</code>  <i>(点击口令即可复制)</i>\n"
+            . "🧾 <b>订单编号：</b><code>{$orderNo}</code>\n"
+            . "🕒 <b>提交时间：</b>{$time}\n\n"
+            . "👉 请前往支付宝核实收款后，在 <a href=\"{$adminUrl}\">管理后台 -> 充值订单管理</a> 审核并为用户发放余额。";
+
+        SendTelegramMessageJob::dispatch($html);
     }
 
     /**
@@ -489,7 +573,7 @@ class WalletController extends Controller
 
         $order = WalletOrder::where('order_no', $orderNo)
             ->where('user_id', Auth::id())
-            ->select(['order_no', 'status', 'amount', 'really_amount', 'paid_at'])
+            ->select(['order_no', 'payment_method', 'red_packet_code', 'status', 'amount', 'really_amount', 'admin_remark', 'paid_at'])
             ->first();
 
         if (!$order) {
@@ -502,12 +586,16 @@ class WalletController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'order_no' => $order->order_no,
-                'is_paid' => $order->status === WalletOrder::STATUS_PAID,
-                'status' => $order->status,
-                'amount' => $order->amount,
-                'really_amount' => $effectiveAmount,
-                'tissues' => $reallyTissues,
+                'order_no'        => $order->order_no,
+                'payment_method'  => $order->payment_method,
+                'red_packet_code' => $order->red_packet_code,
+                'is_paid'         => $order->status === WalletOrder::STATUS_PAID,
+                'is_closed'       => $order->status === WalletOrder::STATUS_CLOSED,
+                'status'          => $order->status,
+                'admin_remark'    => $order->admin_remark,
+                'amount'          => $order->amount,
+                'really_amount'   => $effectiveAmount,
+                'tissues'         => $reallyTissues,
             ],
         ]);
     }

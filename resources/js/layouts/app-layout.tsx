@@ -2,6 +2,7 @@ import AppLayoutTemplate from '@/layouts/app/app-sidebar-layout';
 import type { BreadcrumbItem } from '@/types';
 // 1. 导入上一步创建的全局登录拦截 Provider 组件
 import { RequireAuthProvider } from '@/components/require-auth-provider';
+import { GlobalNotificationListener } from '@/components/global-notification-listener';
 
 export default function AppLayout({
     breadcrumbs = [],
@@ -13,6 +14,7 @@ export default function AppLayout({
     return (
         // 2. 在最外层包裹 RequireAuthProvider
         <RequireAuthProvider>
+            <GlobalNotificationListener />
             <AppLayoutTemplate breadcrumbs={breadcrumbs}>
                 {children}
             </AppLayoutTemplate>
